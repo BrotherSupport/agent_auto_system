@@ -3,14 +3,20 @@ import json
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-from src.models import Job
+from src.models import Job, Run  # ensure both tables are in metadata
 
 
 @pytest.fixture(scope="function")
 def test_engine():
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    # StaticPool: all connections share the same in-memory SQLite database.
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     SQLModel.metadata.create_all(engine)
     yield engine
     SQLModel.metadata.drop_all(engine)
@@ -24,21 +30,17 @@ def db_session(test_engine):
 
 @pytest_asyncio.fixture
 async def client(test_engine, mocker):
+    import src.database as _db
     from src.main import app
-    from src.database import get_session
 
-    mocker.patch("src.database.get_engine", return_value=test_engine)
+    # Patch the module-level engine so get_session(), get_engine(), and init_db()
+    # all operate on the in-memory test database.
+    mocker.patch.object(_db, "engine", test_engine)
     mocker.patch("src.routers.runs.get_engine", return_value=test_engine)
     mocker.patch("src.automation.executor.get_engine", return_value=test_engine)
 
-    def _override():
-        with Session(test_engine) as s:
-            yield s
-
-    app.dependency_overrides[get_session] = _override
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
-    app.dependency_overrides.clear()
 
 
 @pytest.fixture
