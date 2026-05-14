@@ -1,7 +1,7 @@
 from crewai import Agent, Crew, Process, Task
 from crewai.project import CrewBase, agent, crew, task
 
-from src.automation.tools.playwright_form_tool import PlaywrightFormTool
+from src.automation.tools.google_form_tools import GoogleFormInspectorTool, GoogleFormSubmitTool
 
 
 @CrewBase
@@ -13,7 +13,7 @@ class FormFillerCrew:
     def form_agent(self) -> Agent:
         return Agent(
             config=self.agents_config["form_agent"],
-            tools=[PlaywrightFormTool()],
+            tools=[GoogleFormInspectorTool(), GoogleFormSubmitTool()],
             verbose=False,
         )
 

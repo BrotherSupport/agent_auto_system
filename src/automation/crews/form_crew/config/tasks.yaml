@@ -1,12 +1,21 @@
 fill_form_task:
   description: >
-    Fill the AI Consultant Google Form with the following information:
+    Submit the AI Consultant Google Form on behalf of the user.
+
+    Form URL: https://docs.google.com/forms/d/e/1FAIpQLSc0E2-jTMy8WNFLlHc5rG4zw3U1QaCykBra3mdqFv0DNb8i9Q/viewform
+
+    User information to submit:
     - Company Name: {company_name}
     - Company Size: {company_size}
     - AI Problem to solve: {ai_problem}
 
-    Use the playwright_form_tool to navigate to the form, fill each field,
-    and submit. Confirm the form was submitted successfully.
+    STEP 1 — Inspect: Call google_form_inspector with the form URL above.
+    Read the returned questions, entry_ids, and options carefully.
+
+    STEP 2 — Submit: Call google_form_submit with the form_id and a responses
+    dict mapping each entry_id to the correct user value.
+    For radio questions the value MUST exactly match one of the listed options.
+
   expected_output: >
-    A JSON object: {{"submitted": true, "confirmation_text": "<confirmation message>"}}
+    A JSON object: {{"submitted": true, "confirmation": "<message>"}}
   agent: form_agent
