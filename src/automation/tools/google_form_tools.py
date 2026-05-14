@@ -1,12 +1,18 @@
 """
 Two-tool approach for Google Form submission:
   1. GoogleFormInspectorTool  – GET form HTML, parse structure → question titles + entry IDs
-  2. GoogleFormSubmitTool     – POST entry.ID=value to formResponse URL
+  2. GoogleFormSubmitTool     – GET form (cookies + fbzx token), then POST with all hidden fields
 
-No browser or OAuth required for public forms.
+Google Forms silently drops field values if the session cookies and the per-page
+fbzx CSRF token are missing — the response is recorded (timestamp saved) but all
+answers are blank. We fix this by doing a real GET first, then POSTing with the
+same cookie jar and all hidden <input> values extracted from the page.
 """
+import html as _html_mod
+import http.cookiejar
 import json
 import re
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -65,31 +71,46 @@ class GoogleFormSubmitTool(BaseTool):
     args_schema: Type[BaseModel] = SubmitInput
 
     def _run(self, form_id: str, responses: dict) -> dict:
+        view_url = f"https://docs.google.com/forms/d/e/{form_id}/viewform"
         submit_url = f"https://docs.google.com/forms/d/e/{form_id}/formResponse"
 
-        post_data: dict[str, str] = {}
+        # Use a cookie jar so the same session is reused for GET → POST.
+        jar = http.cookiejar.CookieJar()
+        opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+        # Step 1: GET the form page to collect session cookies and hidden inputs
+        # (fbzx CSRF token, fvv, pageHistory, partialResponse, submissionTimestamp).
+        get_req = urllib.request.Request(view_url, headers=_HEADERS)
+        html = opener.open(get_req, timeout=30).read().decode("utf-8")
+        hidden = _extract_hidden_inputs(html)
+
+        # Step 2: Build POST body — hidden fields first, then user answers.
+        # Override submissionTimestamp: the page's default is -1 (JS not yet run).
+        # Google uses this to distinguish real browser submissions from bots — if it
+        # stays -1 the field values are accepted but silently discarded in Sheets.
+        post_data: dict[str, str] = {
+            **hidden,
+            "submissionTimestamp": str(int(time.time() * 1000)),
+        }
         for entry_id, value in responses.items():
             key = f"entry.{entry_id}"
-            if str(value) == "其他":
-                post_data[key] = "__other_option__"
-            else:
-                post_data[key] = str(value)
+            post_data[key] = "__other_option__" if str(value) == "其他" else str(value)
 
         encoded = urllib.parse.urlencode(post_data, encoding="utf-8").encode("utf-8")
-        req = urllib.request.Request(
+        post_req = urllib.request.Request(
             submit_url,
             data=encoded,
             headers={
                 **_HEADERS,
                 "Content-Type": "application/x-www-form-urlencoded",
                 "Origin": "https://docs.google.com",
-                "Referer": f"https://docs.google.com/forms/d/e/{form_id}/viewform",
+                "Referer": view_url,
             },
             method="POST",
         )
 
         try:
-            resp = urllib.request.urlopen(req, timeout=30)
+            resp = opener.open(post_req, timeout=30)
             final_url = resp.geturl()
             body = resp.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as exc:
@@ -100,7 +121,7 @@ class GoogleFormSubmitTool(BaseTool):
         return {
             "submitted": success,
             "final_url": final_url,
-            "confirmation": "Response recorded successfully" if success else "Submission may have failed — check final_url",
+            "confirmation": "Response recorded successfully" if success else "Submission may have failed",
         }
 
 
@@ -109,6 +130,25 @@ class GoogleFormSubmitTool(BaseTool):
 def _fetch_html(url: str) -> str:
     req = urllib.request.Request(url, headers=_HEADERS)
     return urllib.request.urlopen(req, timeout=30).read().decode("utf-8")
+
+
+def _extract_hidden_inputs(html: str) -> dict[str, str]:
+    """Return {name: value} for every <input type="hidden"> in the form HTML.
+
+    These carry the session context Google requires (fbzx CSRF token, fvv,
+    pageHistory, partialResponse, submissionTimestamp).  Without them the POST
+    is accepted but all field values are silently discarded.
+    """
+    result: dict[str, str] = {}
+    for tag in re.finditer(r"<input\b[^>]+>", html, re.I):
+        attrs = tag.group(0)
+        if not re.search(r'type=["\']hidden["\']', attrs, re.I):
+            continue
+        name_m = re.search(r'\bname=["\']([^"\']+)["\']', attrs)
+        value_m = re.search(r'\bvalue=["\']([^"\']*)["\']', attrs)
+        if name_m:
+            result[name_m.group(1)] = _html_mod.unescape(value_m.group(1) if value_m else "")
+    return result
 
 
 def _extract_form_id(url: str) -> str:
