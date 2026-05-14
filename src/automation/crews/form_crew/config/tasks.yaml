@@ -1,0 +1,12 @@
+fill_form_task:
+  description: >
+    Fill the AI Consultant Google Form with the following information:
+    - Company Name: {company_name}
+    - Company Size: {company_size}
+    - AI Problem to solve: {ai_problem}
+
+    Use the playwright_form_tool to navigate to the form, fill each field,
+    and submit. Confirm the form was submitted successfully.
+  expected_output: >
+    A JSON object: {{"submitted": true, "confirmation_text": "<confirmation message>"}}
+  agent: form_agent
