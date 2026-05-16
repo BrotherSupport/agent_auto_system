@@ -134,6 +134,32 @@ def _parse_nitter_posts(html: str, limit: int) -> list[dict]:
 
 # ── Playwright fallback ────────────────────────────────────────────────────────
 
+def _parse_count(raw: str) -> int:
+    """Parse engagement counts like '10K', '1.2M', '45', '' → int."""
+    raw = raw.strip().replace(",", "")
+    if not raw:
+        return 0
+    try:
+        if raw.endswith("K"):
+            return int(float(raw[:-1]) * 1_000)
+        if raw.endswith("M"):
+            return int(float(raw[:-1]) * 1_000_000)
+        return int(raw)
+    except ValueError:
+        return 0
+
+
+def _stat_pw(article, testid: str) -> int:
+    """Extract engagement count from a tweet article by data-testid."""
+    loc = article.locator(f'[data-testid="{testid}"]')
+    if not loc.count():
+        return 0
+    try:
+        return _parse_count(loc.first.inner_text(timeout=1500))
+    except Exception:
+        return 0
+
+
 def _scrape_with_playwright(handle: str, limit: int) -> list[dict]:
     from playwright.sync_api import sync_playwright
 
@@ -146,23 +172,39 @@ def _scrape_with_playwright(handle: str, limit: int) -> list[dict]:
             locale="en-US",
         )
         page = ctx.new_page()
-        # Block heavy media to speed up initial render
-        page.route("**/*.{png,jpg,jpeg,gif,mp4,webm,svg}", lambda r: r.abort())
+        # Block media and tracking to speed up render
+        page.route("**/*.{png,jpg,jpeg,gif,mp4,webm,svg,woff,woff2}", lambda r: r.abort())
 
         try:
-            page.goto(f"https://x.com/{handle}", timeout=25000, wait_until="domcontentloaded")
-            # Let JS render the timeline before any modal blocks it
-            page.wait_for_timeout(3500)
+            page.goto(f"https://x.com/{handle}", timeout=30000, wait_until="domcontentloaded")
+            # Wait until at least one tweet article appears (up to 10 s)
+            try:
+                page.wait_for_selector('article[data-testid="tweet"]', timeout=10000)
+            except Exception:
+                # Dismiss any modal and retry
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(2000)
 
             articles = page.locator('article[data-testid="tweet"]').all()
             for article in articles[:limit]:
                 try:
                     text_loc = article.locator('[data-testid="tweetText"]').first
-                    text = text_loc.inner_text(timeout=2000) if text_loc.count() else ""
+                    if not text_loc.count():
+                        continue
+                    text = text_loc.inner_text(timeout=2000)
+                    if not text:
+                        continue
+
                     time_loc = article.locator("time").first
-                    date = time_loc.get_attribute("datetime", timeout=2000) if time_loc.count() else ""
-                    if text:
-                        posts.append({"text": text, "date": date or "", "likes": 0, "retweets": 0, "replies": 0})
+                    date = time_loc.get_attribute("datetime", timeout=1500) if time_loc.count() else ""
+
+                    posts.append({
+                        "text": text,
+                        "date": date or "",
+                        "likes": _stat_pw(article, "like"),
+                        "retweets": _stat_pw(article, "retweet"),
+                        "replies": _stat_pw(article, "reply"),
+                    })
                 except Exception:
                     pass
         finally:

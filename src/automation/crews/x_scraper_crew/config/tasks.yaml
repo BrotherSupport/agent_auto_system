@@ -1,16 +1,23 @@
 x_scrape_task:
   description: >
     Use the x_post_scraper tool to fetch the {limit} most recent posts from
-    X user @{username}. Then analyze them: find the most engaging post,
-    identify 2-3 recurring themes, and write a one-paragraph summary of
-    what this person has been posting about lately.
+    X user @{username}. The tool returns a "posts" list — each entry has
+    "text", "date", "likes", "retweets", "replies".
+
+    IMPORTANT: If the "posts" list in the tool result is non-empty, use it
+    as your data even if all engagement counts are 0. Do NOT say you cannot
+    retrieve posts if the tool returned at least one post.
+
+    From the fetched posts: pick the top_post (highest likes, or first post
+    if all likes are 0), identify 2-3 recurring themes, and write a one-
+    paragraph summary of what this person has been posting about.
   expected_output: >
     A JSON object with exactly these keys:
     - "username": the X handle (string)
-    - "post_count": number of posts fetched (integer)
-    - "top_post": object with "text" and "likes" of the highest-liked post
-    - "themes": list of 2-3 theme strings
-    - "summary": one paragraph summarizing recent post activity
-    - "posts": the full list of post objects (text, date, likes, retweets, replies)
+    - "post_count": number of posts in the "posts" list (integer, must match)
+    - "top_post": object with "text" and "likes" of the best post (never null)
+    - "themes": list of 2-3 theme strings derived from the post content
+    - "summary": one paragraph summarizing the user's recent posting activity
+    - "posts": the complete list of post objects from the tool result
     Return ONLY the JSON object, no markdown fences.
   agent: x_analyst
