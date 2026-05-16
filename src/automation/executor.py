@@ -28,13 +28,24 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
 
             flow = FormFillFlow()
             raw = await asyncio.to_thread(flow.kickoff, inputs=payload)
-            result_str = raw.raw if hasattr(raw, "raw") else str(raw)
-            try:
-                result = json.loads(result_str)
-            except (json.JSONDecodeError, TypeError):
-                result = {"message": result_str}
+        elif job_type == "web_scraper":
+            from src.automation.flows.web_scraper_flow import WebScraperFlow
+
+            flow = WebScraperFlow()
+            raw = await asyncio.to_thread(flow.kickoff, inputs=payload)
+        elif job_type == "hacker_news_digest":
+            from src.automation.flows.hn_digest_flow import HNDigestFlow
+
+            flow = HNDigestFlow()
+            raw = await asyncio.to_thread(flow.kickoff, inputs=payload)
         else:
             raise ValueError(f"Unknown job_type: {job_type}")
+
+        result_str = raw.raw if hasattr(raw, "raw") else str(raw)
+        try:
+            result = json.loads(result_str)
+        except (json.JSONDecodeError, TypeError):
+            result = {"message": result_str}
 
         _update_run(run_id, "success", result)
     except Exception as exc:

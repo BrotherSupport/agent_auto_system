@@ -1,0 +1,12 @@
+digest_task:
+  description: >
+    Fetch the top {limit} stories from Hacker News using the hn_top_stories tool.
+    Then write a brief digest: pick the best story, summarize each story in one
+    sentence, and identify 2-3 recurring themes across all stories.
+  expected_output: >
+    A JSON object with exactly these keys:
+    - "story_of_the_day": object with "title" and "reason" (why it stands out, 1 sentence)
+    - "stories": list of objects, each with "title", "score", "url", "summary" (1 sentence)
+    - "themes": list of 2-3 theme strings (e.g. "AI tooling", "open source")
+    Return ONLY the JSON object, no markdown fences.
+  agent: hn_analyst

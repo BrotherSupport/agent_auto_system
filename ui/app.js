@@ -15,32 +15,58 @@ document.getElementById('modal-close').addEventListener('click', closeModalFn);
 document.getElementById('cancel-btn').addEventListener('click', closeModalFn);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModalFn(); });
 
+// ── Job type switcher ─────────────────────────────────────────────────────────
+
+function switchJobType(type) {
+  ['google_form_fill', 'web_scraper', 'hacker_news_digest'].forEach((t) => {
+    document.getElementById(`fields-${t}`).classList.toggle('hidden', t !== type);
+  });
+}
+
 // ── Form submit ───────────────────────────────────────────────────────────────
 
 runForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const payload = {
-    company_name: document.getElementById('company-name').value.trim(),
-    company_size: document.getElementById('company-size').value,
-    ai_problem: document.getElementById('ai-problem').value.trim(),
-  };
+  const jobType = document.getElementById('job-type').value;
+  let payload, jobName;
+
+  if (jobType === 'google_form_fill') {
+    const company = document.getElementById('company-name').value.trim();
+    if (!company) { showError('Company name is required'); return; }
+    payload = {
+      company_name: company,
+      company_size: document.getElementById('company-size').value,
+      ai_problem: document.getElementById('ai-problem').value.trim(),
+    };
+    jobName = `Form: ${company}`;
+  } else if (jobType === 'web_scraper') {
+    const url = document.getElementById('scrape-url').value.trim();
+    if (!url) { showError('URL is required'); return; }
+    payload = {
+      url,
+      question: document.getElementById('scrape-question').value.trim() || 'What is this page about?',
+    };
+    jobName = `Scrape: ${new URL(url).hostname}`;
+  } else if (jobType === 'hacker_news_digest') {
+    payload = { limit: parseInt(document.getElementById('hn-limit').value, 10) || 5 };
+    jobName = `HN Digest (top ${payload.limit})`;
+  }
+
   closeModalFn();
   runForm.reset();
-  await triggerRun(payload);
+  switchJobType('google_form_fill');
+  document.getElementById('job-type').value = 'google_form_fill';
+  await triggerRun(jobType, jobName, payload);
 });
 
 // ── Trigger a new run ─────────────────────────────────────────────────────────
 
-async function triggerRun(payload) {
+async function triggerRun(jobType, jobName, payload) {
   try {
     const jobResp = await fetch('/api/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: `Form: ${payload.company_name}`,
-        job_type: 'google_form_fill',
-        payload,
-      }),
+      body: JSON.stringify({ name: jobName, job_type: jobType, payload }),
     });
     if (!jobResp.ok) throw new Error('Failed to create job');
     const job = await jobResp.json();
@@ -93,7 +119,7 @@ function updateRow(runId, data) {
 
   if (data.result) {
     const resultCell = row.querySelector('.result-cell');
-    if (resultCell) resultCell.textContent = data.result.confirmation_text || data.result.error || '';
+    if (resultCell) resultCell.textContent = extractResultText(data.result);
 
     const detail = document.getElementById(`detail-${runId}`);
     if (detail) {
@@ -134,7 +160,7 @@ function renderHistory(runs) {
     if (run.result) {
       try {
         resultJson = JSON.parse(run.result);
-        resultText = resultJson.confirmation_text || resultJson.error || resultJson.message || '';
+        resultText = extractResultText(resultJson);
       } catch (_) {
         resultText = run.result;
       }
@@ -157,6 +183,18 @@ function renderHistory(runs) {
 function toggleDetail(runId) {
   const detail = document.getElementById(`detail-${runId}`);
   if (detail) detail.classList.toggle('hidden');
+}
+
+// ── Result text helper ────────────────────────────────────────────────────────
+
+function extractResultText(r) {
+  if (!r) return '';
+  return r.answer ||
+    (r.story_of_the_day && r.story_of_the_day.title) ||
+    r.confirmation_text ||
+    r.error ||
+    r.message ||
+    '';
 }
 
 // ── Error banner ──────────────────────────────────────────────────────────────

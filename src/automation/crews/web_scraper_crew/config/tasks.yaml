@@ -1,0 +1,12 @@
+scrape_task:
+  description: >
+    Fetch the URL "{url}" using the web_scraper tool, then answer this question:
+    "{question}"
+    Base your answer strictly on the page content you retrieved.
+  expected_output: >
+    A JSON object with exactly these keys:
+    - "title": the page title (string)
+    - "answer": a concise answer to the question (2-4 sentences)
+    - "key_points": a list of 3-5 key facts from the page (list of strings)
+    Return ONLY the JSON object, no markdown fences.
+  agent: web_scraper_agent
