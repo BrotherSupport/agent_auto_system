@@ -54,6 +54,7 @@ async def stream_run(run_id: int):
 
     async def event_generator():
         last_status = None
+        last_log_count = 0
         try:
             while True:
                 with Session(_engine) as s:
@@ -63,9 +64,23 @@ async def stream_run(run_id: int):
                     yield f"data: {json.dumps({'error': 'run not found'})}\n\n"
                     break
 
-                if run.status != last_status:
+                current_log: list = []
+                if run.log:
+                    try:
+                        current_log = json.loads(run.log)
+                    except json.JSONDecodeError:
+                        pass
+
+                status_changed = run.status != last_status
+                new_entries = current_log[last_log_count:]
+
+                if status_changed or new_entries:
                     last_status = run.status
-                    event = {"status": run.status}
+                    last_log_count = len(current_log)
+
+                    event: dict = {"status": run.status}
+                    if new_entries:
+                        event["new_logs"] = new_entries
                     if run.result:
                         try:
                             event["result"] = json.loads(run.result)

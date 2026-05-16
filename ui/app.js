@@ -1,8 +1,12 @@
 const modal = document.getElementById('modal');
 const runForm = document.getElementById('run-form');
 const liveIndicator = document.getElementById('live-indicator');
+const progressPanel = document.getElementById('progress-panel');
+const progressLog = document.getElementById('progress-log');
+const progressJobName = document.getElementById('progress-job-name');
 
 let activeEventSource = null;
+const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper'];
 
 // ── Modal open/close ──────────────────────────────────────────────────────────
 
@@ -18,7 +22,7 @@ modal.addEventListener('click', (e) => { if (e.target === modal) closeModalFn();
 // ── Job type switcher ─────────────────────────────────────────────────────────
 
 function switchJobType(type) {
-  ['google_form_fill', 'web_scraper', 'hacker_news_digest'].forEach((t) => {
+  ALL_TYPES.forEach((t) => {
     document.getElementById(`fields-${t}`).classList.toggle('hidden', t !== type);
   });
 }
@@ -50,6 +54,14 @@ runForm.addEventListener('submit', async (e) => {
   } else if (jobType === 'hacker_news_digest') {
     payload = { limit: parseInt(document.getElementById('hn-limit').value, 10) || 5 };
     jobName = `HN Digest (top ${payload.limit})`;
+  } else if (jobType === 'x_scraper') {
+    const username = document.getElementById('x-username').value.trim().replace(/^@/, '');
+    if (!username) { showError('X username is required'); return; }
+    payload = {
+      username,
+      limit: parseInt(document.getElementById('x-limit').value, 10) || 5,
+    };
+    jobName = `X: @${username}`;
   }
 
   closeModalFn();
@@ -75,11 +87,31 @@ async function triggerRun(jobType, jobName, payload) {
     if (!runResp.ok) throw new Error('Failed to trigger run');
     const { run_id } = await runResp.json();
 
+    showProgress(jobName);
     await loadHistory();
     startSSE(run_id);
   } catch (err) {
     showError(err.message);
   }
+}
+
+// ── Live progress panel ───────────────────────────────────────────────────────
+
+function showProgress(jobName) {
+  progressLog.innerHTML = '';
+  progressJobName.textContent = jobName;
+  progressPanel.classList.remove('hidden');
+}
+
+function hideProgress() {
+  progressPanel.classList.add('hidden');
+}
+
+function appendProgressEntry(entry) {
+  const li = document.createElement('li');
+  li.innerHTML = `<span class="log-ts">${entry.ts}</span>${escHtml(entry.msg)}`;
+  progressLog.appendChild(li);
+  progressLog.scrollTop = progressLog.scrollHeight;
 }
 
 // ── Server-Sent Events ────────────────────────────────────────────────────────
@@ -92,11 +124,18 @@ function startSSE(runId) {
 
   activeEventSource.onmessage = (e) => {
     const data = JSON.parse(e.data);
+
+    if (data.new_logs) {
+      data.new_logs.forEach(appendProgressEntry);
+    }
+
     updateRow(runId, data);
+
     if (data.status === 'success' || data.status === 'failed') {
       activeEventSource.close();
       activeEventSource = null;
       liveIndicator.classList.add('hidden');
+      hideProgress();
     }
   };
 
@@ -104,6 +143,7 @@ function startSSE(runId) {
     activeEventSource.close();
     activeEventSource = null;
     liveIndicator.classList.add('hidden');
+    hideProgress();
   };
 }
 
@@ -120,14 +160,8 @@ function updateRow(runId, data) {
   if (data.result) {
     const resultCell = row.querySelector('.result-cell');
     if (resultCell) resultCell.textContent = extractResultText(data.result);
-
-    const detail = document.getElementById(`detail-${runId}`);
-    if (detail) {
-      detail.querySelector('pre').textContent = JSON.stringify(data.result, null, 2);
-    }
   }
 
-  // Update duration once finished
   if (data.status === 'success' || data.status === 'failed') {
     loadHistory();
   }
@@ -165,6 +199,23 @@ function renderHistory(runs) {
         resultText = run.result;
       }
     }
+
+    let logJson = null;
+    if (run.log) {
+      try { logJson = JSON.parse(run.log); } catch (_) {}
+    }
+
+    const logTab = logJson
+      ? `<button class="detail-tab" onclick="switchTab(${run.id},'log')">Log (${logJson.length})</button>`
+      : '';
+    const logPane = logJson
+      ? `<div class="detail-pane" id="pane-log-${run.id}">
+           <ul class="log-list">${logJson.map(e =>
+             `<li><span class="log-ts">${escHtml(e.ts)}</span>${escHtml(e.msg)}</li>`
+           ).join('')}</ul>
+         </div>`
+      : '';
+
     return `
       <tr class="data-row" data-run-id="${run.id}" onclick="toggleDetail(${run.id})">
         <td style="color:var(--text-muted)">#${run.id}</td>
@@ -175,7 +226,16 @@ function renderHistory(runs) {
         <td class="result-cell" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.82rem;color:var(--text-muted)">${resultText}</td>
       </tr>
       <tr class="detail-row hidden" id="detail-${run.id}">
-        <td colspan="6"><pre>${resultJson ? JSON.stringify(resultJson, null, 2) : (run.result || '')}</pre></td>
+        <td colspan="6" style="padding:0">
+          <div class="detail-tabs">
+            <button class="detail-tab active" onclick="switchTab(${run.id},'result')">Result</button>
+            ${logTab}
+          </div>
+          <div class="detail-pane active" id="pane-result-${run.id}">
+            <pre>${escHtml(resultJson ? JSON.stringify(resultJson, null, 2) : (run.result || ''))}</pre>
+          </div>
+          ${logPane}
+        </td>
       </tr>`;
   }).join('');
 }
@@ -185,16 +245,37 @@ function toggleDetail(runId) {
   if (detail) detail.classList.toggle('hidden');
 }
 
-// ── Result text helper ────────────────────────────────────────────────────────
+function switchTab(runId, tab) {
+  const tabs = document.querySelectorAll(`#detail-${runId} .detail-tab`);
+  const panes = document.querySelectorAll(`#detail-${runId} .detail-pane`);
+  tabs.forEach(t => t.classList.remove('active'));
+  panes.forEach(p => p.classList.remove('active'));
+  const activeTab = [...tabs].find(t => t.textContent.toLowerCase().startsWith(tab));
+  if (activeTab) activeTab.classList.add('active');
+  const activePane = document.getElementById(`pane-${tab}-${runId}`);
+  if (activePane) activePane.classList.add('active');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function extractResultText(r) {
   if (!r) return '';
   return r.answer ||
     (r.story_of_the_day && r.story_of_the_day.title) ||
+    (r.summary) ||
     r.confirmation_text ||
+    r.confirmation ||
     r.error ||
     r.message ||
     '';
+}
+
+function escHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // ── Error banner ──────────────────────────────────────────────────────────────

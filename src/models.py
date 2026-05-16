@@ -16,5 +16,6 @@ class Run(SQLModel, table=True):
     job_id: int = Field(foreign_key="job.id")
     status: str = "pending"  # pending | running | success | failed
     result: Optional[str] = None  # JSON string
+    log: Optional[str] = None  # JSON array of {ts, msg} progress entries
     started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     finished_at: Optional[datetime] = None

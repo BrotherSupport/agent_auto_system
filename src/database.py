@@ -18,6 +18,17 @@ def init_db():
     if _db_url.startswith("sqlite:///./"):
         Path("data").mkdir(exist_ok=True)
     SQLModel.metadata.create_all(engine)
+    # Migrate: add columns introduced after the initial schema
+    from sqlalchemy import text
+    with engine.connect() as conn:
+        for ddl in [
+            "ALTER TABLE run ADD COLUMN log VARCHAR",
+        ]:
+            try:
+                conn.execute(text(ddl))
+                conn.commit()
+            except Exception:
+                pass  # column already exists
 
 
 def get_session():

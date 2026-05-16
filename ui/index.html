@@ -211,6 +211,76 @@
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.4; transform: scale(0.7); }
     }
+
+    /* ── Progress panel ── */
+    #progress-panel {
+      background: var(--surface);
+      border: 1px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+    }
+    .progress-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 0.6rem;
+      color: var(--text);
+    }
+    #progress-log {
+      list-style: none;
+      font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      max-height: 140px;
+      overflow-y: auto;
+      padding-right: 0.25rem;
+    }
+    #progress-log li {
+      padding: 0.18rem 0;
+    }
+    #progress-log li .log-ts {
+      color: var(--accent);
+      margin-right: 0.5rem;
+      user-select: none;
+    }
+
+    /* ── Detail tabs ── */
+    .detail-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      padding: 0 1rem;
+      background: #0a1120;
+    }
+    .detail-tab {
+      padding: 0.45rem 0.85rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+    }
+    .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .detail-pane { display: none; padding: 0.75rem 1rem; background: #0a1120; }
+    .detail-pane.active { display: block; }
+    .detail-pane pre {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-list {
+      list-style: none;
+      font-family: ui-monospace, monospace;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .log-list li { padding: 0.15rem 0; }
+    .log-list .log-ts { color: var(--accent); margin-right: 0.5rem; }
   </style>
 </head>
 <body>
@@ -234,6 +304,16 @@
     <h2>Run History</h2>
     <span id="live-indicator" class="hidden"><span class="pulse"></span></span>
   </div>
+
+  <!-- Live progress panel -->
+  <div id="progress-panel" class="hidden">
+    <div class="progress-header">
+      <span class="pulse"></span>
+      <span id="progress-job-name">Running...</span>
+    </div>
+    <ul id="progress-log"></ul>
+  </div>
+
   <div class="table-wrap">
     <table>
       <thead>
@@ -267,9 +347,11 @@
           <option value="google_form_fill">Google Form Fill</option>
           <option value="web_scraper">Web Scraper</option>
           <option value="hacker_news_digest">Hacker News Digest</option>
+          <option value="x_scraper">X Post Scraper</option>
         </select>
       </div>
 
+      <!-- google_form_fill fields -->
       <!-- google_form_fill fields -->
       <div id="fields-google_form_fill">
         <div class="field">
@@ -308,6 +390,18 @@
         <div class="field">
           <label>Number of Stories (1–10)</label>
           <input type="number" id="hn-limit" value="5" min="1" max="10" />
+        </div>
+      </div>
+
+      <!-- x_scraper fields -->
+      <div id="fields-x_scraper" class="hidden">
+        <div class="field">
+          <label>X Username</label>
+          <input type="text" id="x-username" placeholder="e.g. elonmusk (without @)" />
+        </div>
+        <div class="field">
+          <label>Number of Posts (1–10)</label>
+          <input type="number" id="x-limit" value="5" min="1" max="10" />
         </div>
       </div>
 
