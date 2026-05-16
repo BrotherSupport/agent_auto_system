@@ -15,16 +15,38 @@ let activeEventSource = null;
 let sseStartTime      = null;
 let cachedRuns        = [];
 const elapsedTimers   = new Map();  // runId → intervalId
+let toastTimer        = null;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
 const modal           = document.getElementById('modal');
 const runForm         = document.getElementById('run-form');
-const liveIndicator   = document.getElementById('live-indicator');
 const progressPanel   = document.getElementById('progress-panel');
 const progressLog     = document.getElementById('progress-log');
 const progressJobName = document.getElementById('progress-job-name');
 const progressPulse   = document.getElementById('progress-pulse');
+const heroSection     = document.getElementById('hero-section');
+const heroRestoreBtn  = document.getElementById('hero-restore');
+
+// ── Hero dismiss / restore ────────────────────────────────────────────────────
+
+if (localStorage.getItem('hero-dismissed')) {
+  heroSection.classList.add('hidden');
+  heroRestoreBtn.classList.remove('hidden');
+}
+
+document.getElementById('hero-dismiss').addEventListener('click', () => {
+  heroSection.classList.add('hidden');
+  heroRestoreBtn.classList.remove('hidden');
+  localStorage.setItem('hero-dismissed', '1');
+});
+
+heroRestoreBtn.addEventListener('click', () => {
+  heroSection.classList.remove('hidden');
+  heroRestoreBtn.classList.add('hidden');
+  localStorage.removeItem('hero-dismissed');
+  heroSection.scrollIntoView({ behavior: 'smooth' });
+});
 
 // ── Modal open/close ──────────────────────────────────────────────────────────
 
@@ -37,15 +59,46 @@ document.getElementById('modal-close').addEventListener('click', closeModalFn);
 document.getElementById('cancel-btn').addEventListener('click', closeModalFn);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModalFn(); });
 
-// ── Job type card selector ────────────────────────────────────────────────────
+// ── Job type card selection (event delegation on grid) ────────────────────────
+
+document.getElementById('type-grid').addEventListener('click', (e) => {
+  const card = e.target.closest('.type-card');
+  if (card) selectJobType(card.dataset.type);
+});
 
 function selectJobType(type) {
-  document.querySelectorAll('.type-card').forEach(c =>
-    c.classList.toggle('active', c.dataset.type === type));
+  document.querySelectorAll('.type-card')
+    .forEach(c => c.classList.toggle('active', c.dataset.type === type));
   document.getElementById('job-type').value = type;
   ALL_TYPES.forEach(t =>
     document.getElementById(`fields-${t}`).classList.toggle('hidden', t !== type));
 }
+
+// ── Table event delegation ────────────────────────────────────────────────────
+// All row interactions (toggle, tab, rerun, delete, copy) go through one listener.
+
+document.getElementById('history-tbody').addEventListener('click', (e) => {
+  const actionEl = e.target.closest('[data-action]');
+
+  if (actionEl) {
+    const action = actionEl.dataset.action;
+    const runId  = parseInt(actionEl.dataset.runId,  10);
+    const jobId  = parseInt(actionEl.dataset.jobId,  10);
+    const tab    = actionEl.dataset.tab;
+
+    switch (action) {
+      case 'tab':    switchTab(runId, tab);  return;
+      case 'rerun':  rerun(jobId);           return;
+      case 'delete': deleteRun(runId);       return;
+      case 'copy':   copyResult(runId);      return;
+    }
+    return;
+  }
+
+  // Plain row click → toggle detail panel
+  const row = e.target.closest('tr.data-row');
+  if (row) toggleDetail(parseInt(row.dataset.runId, 10));
+});
 
 // ── Form submit ───────────────────────────────────────────────────────────────
 
@@ -75,14 +128,14 @@ runForm.addEventListener('submit', async (e) => {
 
   } else if (jobType === 'hacker_news_digest') {
     const limit = parseInt(document.getElementById('hn-limit').value, 10) || 5;
-    payload  = { limit };
-    jobName  = `HN Digest (top ${limit})`;
+    payload = { limit };
+    jobName = `HN Digest (top ${limit})`;
 
   } else if (jobType === 'x_scraper') {
     const username = document.getElementById('x-username').value.trim().replace(/^@/, '');
     if (!username) { showToast('X username is required', 'error'); return; }
-    payload  = { username, limit: parseInt(document.getElementById('x-limit').value, 10) || 5 };
-    jobName  = `X: @${username}`;
+    payload = { username, limit: parseInt(document.getElementById('x-limit').value, 10) || 5 };
+    jobName = `X: @${username}`;
   }
 
   closeModalFn();
@@ -118,20 +171,38 @@ async function triggerRun(jobType, jobName, payload) {
 
 // ── Re-run ────────────────────────────────────────────────────────────────────
 
-async function rerun(jobId, event) {
-  event.stopPropagation();
+async function rerun(jobId) {
   try {
     const runResp = await fetch(`/api/jobs/${jobId}/run`, { method: 'POST' });
     if (!runResp.ok) throw new Error('Re-run failed');
     const { run_id } = await runResp.json();
 
-    const cached = cachedRuns.find(r => r.job_id === jobId);
-    const jobName = cached ? cached.job_name : `job ${jobId}`;
+    const cached  = cachedRuns.find(r => r.job_id === jobId);
+    const jobName = cached?.job_name ?? `job ${jobId}`;
 
     showProgress(jobName);
     await loadHistory();
     scrollToRun(run_id);
     startSSE(run_id);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+// ── Delete run ────────────────────────────────────────────────────────────────
+
+async function deleteRun(runId) {
+  const run = cachedRuns.find(r => r.id === runId);
+  if (run?.status === 'pending' || run?.status === 'running') {
+    showToast('Cannot delete an active run', 'error');
+    return;
+  }
+  try {
+    const resp = await fetch(`/api/runs/${runId}`, { method: 'DELETE' });
+    if (resp.status === 409) { showToast('Cannot delete an active run', 'error'); return; }
+    if (!resp.ok) throw new Error('Delete failed');
+    await loadHistory();
+    showToast('Run deleted', 'success');
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -149,7 +220,7 @@ function scrollToRun(runId) {
   }, 120);
 }
 
-// ── Live progress panel ───────────────────────────────────────────────────────
+// ── Progress panel ────────────────────────────────────────────────────────────
 
 function showProgress(jobName) {
   progressLog.innerHTML = '';
@@ -162,14 +233,12 @@ function finishProgress(status, durationSecs) {
   progressPulse.style.display = 'none';
   const ok    = status === 'success';
   const color = ok ? 'var(--green)' : 'var(--red)';
-  const label = ok ? '✓ Completed' : '✗ Failed';
-  progressJobName.innerHTML = `<span style="color:${color}">${label} in ${durationSecs}s</span>`;
+  progressJobName.innerHTML =
+    `<span style="color:${color}">${ok ? '✓ Completed' : '✗ Failed'} in ${durationSecs}s</span>`;
   setTimeout(hideProgress, 3000);
 }
 
-function hideProgress() {
-  progressPanel.classList.add('hidden');
-}
+function hideProgress() { progressPanel.classList.add('hidden'); }
 
 function appendProgressEntry(entry) {
   const li = document.createElement('li');
@@ -183,29 +252,24 @@ function appendProgressEntry(entry) {
 function startSSE(runId) {
   if (activeEventSource) activeEventSource.close();
   sseStartTime = Date.now();
-  liveIndicator.classList.remove('hidden');
 
   activeEventSource = new EventSource(`/api/runs/${runId}/stream`);
 
   activeEventSource.onmessage = (e) => {
     const data = JSON.parse(e.data);
-
     if (data.new_logs) data.new_logs.forEach(appendProgressEntry);
     updateRow(runId, data);
 
     if (data.status === 'success' || data.status === 'failed') {
       activeEventSource.close();
       activeEventSource = null;
-      liveIndicator.classList.add('hidden');
-      const duration = ((Date.now() - sseStartTime) / 1000).toFixed(1);
-      finishProgress(data.status, duration);
+      finishProgress(data.status, ((Date.now() - sseStartTime) / 1000).toFixed(1));
     }
   };
 
   activeEventSource.onerror = () => {
     activeEventSource.close();
     activeEventSource = null;
-    liveIndicator.classList.add('hidden');
     hideProgress();
   };
 }
@@ -215,14 +279,11 @@ function updateRow(runId, data) {
   if (!row) { loadHistory(); return; }
 
   const badge = row.querySelector('.badge');
-  if (badge) {
-    badge.textContent = data.status;
-    badge.className = `badge badge-${data.status}`;
-  }
+  if (badge) { badge.textContent = data.status; badge.className = `badge badge-${data.status}`; }
 
   if (data.result) {
-    const resultCell = row.querySelector('.result-cell');
-    if (resultCell) resultCell.textContent = extractResultText(data.result);
+    const cell = row.querySelector('.result-cell');
+    if (cell) cell.textContent = extractResultText(data.result);
   }
 
   if (data.status === 'success' || data.status === 'failed') {
@@ -245,24 +306,23 @@ function renderHistory(runs) {
   cachedRuns = runs;
   const tbody = document.getElementById('history-tbody');
 
-  if (runs.length === 0) {
+  if (!runs.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No runs yet. Click "New Run" to get started.</td></tr>';
     return;
   }
 
   tbody.innerHTML = runs.map((run) => {
-    const meta     = TYPE_META[run.job_type] || { chip: run.job_type?.toUpperCase() || '?', cls: 'chip-unknown' };
-    const duration = run.finished_at
+    const meta      = TYPE_META[run.job_type] || { chip: run.job_type?.toUpperCase() || '?', cls: 'chip-unknown' };
+    const isActive  = run.status === 'running' || run.status === 'pending';
+    const duration  = run.finished_at
       ? `${((new Date(run.finished_at) - new Date(run.started_at)) / 1000).toFixed(1)}s`
       : '—';
-    const isRunning = run.status === 'running' || run.status === 'pending';
-    const durCell   = isRunning
+    const durCell   = isActive
       ? `<span class="elapsed-timer" data-started="${run.started_at}">…</span>`
       : duration;
-    const started  = new Date(run.started_at).toLocaleString();
+    const started   = new Date(run.started_at).toLocaleString();
 
-    let resultText = '';
-    let resultJson = null;
+    let resultText = '', resultJson = null;
     if (run.result) {
       try { resultJson = JSON.parse(run.result); resultText = extractResultText(resultJson); }
       catch (_) { resultText = run.result; }
@@ -272,7 +332,7 @@ function renderHistory(runs) {
     if (run.log) { try { logJson = JSON.parse(run.log); } catch (_) {} }
 
     const logTab = logJson
-      ? `<button class="detail-tab" data-tab="log" onclick="switchTab(${run.id},'log',event)">Log (${logJson.length})</button>`
+      ? `<button class="detail-tab" data-action="tab" data-tab="log" data-run-id="${run.id}">Log (${logJson.length})</button>`
       : '';
     const logPane = logJson
       ? `<div class="detail-pane" id="pane-log-${run.id}" data-pane="log">
@@ -282,8 +342,10 @@ function renderHistory(runs) {
          </div>`
       : '';
 
+    const deleteDis = isActive ? 'disabled title="Cannot delete an active run"' : 'title="Delete run"';
+
     return `
-      <tr class="data-row" data-run-id="${run.id}" onclick="toggleDetail(${run.id})">
+      <tr class="data-row" data-run-id="${run.id}">
         <td style="color:var(--text-muted)">#${run.id}</td>
         <td>
           <div class="job-cell">
@@ -296,18 +358,21 @@ function renderHistory(runs) {
         <td style="color:var(--text-muted)">${durCell}</td>
         <td class="result-cell" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.82rem;color:var(--text-muted)">${escHtml(resultText)}</td>
         <td style="padding:0.65rem 0.5rem">
-          <button class="btn-rerun" onclick="rerun(${run.job_id}, event)" title="Re-run this job">↺</button>
+          <div class="row-actions">
+            <button class="btn-rerun" data-action="rerun" data-job-id="${run.job_id}" data-run-id="${run.id}" title="Re-run">↺</button>
+            <button class="btn-delete" data-action="delete" data-run-id="${run.id}" ${deleteDis}>🗑</button>
+          </div>
         </td>
       </tr>
       <tr class="detail-row hidden" id="detail-${run.id}">
         <td colspan="7" style="padding:0">
           <div class="detail-tabs">
-            <button class="detail-tab active" data-tab="result" onclick="switchTab(${run.id},'result',event)">Result</button>
+            <button class="detail-tab active" data-action="tab" data-tab="result" data-run-id="${run.id}">Result</button>
             ${logTab}
           </div>
           <div class="detail-pane active" id="pane-result-${run.id}" data-pane="result">
             <div class="pane-toolbar">
-              <button class="btn-copy" onclick="copyResult(${run.id}, event)">Copy JSON</button>
+              <button class="btn-copy" data-action="copy" data-run-id="${run.id}">Copy JSON</button>
             </div>
             <pre>${escHtml(resultJson ? JSON.stringify(resultJson, null, 2) : (run.result || ''))}</pre>
           </div>
@@ -323,18 +388,16 @@ function toggleDetail(runId) {
   document.getElementById(`detail-${runId}`)?.classList.toggle('hidden');
 }
 
-function switchTab(runId, tab, event) {
-  event?.stopPropagation();
+function switchTab(runId, tab) {
   document.querySelectorAll(`#detail-${runId} .detail-tab`)
     .forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll(`#detail-${runId} .detail-pane`)
     .forEach(p => p.classList.toggle('active', p.dataset.pane === tab));
 }
 
-// ── Elapsed timers for running rows ──────────────────────────────────────────
+// ── Elapsed timers ────────────────────────────────────────────────────────────
 
 function initElapsedTimers() {
-  // Clear timers whose rows are no longer running
   elapsedTimers.forEach((id, runId) => {
     if (!document.querySelector(`tr[data-run-id="${runId}"] .elapsed-timer`)) {
       clearInterval(id);
@@ -342,17 +405,11 @@ function initElapsedTimers() {
     }
   });
 
-  // Start timers for all running rows
   document.querySelectorAll('.elapsed-timer').forEach(el => {
-    const row   = el.closest('tr');
-    const runId = parseInt(row?.dataset.runId, 10);
+    const runId = parseInt(el.closest('tr')?.dataset.runId, 10);
     if (!runId || elapsedTimers.has(runId)) return;
-
     const startedAt = new Date(el.dataset.started);
-    const tick = () => {
-      const secs = Math.floor((Date.now() - startedAt) / 1000);
-      el.textContent = `${secs}s…`;
-    };
+    const tick = () => { el.textContent = `${Math.floor((Date.now() - startedAt) / 1000)}s…`; };
     tick();
     elapsedTimers.set(runId, setInterval(tick, 1000));
   });
@@ -360,23 +417,19 @@ function initElapsedTimers() {
 
 function stopElapsedTimer(runId) {
   const id = elapsedTimers.get(runId);
-  if (id !== undefined) {
-    clearInterval(id);
-    elapsedTimers.delete(runId);
-  }
+  if (id !== undefined) { clearInterval(id); elapsedTimers.delete(runId); }
 }
 
 // ── Copy result JSON ──────────────────────────────────────────────────────────
 
-async function copyResult(runId, event) {
-  event.stopPropagation();
+async function copyResult(runId) {
   const pre = document.querySelector(`#pane-result-${runId} pre`);
   if (!pre) return;
   try {
     await navigator.clipboard.writeText(pre.textContent);
     showToast('Copied to clipboard', 'success');
   } catch (_) {
-    showToast('Copy failed — select text manually', 'error');
+    showToast('Copy failed — select manually', 'error');
   }
 }
 
@@ -385,7 +438,7 @@ async function copyResult(runId, event) {
 function extractResultText(r) {
   if (!r) return '';
   return r.answer
-    || (r.story_of_the_day?.title)
+    || r.story_of_the_day?.title
     || r.summary
     || r.confirmation_text
     || r.confirmation
@@ -396,15 +449,9 @@ function extractResultText(r) {
 
 function escHtml(str) {
   return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-
-// ── Toast / error banner ──────────────────────────────────────────────────────
-
-let toastTimer = null;
 
 function showToast(msg, type = 'error') {
   const banner = document.getElementById('toast-banner');
@@ -418,5 +465,4 @@ function showToast(msg, type = 'error') {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 loadHistory();
-// Poll only when no SSE is active to avoid double fetches
 setInterval(() => { if (!activeEventSource) loadHistory(); }, 5000);

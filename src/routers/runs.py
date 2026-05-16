@@ -59,6 +59,17 @@ def list_runs(
     return result
 
 
+@router.delete("/runs/{run_id}", status_code=204)
+def delete_run(run_id: int, session: Session = Depends(get_session)):
+    run = session.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status in ("pending", "running"):
+        raise HTTPException(status_code=409, detail="Cannot delete a run that is in progress")
+    session.delete(run)
+    session.commit()
+
+
 @router.get("/runs/{run_id}")
 def get_run(run_id: int, session: Session = Depends(get_session)):
     run = session.get(Run, run_id)
