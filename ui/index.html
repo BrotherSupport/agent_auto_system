@@ -18,16 +18,12 @@
       --green: #22c55e;
       --red: #ef4444;
       --blue: #3b82f6;
+      --orange: #fb923c;
       --gray: #64748b;
       --radius: 8px;
     }
 
-    body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-    }
+    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
 
     /* ── Header ── */
     header {
@@ -46,28 +42,17 @@
     .logo span { color: var(--accent); }
 
     /* ── Hero ── */
-    .hero {
-      padding: 5rem 2rem 4rem;
-      text-align: center;
-      max-width: 640px;
-      margin: 0 auto;
-    }
-    .hero h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; }
+    .hero { padding: 3rem 2rem 2.5rem; text-align: center; max-width: 640px; margin: 0 auto; }
+    .hero h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; }
     .hero h1 em { color: var(--accent); font-style: normal; }
-    .hero p { margin-top: 1rem; color: var(--text-muted); font-size: 1.05rem; line-height: 1.6; }
-    .hero-actions { margin-top: 2rem; display: flex; gap: 0.75rem; justify-content: center; }
+    .hero p { margin-top: 0.75rem; color: var(--text-muted); font-size: 1rem; line-height: 1.6; }
+    .hero-actions { margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: center; }
 
     /* ── Buttons ── */
     .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.55rem 1.25rem;
-      border-radius: var(--radius);
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.55rem 1.25rem; border-radius: var(--radius);
+      font-size: 0.9rem; font-weight: 600; cursor: pointer; border: none;
       transition: opacity 0.15s, transform 0.1s;
     }
     .btn:active { transform: scale(0.97); }
@@ -77,17 +62,8 @@
     .btn-ghost:hover { border-color: var(--accent); }
 
     /* ── History section ── */
-    .section {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 0 2rem 4rem;
-    }
-    .section-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-    }
+    .section { max-width: 1000px; margin: 0 auto; padding: 0 2rem 4rem; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
     .section-header h2 { font-size: 1rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
     /* ── Table ── */
@@ -95,192 +71,169 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
     thead { background: var(--surface); }
     th { padding: 0.65rem 1rem; text-align: left; color: var(--text-muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    td { padding: 0.75rem 1rem; border-top: 1px solid var(--border); vertical-align: middle; }
+    th.th-actions { width: 48px; padding: 0.65rem 0.5rem; }
+    td { padding: 0.65rem 1rem; border-top: 1px solid var(--border); vertical-align: middle; }
     tr.data-row { cursor: pointer; transition: background 0.1s; }
     tr.data-row:hover { background: rgba(99,102,241,0.06); }
 
+    /* ── Row highlight on new run ── */
+    @keyframes rowGlow {
+      0%   { background: rgba(99,102,241,0.22); }
+      100% { background: transparent; }
+    }
+    tr.row-highlight { animation: rowGlow 2s ease-out forwards; }
+
+    /* ── Job cell ── */
+    .job-cell { display: flex; flex-direction: column; gap: 0.2rem; }
+    .job-name-text { color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+    .type-chip {
+      display: inline-block; font-size: 0.6rem; font-weight: 700;
+      padding: 0.08rem 0.32rem; border-radius: 3px; letter-spacing: 0.05em;
+      width: fit-content;
+    }
+    .chip-form { background: rgba(99,102,241,0.15); color: var(--accent); }
+    .chip-web  { background: rgba(59,130,246,0.15); color: var(--blue); }
+    .chip-hn   { background: rgba(251,146,60,0.2);  color: var(--orange); }
+    .chip-x    { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+    .chip-unknown { background: rgba(100,116,139,0.15); color: var(--gray); }
+
     /* ── Status badge ── */
     .badge {
-      display: inline-block;
-      padding: 0.2rem 0.55rem;
-      border-radius: 99px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      letter-spacing: 0.02em;
+      display: inline-block; padding: 0.2rem 0.55rem; border-radius: 99px;
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em;
     }
-    .badge-pending  { background: rgba(100,116,139,0.2); color: var(--gray); }
-    .badge-running  { background: rgba(59,130,246,0.15); color: var(--blue); }
-    .badge-success  { background: rgba(34,197,94,0.15);  color: var(--green); }
-    .badge-failed   { background: rgba(239,68,68,0.15);  color: var(--red); }
+    .badge-pending { background: rgba(100,116,139,0.2); color: var(--gray); }
+    .badge-running { background: rgba(59,130,246,0.15); color: var(--blue); animation: badgePulse 1.4s ease-in-out infinite; }
+    .badge-success { background: rgba(34,197,94,0.15);  color: var(--green); }
+    .badge-failed  { background: rgba(239,68,68,0.15);  color: var(--red); }
+    @keyframes badgePulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.45; }
+    }
+
+    /* ── Re-run button ── */
+    .btn-rerun {
+      background: none; border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text-muted); padding: 0.22rem 0.5rem; font-size: 0.82rem;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-rerun:hover { border-color: var(--accent); color: var(--accent); }
 
     /* ── Detail row ── */
     tr.detail-row td { background: #0a1120; padding: 0; }
-    tr.detail-row pre {
-      padding: 0.75rem 1rem;
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
     .hidden { display: none !important; }
-
     .empty-state { text-align: center; color: var(--text-muted); padding: 3rem !important; }
 
-    /* ── Error banner ── */
-    #error-banner {
-      position: fixed;
-      bottom: 1.5rem;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--red);
-      color: #fff;
-      padding: 0.6rem 1.25rem;
-      border-radius: var(--radius);
-      font-size: 0.875rem;
-      font-weight: 500;
-      z-index: 100;
+    /* ── Detail tabs ── */
+    .detail-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 1rem; background: #0a1120; }
+    .detail-tab {
+      padding: 0.45rem 0.85rem; font-size: 0.78rem; font-weight: 600;
+      color: var(--text-muted); cursor: pointer; border: none; background: none;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .detail-pane { display: none; background: #0a1120; }
+    .detail-pane.active { display: block; }
+
+    /* Result pane */
+    .pane-toolbar {
+      display: flex; justify-content: flex-end;
+      padding: 0.5rem 1rem 0; background: #0a1120;
+    }
+    .btn-copy {
+      background: none; border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text-muted); padding: 0.18rem 0.6rem; font-size: 0.72rem;
+      cursor: pointer; transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
+    .detail-pane pre {
+      padding: 0.6rem 1rem 0.75rem; font-size: 0.8rem; color: var(--text-muted);
+      white-space: pre-wrap; word-break: break-all;
     }
 
-    /* ── Modal overlay ── */
+    /* Log pane */
+    .log-list { list-style: none; font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--text-muted); padding: 0.6rem 1rem 0.75rem; }
+    .log-list li { padding: 0.15rem 0; }
+    .log-list .log-ts { color: var(--accent); margin-right: 0.5rem; }
+
+    /* ── Progress panel ── */
+    #progress-panel {
+      background: var(--surface); border: 1px solid var(--accent);
+      border-radius: var(--radius); padding: 0.9rem 1.25rem; margin-bottom: 1rem;
+    }
+    .progress-header {
+      display: flex; align-items: center; gap: 0.6rem;
+      font-size: 0.85rem; font-weight: 600; margin-bottom: 0.55rem; color: var(--text);
+    }
+    #progress-log {
+      list-style: none; font-family: ui-monospace, "Cascadia Code", monospace;
+      font-size: 0.78rem; color: var(--text-muted);
+      max-height: 130px; overflow-y: auto; padding-right: 0.25rem;
+    }
+    #progress-log li { padding: 0.16rem 0; }
+    #progress-log li .log-ts { color: var(--accent); margin-right: 0.5rem; user-select: none; }
+
+    /* ── Pulse ── */
+    .pulse {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--blue); animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    /* ── Error / toast banner ── */
+    #toast-banner {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      color: #fff; padding: 0.6rem 1.25rem; border-radius: var(--radius);
+      font-size: 0.875rem; font-weight: 500; z-index: 100;
+      transition: background 0.2s;
+    }
+
+    /* ── Modal ── */
     .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 50;
-      backdrop-filter: blur(2px);
+      position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 50; backdrop-filter: blur(2px);
     }
     .modal {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 1.75rem;
-      width: 100%;
-      max-width: 440px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.75rem; width: 100%; max-width: 460px;
     }
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 1.5rem;
-    }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
     .modal-header h3 { font-size: 1rem; font-weight: 700; }
-    .modal-close {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 1.25rem;
-      cursor: pointer;
-      line-height: 1;
-    }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: 1.25rem; cursor: pointer; line-height: 1; }
     .modal-close:hover { color: var(--text); }
+
+    /* ── Job type cards ── */
+    .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; }
+    .type-card {
+      border: 1.5px solid var(--border); border-radius: var(--radius);
+      padding: 0.7rem 0.85rem; cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      background: var(--bg); user-select: none;
+    }
+    .type-card:hover { border-color: var(--accent); background: rgba(99,102,241,0.04); }
+    .type-card.active { border-color: var(--accent); background: rgba(99,102,241,0.1); }
+    .type-card-header { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem; }
+    .type-card-icon { font-size: 1rem; line-height: 1; }
+    .type-card-name { font-size: 0.83rem; font-weight: 700; color: var(--text); }
+    .type-card-desc { font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
 
     /* ── Form fields ── */
     .field { margin-bottom: 1rem; }
     .field label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.04em; }
     .field input, .field select, .field textarea {
-      width: 100%;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      color: var(--text);
-      padding: 0.55rem 0.75rem;
-      font-size: 0.9rem;
-      font-family: inherit;
-      outline: none;
-      transition: border-color 0.15s;
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); color: var(--text); padding: 0.55rem 0.75rem;
+      font-size: 0.9rem; font-family: inherit; outline: none; transition: border-color 0.15s;
     }
     .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
     .field textarea { resize: vertical; min-height: 80px; }
     .field select option { background: var(--surface); }
 
     .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
-
-    /* ── Live indicator ── */
-    .pulse {
-      display: inline-block;
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--blue);
-      animation: pulse 1.2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: 0.4; transform: scale(0.7); }
-    }
-
-    /* ── Progress panel ── */
-    #progress-panel {
-      background: var(--surface);
-      border: 1px solid var(--accent);
-      border-radius: var(--radius);
-      padding: 1rem 1.25rem;
-      margin-bottom: 1rem;
-    }
-    .progress-header {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      font-size: 0.85rem;
-      font-weight: 600;
-      margin-bottom: 0.6rem;
-      color: var(--text);
-    }
-    #progress-log {
-      list-style: none;
-      font-family: ui-monospace, "Cascadia Code", monospace;
-      font-size: 0.78rem;
-      color: var(--text-muted);
-      max-height: 140px;
-      overflow-y: auto;
-      padding-right: 0.25rem;
-    }
-    #progress-log li {
-      padding: 0.18rem 0;
-    }
-    #progress-log li .log-ts {
-      color: var(--accent);
-      margin-right: 0.5rem;
-      user-select: none;
-    }
-
-    /* ── Detail tabs ── */
-    .detail-tabs {
-      display: flex;
-      gap: 0;
-      border-bottom: 1px solid var(--border);
-      padding: 0 1rem;
-      background: #0a1120;
-    }
-    .detail-tab {
-      padding: 0.45rem 0.85rem;
-      font-size: 0.78rem;
-      font-weight: 600;
-      color: var(--text-muted);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      margin-bottom: -1px;
-    }
-    .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-    .detail-pane { display: none; padding: 0.75rem 1rem; background: #0a1120; }
-    .detail-pane.active { display: block; }
-    .detail-pane pre {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-    .log-list {
-      list-style: none;
-      font-family: ui-monospace, monospace;
-      font-size: 0.78rem;
-      color: var(--text-muted);
-    }
-    .log-list li { padding: 0.15rem 0; }
-    .log-list .log-ts { color: var(--accent); margin-right: 0.5rem; }
   </style>
 </head>
 <body>
@@ -305,11 +258,10 @@
     <span id="live-indicator" class="hidden"><span class="pulse"></span></span>
   </div>
 
-  <!-- Live progress panel -->
   <div id="progress-panel" class="hidden">
     <div class="progress-header">
-      <span class="pulse"></span>
-      <span id="progress-job-name">Running...</span>
+      <span class="pulse" id="progress-pulse"></span>
+      <span id="progress-job-name">Running…</span>
     </div>
     <ul id="progress-log"></ul>
   </div>
@@ -324,10 +276,11 @@
           <th>Started</th>
           <th>Duration</th>
           <th>Result</th>
+          <th class="th-actions"></th>
         </tr>
       </thead>
       <tbody id="history-tbody">
-        <tr><td colspan="6" class="empty-state">No runs yet. Click "New Run" to get started.</td></tr>
+        <tr><td colspan="7" class="empty-state">No runs yet. Click "New Run" to get started.</td></tr>
       </tbody>
     </table>
   </div>
@@ -341,17 +294,28 @@
       <button class="modal-close" id="modal-close">&times;</button>
     </div>
     <form id="run-form">
-      <div class="field">
-        <label>Automation Type</label>
-        <select id="job-type" onchange="switchJobType(this.value)">
-          <option value="google_form_fill">Google Form Fill</option>
-          <option value="web_scraper">Web Scraper</option>
-          <option value="hacker_news_digest">Hacker News Digest</option>
-          <option value="x_scraper">X Post Scraper</option>
-        </select>
-      </div>
 
-      <!-- google_form_fill fields -->
+      <!-- Job type cards -->
+      <div class="type-grid" id="type-grid">
+        <div class="type-card active" data-type="google_form_fill" onclick="selectJobType('google_form_fill')">
+          <div class="type-card-header"><span class="type-card-icon">📋</span><span class="type-card-name">Form Fill</span></div>
+          <div class="type-card-desc">Auto-fill any Google Form</div>
+        </div>
+        <div class="type-card" data-type="web_scraper" onclick="selectJobType('web_scraper')">
+          <div class="type-card-header"><span class="type-card-icon">🌐</span><span class="type-card-name">Web Scraper</span></div>
+          <div class="type-card-desc">Fetch a URL, answer a question</div>
+        </div>
+        <div class="type-card" data-type="hacker_news_digest" onclick="selectJobType('hacker_news_digest')">
+          <div class="type-card-header"><span class="type-card-icon">🔶</span><span class="type-card-name">HN Digest</span></div>
+          <div class="type-card-desc">Top HN stories with AI summary</div>
+        </div>
+        <div class="type-card" data-type="x_scraper" onclick="selectJobType('x_scraper')">
+          <div class="type-card-header"><span class="type-card-icon">✕</span><span class="type-card-name">X Scraper</span></div>
+          <div class="type-card-desc">Recent posts from any X profile</div>
+        </div>
+      </div>
+      <input type="hidden" id="job-type" value="google_form_fill" />
+
       <!-- google_form_fill fields -->
       <div id="fields-google_form_fill">
         <div class="field">
@@ -369,7 +333,7 @@
         </div>
         <div class="field">
           <label>AI Problem to Solve</label>
-          <textarea id="ai-problem" placeholder="Describe what you want AI to solve..."></textarea>
+          <textarea id="ai-problem" placeholder="Describe what you want AI to solve…"></textarea>
         </div>
       </div>
 
@@ -413,7 +377,7 @@
   </div>
 </div>
 
-<div id="error-banner" class="hidden"></div>
+<div id="toast-banner" class="hidden"></div>
 
 <script src="/ui/app.js"></script>
 </body>

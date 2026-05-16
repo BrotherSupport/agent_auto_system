@@ -35,9 +35,28 @@ def list_runs(
     limit: int = 50,
     session: Session = Depends(get_session),
 ):
-    return session.exec(
+    runs = session.exec(
         select(Run).order_by(Run.started_at.desc()).offset(offset).limit(limit)
     ).all()
+    if not runs:
+        return []
+    job_ids = list({r.job_id for r in runs})
+    jobs = {j.id: j for j in session.exec(select(Job).where(Job.id.in_(job_ids))).all()}
+    result = []
+    for run in runs:
+        job = jobs.get(run.job_id)
+        result.append({
+            "id": run.id,
+            "job_id": run.job_id,
+            "job_name": job.name if job else f"job {run.job_id}",
+            "job_type": job.job_type if job else "unknown",
+            "status": run.status,
+            "result": run.result,
+            "log": run.log,
+            "started_at": run.started_at,
+            "finished_at": run.finished_at,
+        })
+    return result
 
 
 @router.get("/runs/{run_id}")
