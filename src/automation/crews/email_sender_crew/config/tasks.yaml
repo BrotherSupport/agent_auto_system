@@ -1,0 +1,13 @@
+send_email_task:
+  description: >
+    Send an email using the gmail_send_email tool with EXACTLY these parameters —
+    do not change them:
+      to: {to}
+      subject: {subject}
+      body: {body}
+      cc: {cc}
+
+    Call the tool once with these values and return the result.
+  expected_output: >
+    A JSON object: {"sent": true, "to": "...", "subject": "...", "confirmation": "..."}
+  agent: email_sender_agent

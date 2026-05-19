@@ -7,7 +7,6 @@ from src.automation.progress import append_log
 
 class WebScraperState(BaseModel):
     url: str = ""
-    question: str = "What is this page about?"
     run_id: int = 0
 
 
@@ -23,9 +22,6 @@ class WebScraperFlow(Flow[WebScraperState]):
     @listen(validate_payload)
     def execute_crew(self, _):
         append_log(self.state.run_id, "Web scraper agent reading page content...")
-        result = WebScraperCrew().crew().kickoff(inputs={
-            "url": self.state.url,
-            "question": self.state.question,
-        })
-        append_log(self.state.run_id, "Agent generated answer, formatting result...")
+        result = WebScraperCrew().crew().kickoff(inputs={"url": self.state.url})
+        append_log(self.state.run_id, "Agent generated summary, formatting result...")
         return result.raw if hasattr(result, "raw") else str(result)

@@ -1,12 +1,16 @@
 scrape_task:
   description: >
-    Fetch the URL "{url}" using the web_scraper tool, then answer this question:
-    "{question}"
-    Base your answer strictly on the page content you retrieved.
+    Fetch the URL "{url}" using the web_scraper tool and return a comprehensive
+    structured summary of all content found on the page.
+    Include the page title, a paragraph summary, key points, headings, word count, and notable links.
   expected_output: >
     A JSON object with exactly these keys:
+    - "url": the scraped URL (string)
     - "title": the page title (string)
-    - "answer": a concise answer to the question (2-4 sentences)
-    - "key_points": a list of 3-5 key facts from the page (list of strings)
+    - "summary": a 2-4 sentence overview of what the page is about
+    - "key_points": list of 4-6 key facts or takeaways from the page
+    - "headings": list of h1-h3 headings found on the page
+    - "word_count": approximate word count of the page body (integer)
+    - "links": list of up to 8 notable outbound URLs found on the page
     Return ONLY the JSON object, no markdown fences.
   agent: web_scraper_agent

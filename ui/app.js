@@ -1,12 +1,13 @@
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper'];
+const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender'];
 
 const TYPE_META = {
-  google_form_fill:   { chip: 'FORM', cls: 'chip-form' },
-  web_scraper:        { chip: 'WEB',  cls: 'chip-web'  },
-  hacker_news_digest: { chip: 'HN',   cls: 'chip-hn'   },
-  x_scraper:          { chip: 'X',    cls: 'chip-x'    },
+  google_form_fill:   { chip: 'FORM',  cls: 'chip-form'  },
+  web_scraper:        { chip: 'WEB',   cls: 'chip-web'   },
+  hacker_news_digest: { chip: 'HN',    cls: 'chip-hn'    },
+  x_scraper:          { chip: 'X',     cls: 'chip-x'     },
+  email_sender:       { chip: 'EMAIL', cls: 'chip-email' },
 };
 
 const AUTO_CATALOG = {
@@ -23,13 +24,12 @@ const AUTO_CATALOG = {
   },
   web_scraper: {
     icon: '🌐', name: 'Web Scraper',
-    desc: 'Fetch any public web page and have an AI agent answer a custom question based strictly on the page content.',
+    desc: 'Fetch any public web page and return a comprehensive structured summary — title, key points, headings, word count, and outbound links. No question needed.',
     inputs: [
-      { name: 'url',      type: 'str', desc: 'Full URL to fetch' },
-      { name: 'question', type: 'str', desc: 'Question to answer from page content' },
+      { name: 'url', type: 'str', desc: 'Full URL to scrape' },
     ],
     crew: 'WebScraperCrew', flow: 'WebScraperFlow',
-    agent: 'Web Scraper Agent', tools: ['Web Scraper'],
+    agent: 'Web Content Analyst', tools: ['Web Scraper'],
   },
   hacker_news_digest: {
     icon: '🔶', name: 'HN Digest',
@@ -49,6 +49,18 @@ const AUTO_CATALOG = {
     ],
     crew: 'XScraperCrew', flow: 'XScraperFlow',
     agent: 'X Analyst', tools: ['X Post Scraper'],
+  },
+  email_sender: {
+    icon: '✉️', name: 'Email Sender',
+    desc: 'Send an email to one or more recipients via Gmail SMTP. Supports HTML or plain-text bodies, CC, and multiple comma-separated addresses. No LLM — content is sent exactly as provided.',
+    inputs: [
+      { name: 'to',      type: 'str', desc: 'Recipient address(es), comma-separated' },
+      { name: 'subject', type: 'str', desc: 'Email subject line' },
+      { name: 'body',    type: 'str', desc: 'Email body — HTML or plain text' },
+      { name: 'cc',      type: 'str (optional)', desc: 'CC addresses, comma-separated' },
+    ],
+    crew: 'EmailSenderCrew', flow: 'EmailSenderFlow',
+    agent: 'Email Sender Agent', tools: ['Gmail Send'],
   },
 };
 
@@ -167,7 +179,7 @@ runForm.addEventListener('submit', async (e) => {
   } else if (jobType === 'web_scraper') {
     const url = document.getElementById('scrape-url').value.trim();
     if (!url) { showToast('URL is required', 'error'); return; }
-    payload = { url, question: document.getElementById('scrape-question').value.trim() || 'What is this page about?' };
+    payload = { url };
     jobName = `Scrape: ${new URL(url).hostname}`;
   } else if (jobType === 'hacker_news_digest') {
     const limit = parseInt(document.getElementById('hn-limit').value, 10) || 5;
@@ -178,6 +190,18 @@ runForm.addEventListener('submit', async (e) => {
     if (!username) { showToast('X username is required', 'error'); return; }
     payload = { username, limit: parseInt(document.getElementById('x-limit').value, 10) || 5 };
     jobName = `X: @${username}`;
+
+  } else if (jobType === 'email_sender') {
+    const to = document.getElementById('email-to').value.trim();
+    const subject = document.getElementById('email-subject').value.trim();
+    const body = document.getElementById('email-body').value.trim();
+    if (!to)      { showToast('Recipients are required', 'error'); return; }
+    if (!subject) { showToast('Subject is required', 'error'); return; }
+    if (!body)    { showToast('Body is required', 'error'); return; }
+    const cc = document.getElementById('email-cc').value.trim();
+    payload = { to, subject, body, ...(cc ? { cc } : {}) };
+    const recipientCount = to.split(',').filter(e => e.trim()).length;
+    jobName = `Email: ${subject} → ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}`;
   }
 
   closeModalFn();
@@ -1152,10 +1176,11 @@ function extractResultText(r) {
   return r.answer
     || r.story_of_the_day?.title
     || r.summary
-    || r.confirmation_text
     || r.confirmation
+    || r.confirmation_text
     || r.error
     || r.message
+    || (r.title ? `${r.title} (${r.word_count ?? '?'} words)` : '')
     || '';
 }
 

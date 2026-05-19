@@ -126,6 +126,7 @@
     .chip-web     { background: rgba(59,130,246,0.15);  color: var(--blue); }
     .chip-hn      { background: rgba(251,146,60,0.2);   color: var(--orange); }
     .chip-x       { background: rgba(148,163,184,0.15); color: var(--text-muted); }
+    .chip-email   { background: rgba(34,197,94,0.13);  color: var(--green); }
     .chip-unknown { background: rgba(100,116,139,0.15); color: var(--gray); }
 
     /* ── Status badge ── */
@@ -212,7 +213,7 @@
     .modal-header h3 { font-size: 1rem; font-weight: 700; }
     .modal-close { background: none; border: none; color: var(--text-muted); font-size: 1.25rem; cursor: pointer; line-height: 1; }
     .modal-close:hover { color: var(--text); }
-    .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; }
+    .type-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; }
     .type-card {
       border: 1.5px solid var(--border); border-radius: var(--radius); padding: 0.7rem 0.85rem;
       cursor: pointer; transition: border-color 0.15s, background 0.15s; background: var(--bg); user-select: none;
@@ -527,7 +528,7 @@
         </div>
         <div class="type-card" data-type="web_scraper">
           <div class="type-card-header"><span class="type-card-icon">🌐</span><span class="type-card-name">Web Scraper</span></div>
-          <div class="type-card-desc">Fetch a URL, answer a question</div>
+          <div class="type-card-desc">Scrape full page content &amp; summary</div>
         </div>
         <div class="type-card" data-type="hacker_news_digest">
           <div class="type-card-header"><span class="type-card-icon">🔶</span><span class="type-card-name">HN Digest</span></div>
@@ -536,6 +537,10 @@
         <div class="type-card" data-type="x_scraper">
           <div class="type-card-header"><span class="type-card-icon">✕</span><span class="type-card-name">X Scraper</span></div>
           <div class="type-card-desc">Recent posts from any X profile</div>
+        </div>
+        <div class="type-card" data-type="email_sender">
+          <div class="type-card-header"><span class="type-card-icon">✉️</span><span class="type-card-name">Email Sender</span></div>
+          <div class="type-card-desc">Send email to multiple recipients</div>
         </div>
       </div>
       <input type="hidden" id="job-type" value="google_form_fill" />
@@ -555,7 +560,6 @@
       </div>
       <div id="fields-web_scraper" class="hidden">
         <div class="field"><label>URL to Scrape</label><input type="url" id="scrape-url" placeholder="https://example.com" /></div>
-        <div class="field"><label>Question to Answer</label><textarea id="scrape-question" placeholder="What is this page about?"></textarea></div>
       </div>
       <div id="fields-hacker_news_digest" class="hidden">
         <div class="field"><label>Number of Stories (1–10)</label><input type="number" id="hn-limit" value="5" min="1" max="10" /></div>
@@ -563,6 +567,26 @@
       <div id="fields-x_scraper" class="hidden">
         <div class="field"><label>X Username</label><input type="text" id="x-username" placeholder="e.g. elonmusk (without @)" /></div>
         <div class="field"><label>Number of Posts (1–10)</label><input type="number" id="x-limit" value="5" min="1" max="10" /></div>
+      </div>
+
+      <div id="fields-email_sender" class="hidden">
+        <div class="field">
+          <label>Recipients</label>
+          <textarea id="email-to" placeholder="alice@example.com, bob@example.com" style="min-height:60px"></textarea>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.3rem">Separate multiple addresses with commas</div>
+        </div>
+        <div class="field">
+          <label>CC (optional)</label>
+          <input type="text" id="email-cc" placeholder="manager@example.com" />
+        </div>
+        <div class="field"><label>Subject</label><input type="text" id="email-subject" placeholder="Your subject line" /></div>
+        <div class="field">
+          <label>Body</label>
+          <textarea id="email-body" placeholder="Email body — plain text or HTML" style="min-height:110px"></textarea>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-muted);background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
+          Requires <code style="font-family:ui-monospace,monospace">GMAIL_ADDRESS</code> and <code style="font-family:ui-monospace,monospace">GMAIL_APP_PASSWORD</code> in <code style="font-family:ui-monospace,monospace">.env</code>
+        </div>
       </div>
 
       <div class="modal-actions">

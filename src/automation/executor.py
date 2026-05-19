@@ -27,6 +27,8 @@ def _is_app_failure(job_type: str, result: dict) -> bool:
         return True
     if job_type == "google_form_fill" and not result.get("submitted", True):
         return True
+    if job_type == "email_sender" and result.get("sent") is False:
+        return True
     return False
 
 
@@ -46,6 +48,11 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
             from src.automation.flows.web_scraper_flow import WebScraperFlow
             append_log(run_id, "Launching web scraper agent...")
             raw = await asyncio.to_thread(WebScraperFlow().kickoff, inputs=inputs)
+
+        elif job_type == "email_sender":
+            from src.automation.flows.email_sender_flow import EmailSenderFlow
+            append_log(run_id, "Preparing email delivery...")
+            raw = await asyncio.to_thread(EmailSenderFlow().kickoff, inputs=inputs)
 
         elif job_type == "hacker_news_digest":
             from src.automation.flows.hn_digest_flow import HNDigestFlow

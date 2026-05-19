@@ -31,14 +31,26 @@ _CATALOG: dict = {
         {
             "id": "web_scraper_agent",
             "name": "Web Scraper Agent",
-            "role": "Web Research Analyst",
-            "goal": "Fetch the content of the given URL and provide a thorough, accurate answer to the user's question based solely on what you find on the page.",
-            "backstory": "Expert at reading web pages and extracting key information. Always bases answers on what's actually read. Produces clean, structured JSON output.",
+            "role": "Web Content Analyst",
+            "goal": "Fetch the content of the given URL and return a comprehensive structured summary — title, key sections, main points, headings, and links.",
+            "backstory": "Expert web analyst who extracts and organises page content clearly. Always bases output strictly on what the scraper tool returns. Produces clean, structured JSON output.",
             "tools": ["web_scraper"],
             "crew": "WebScraperCrew",
             "task": "scrape_task",
             "job_type": "web_scraper",
             "source_file": "src/automation/crews/web_scraper_crew/config/agents.yaml",
+        },
+        {
+            "id": "email_sender_agent",
+            "name": "Email Sender Agent",
+            "role": "Email Delivery Agent",
+            "goal": "Send emails exactly as instructed using the gmail_send_email tool. Never modify subject, body, or recipients.",
+            "backstory": "Reliable email dispatch agent. Receives ready-to-send email parameters and calls the Gmail send tool once with those exact parameters without altering content.",
+            "tools": ["gmail_send_email"],
+            "crew": "EmailSenderCrew",
+            "task": "send_email_task",
+            "job_type": "email_sender",
+            "source_file": "src/automation/crews/email_sender_crew/config/agents.yaml",
         },
         {
             "id": "hn_analyst",
@@ -93,12 +105,26 @@ _CATALOG: dict = {
             "id": "web_scraper",
             "name": "Web Scraper",
             "class": "WebScraperTool",
-            "description": "Fetch a web page and return its title and main text content (up to 8 000 chars, scripts/styles stripped).",
+            "description": "Fetch a web page and return full structured content: title, meta description, h1-h3 headings, main text (up to 8 000 chars), outbound links, and word count.",
             "inputs": [
                 {"name": "url", "type": "str", "description": "URL to fetch"},
             ],
             "used_by": ["WebScraperCrew"],
             "source_file": "src/automation/tools/web_scraper_tool.py",
+        },
+        {
+            "id": "gmail_send_email",
+            "name": "Gmail Send",
+            "class": "GmailSendTool",
+            "description": "Send an email via Gmail SMTP using an app password. Supports multiple recipients (comma-separated), CC, and HTML or plain-text bodies.",
+            "inputs": [
+                {"name": "to",      "type": "str",           "description": "Recipient(s), comma-separated"},
+                {"name": "subject", "type": "str",           "description": "Email subject line"},
+                {"name": "body",    "type": "str",           "description": "HTML or plain-text email body"},
+                {"name": "cc",      "type": "str (optional)","description": "CC recipients, comma-separated"},
+            ],
+            "used_by": ["EmailSenderCrew"],
+            "source_file": "src/automation/tools/gmail_send_tool.py",
         },
         {
             "id": "hn_top_stories",
@@ -152,12 +178,29 @@ _CATALOG: dict = {
             "tasks": [
                 {
                     "name": "scrape_task",
-                    "description": "Fetch the URL content and answer the user's question strictly from the page.",
-                    "expected_output": '{"title": "...", "answer": "...", "key_points": [...]}',
+                    "description": "Fetch the URL and extract a comprehensive structured summary of all page content.",
+                    "expected_output": '{"url": "...", "title": "...", "summary": "...", "key_points": [...], "headings": [...], "word_count": N, "links": [...]}',
                     "config_file": "src/automation/crews/web_scraper_crew/config/tasks.yaml",
                 }
             ],
             "source_file": "src/automation/crews/web_scraper_crew/crew.py",
+        },
+        {
+            "id": "email_sender_crew",
+            "name": "EmailSenderCrew",
+            "process": "sequential",
+            "agents": ["email_sender_agent"],
+            "job_type": "email_sender",
+            "flow": "EmailSenderFlow",
+            "tasks": [
+                {
+                    "name": "send_email_task",
+                    "description": "Call gmail_send_email tool with the exact provided parameters without modification.",
+                    "expected_output": '{"sent": true, "to": "...", "subject": "...", "confirmation": "..."}',
+                    "config_file": "src/automation/crews/email_sender_crew/config/tasks.yaml",
+                }
+            ],
+            "source_file": "src/automation/crews/email_sender_crew/crew.py",
         },
         {
             "id": "hn_digest_crew",
@@ -227,7 +270,6 @@ _CATALOG: dict = {
             "crew": "WebScraperCrew",
             "state_fields": [
                 {"name": "url", "type": "str", "default": ""},
-                {"name": "question", "type": "str", "default": "What is this page about?"},
                 {"name": "run_id", "type": "int", "default": 0},
             ],
             "steps": [
@@ -239,10 +281,36 @@ _CATALOG: dict = {
                 {
                     "name": "execute_crew",
                     "decorator": "@listen(validate_payload)",
-                    "description": "Kicks off WebScraperCrew with url and question. Returns the raw crew output.",
+                    "description": "Kicks off WebScraperCrew with the url. Returns structured page summary JSON.",
                 },
             ],
             "source_file": "src/automation/flows/web_scraper_flow.py",
+        },
+        {
+            "id": "email_sender_flow",
+            "name": "EmailSenderFlow",
+            "job_type": "email_sender",
+            "crew": "EmailSenderCrew (direct tool call — no LLM)",
+            "state_fields": [
+                {"name": "to",      "type": "str", "default": ""},
+                {"name": "subject", "type": "str", "default": ""},
+                {"name": "body",    "type": "str", "default": ""},
+                {"name": "cc",      "type": "str", "default": ""},
+                {"name": "run_id",  "type": "int", "default": 0},
+            ],
+            "steps": [
+                {
+                    "name": "validate_payload",
+                    "decorator": "@start()",
+                    "description": "Validates to, subject, and body are present. Logs recipient count.",
+                },
+                {
+                    "name": "send_email",
+                    "decorator": "@listen(validate_payload)",
+                    "description": "Calls GmailSendTool directly via SMTP — no LLM involved. Returns send confirmation JSON.",
+                },
+            ],
+            "source_file": "src/automation/flows/email_sender_flow.py",
         },
         {
             "id": "hn_digest_flow",
