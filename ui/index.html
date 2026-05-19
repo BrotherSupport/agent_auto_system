@@ -10,6 +10,7 @@
     :root {
       --bg: #0f172a;
       --surface: #1e293b;
+      --surface2: #162032;
       --border: #334155;
       --accent: #6366f1;
       --accent-dim: #4f46e5;
@@ -19,6 +20,7 @@
       --red: #ef4444;
       --blue: #3b82f6;
       --orange: #fb923c;
+      --yellow: #eab308;
       --gray: #64748b;
       --radius: 8px;
     }
@@ -27,12 +29,42 @@
 
     /* ── Header ── */
     header {
-      border-bottom: 1px solid var(--border); padding: 0 2rem; height: 56px;
-      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 56px;
+      display: flex; align-items: center; gap: 1.5rem;
       position: sticky; top: 0; background: var(--bg); z-index: 10;
     }
-    .logo { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; }
+    .logo { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; flex-shrink: 0; }
     .logo span { color: var(--accent); }
+
+    /* ── Nav tabs ── */
+    .nav-tabs { display: flex; gap: 0.15rem; flex: 1; }
+    .nav-tab {
+      background: none; border: none; color: var(--text-muted); font-size: 0.875rem;
+      font-weight: 500; padding: 0.4rem 0.85rem; border-radius: var(--radius);
+      cursor: pointer; transition: color 0.15s, background 0.15s;
+    }
+    .nav-tab:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+    .nav-tab.active { color: var(--text); background: rgba(99,102,241,0.12); font-weight: 600; }
+
+    /* ── Page visibility ── */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.5rem 1.1rem; border-radius: var(--radius);
+      font-size: 0.875rem; font-weight: 600; cursor: pointer; border: none;
+      transition: opacity 0.15s, transform 0.1s; white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-dim); }
+    .btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-ghost:hover { border-color: var(--accent); }
+    .btn-danger { background: rgba(239,68,68,0.12); color: var(--red); border: 1px solid rgba(239,68,68,0.25); }
+    .btn-danger:hover { background: rgba(239,68,68,0.2); }
+    .btn-sm { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
 
     /* ── Hero ── */
     .hero {
@@ -43,7 +75,6 @@
     .hero h1 em { color: var(--accent); font-style: normal; }
     .hero p { margin-top: 0.75rem; color: var(--text-muted); font-size: 1rem; line-height: 1.6; }
     .hero-actions { margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: center; }
-
     #hero-dismiss {
       position: absolute; top: 0.9rem; right: 0.5rem;
       background: none; border: none; color: var(--text-muted);
@@ -52,23 +83,12 @@
     }
     #hero-dismiss:hover { color: var(--text); background: rgba(255,255,255,0.06); }
 
-    /* ── Buttons ── */
-    .btn {
-      display: inline-flex; align-items: center; gap: 0.4rem;
-      padding: 0.55rem 1.25rem; border-radius: var(--radius);
-      font-size: 0.9rem; font-weight: 600; cursor: pointer; border: none;
-      transition: opacity 0.15s, transform 0.1s;
-    }
-    .btn:active { transform: scale(0.97); }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent-dim); }
-    .btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-    .btn-ghost:hover { border-color: var(--accent); }
-
-    /* ── History section ── */
-    .section { max-width: 1000px; margin: 0 auto; padding: 0 2rem 4rem; }
-    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
-    .section-header h2 { font-size: 1rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    /* ── Sections ── */
+    .section { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem 4rem; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+    .section-header h2 { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .section-header-left { display: flex; align-items: center; gap: 1rem; }
+    .section-header-right { display: flex; align-items: center; gap: 0.5rem; }
 
     .hero-restore-btn {
       background: none; border: none; color: var(--text-muted); font-size: 0.78rem;
@@ -80,11 +100,14 @@
     .table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
     table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
     thead { background: var(--surface); }
-    th { padding: 0.65rem 1rem; text-align: left; color: var(--text-muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    th { padding: 0.65rem 0.85rem; text-align: left; color: var(--text-muted); font-weight: 500; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    th.th-check { width: 36px; padding: 0.65rem 0.75rem; }
     th.th-actions { width: 80px; padding: 0.65rem 0.5rem; }
-    td { padding: 0.65rem 1rem; border-top: 1px solid var(--border); vertical-align: middle; }
+    td { padding: 0.65rem 0.85rem; border-top: 1px solid var(--border); vertical-align: middle; }
+    td.td-check { padding: 0.65rem 0.75rem; }
     tr.data-row { cursor: pointer; transition: background 0.1s; }
     tr.data-row:hover { background: rgba(99,102,241,0.06); }
+    tr.data-row.selected { background: rgba(99,102,241,0.1); }
 
     @keyframes rowGlow {
       0%   { background: rgba(99,102,241,0.22); }
@@ -116,7 +139,7 @@
     .badge-failed  { background: rgba(239,68,68,0.15);  color: var(--red); }
     @keyframes badgePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 
-    /* ── Action buttons in table ── */
+    /* ── Row action buttons ── */
     .btn-rerun, .btn-delete {
       background: none; border: 1px solid var(--border); border-radius: 4px;
       color: var(--text-muted); padding: 0.22rem 0.5rem; font-size: 0.82rem;
@@ -142,7 +165,6 @@
     .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .detail-pane { display: none; background: #0a1120; }
     .detail-pane.active { display: block; }
-
     .pane-toolbar { display: flex; justify-content: flex-end; padding: 0.5rem 1rem 0; }
     .btn-copy {
       background: none; border: 1px solid var(--border); border-radius: 4px;
@@ -151,7 +173,6 @@
     }
     .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
     .detail-pane pre { padding: 0.6rem 1rem 0.75rem; font-size: 0.8rem; color: var(--text-muted); white-space: pre-wrap; word-break: break-all; }
-
     .log-list { list-style: none; font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--text-muted); padding: 0.6rem 1rem 0.75rem; }
     .log-list li { padding: 0.15rem 0; }
     .log-list .log-ts { color: var(--accent); margin-right: 0.5rem; }
@@ -168,7 +189,6 @@
     }
     #progress-log li { padding: 0.16rem 0; }
     #progress-log li .log-ts { color: var(--accent); margin-right: 0.5rem; user-select: none; }
-
     .pulse {
       display: inline-block; width: 8px; height: 8px; border-radius: 50%;
       background: var(--blue); animation: pulse 1.2s ease-in-out infinite; flex-shrink: 0;
@@ -192,8 +212,6 @@
     .modal-header h3 { font-size: 1rem; font-weight: 700; }
     .modal-close { background: none; border: none; color: var(--text-muted); font-size: 1.25rem; cursor: pointer; line-height: 1; }
     .modal-close:hover { color: var(--text); }
-
-    /* ── Job type cards ── */
     .type-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1.25rem; }
     .type-card {
       border: 1.5px solid var(--border); border-radius: var(--radius); padding: 0.7rem 0.85rem;
@@ -205,8 +223,6 @@
     .type-card-icon { font-size: 1rem; line-height: 1; }
     .type-card-name { font-size: 0.83rem; font-weight: 700; color: var(--text); }
     .type-card-desc { font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
-
-    /* ── Form fields ── */
     .field { margin-bottom: 1rem; }
     .field label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.04em; }
     .field input, .field select, .field textarea {
@@ -217,60 +233,274 @@
     .field textarea { resize: vertical; min-height: 80px; }
     .field select option { background: var(--surface); }
     .modal-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+
+    /* ── Checkbox ── */
+    input[type="checkbox"] {
+      width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer;
+    }
+
+    /* ── Page header ── */
+    .page-header { padding: 1.75rem 1.5rem 1rem; max-width: 1100px; margin: 0 auto; }
+    .page-header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
+    .page-header p { margin-top: 0.3rem; color: var(--text-muted); font-size: 0.9rem; }
+
+    /* ── Category tabs ── */
+    .cat-tabs { display: flex; gap: 0.25rem; padding: 0 1.5rem; max-width: 1100px; margin: 0 auto 1.25rem; border-bottom: 1px solid var(--border); }
+    .cat-tab {
+      padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500; color: var(--text-muted);
+      cursor: pointer; border: none; background: none;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .cat-tab:hover { color: var(--text); }
+    .cat-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+
+    /* ── System cards ── */
+    .system-cards { display: flex; flex-direction: column; gap: 0.75rem; }
+    .sys-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .sys-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.85rem 1.1rem; cursor: pointer; user-select: none;
+    }
+    .sys-card-header:hover { background: rgba(255,255,255,0.03); }
+    .sys-card-title { display: flex; align-items: center; gap: 0.65rem; }
+    .sys-card-name { font-size: 0.95rem; font-weight: 600; }
+    .sys-card-sub { font-size: 0.78rem; color: var(--text-muted); }
+    .sys-card-badge {
+      font-size: 0.62rem; font-weight: 700; padding: 0.1rem 0.45rem;
+      border-radius: 3px; letter-spacing: 0.04em; background: rgba(99,102,241,0.15); color: var(--accent);
+    }
+    .sys-card-toggle { color: var(--text-muted); font-size: 0.85rem; transition: transform 0.2s; }
+    .sys-card.open .sys-card-toggle { transform: rotate(180deg); }
+    .sys-card-body { display: none; border-top: 1px solid var(--border); }
+    .sys-card.open .sys-card-body { display: block; }
+
+    .sys-card-meta { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; padding: 1rem 1.1rem; }
+    .meta-item { }
+    .meta-label { font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+    .meta-value { font-size: 0.85rem; color: var(--text); line-height: 1.5; }
+    .meta-value.mono { font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--text-muted); }
+    .meta-tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .meta-tag {
+      font-size: 0.72rem; padding: 0.12rem 0.45rem; border-radius: 3px;
+      background: rgba(59,130,246,0.12); color: var(--blue); border: 1px solid rgba(59,130,246,0.2);
+    }
+
+    .sys-card-source { border-top: 1px solid var(--border); }
+    .source-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.6rem 1.1rem; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+      color: var(--text-muted); background: rgba(255,255,255,0.02); user-select: none;
+    }
+    .source-toggle:hover { color: var(--text); }
+    .source-body { display: none; }
+    .source-body.open { display: block; }
+    .source-body pre {
+      font-family: ui-monospace, "Cascadia Code", monospace; font-size: 0.77rem;
+      padding: 0.75rem 1.1rem; color: var(--text-muted); white-space: pre; overflow-x: auto;
+      max-height: 420px; overflow-y: auto; line-height: 1.6;
+      background: #080f1e;
+    }
+
+    /* ── Flow steps ── */
+    .flow-steps { display: flex; flex-direction: column; gap: 0; padding: 0 1.1rem 0.75rem; }
+    .flow-step {
+      display: flex; gap: 0.85rem; padding: 0.6rem 0;
+      border-bottom: 1px solid rgba(51,65,85,0.5);
+    }
+    .flow-step:last-child { border-bottom: none; }
+    .flow-step-line { display: flex; flex-direction: column; align-items: center; }
+    .flow-step-dot {
+      width: 10px; height: 10px; border-radius: 50%; background: var(--accent); flex-shrink: 0; margin-top: 4px;
+    }
+    .flow-step-connector { width: 2px; background: rgba(99,102,241,0.3); flex: 1; margin: 3px 0; min-height: 12px; }
+    .flow-step-content { flex: 1; }
+    .flow-step-name { font-size: 0.85rem; font-weight: 600; color: var(--text); }
+    .flow-step-dec { font-size: 0.72rem; font-family: ui-monospace, monospace; color: var(--accent); margin-bottom: 0.2rem; }
+    .flow-step-desc { font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; }
+
+    /* ── Automations page ── */
+    .auto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1rem; }
+    .auto-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem;
+    }
+    .auto-card-header { display: flex; align-items: flex-start; gap: 0.75rem; }
+    .auto-card-icon { font-size: 1.5rem; line-height: 1; flex-shrink: 0; }
+    .auto-card-name { font-size: 1rem; font-weight: 700; }
+    .auto-card-type { font-size: 0.72rem; color: var(--text-muted); font-family: ui-monospace, monospace; margin-top: 0.1rem; }
+    .auto-card-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.55; }
+    .auto-card-section { }
+    .auto-card-section-label { font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.4rem; }
+    .auto-card-inputs { display: flex; flex-direction: column; gap: 0.3rem; }
+    .auto-input-row { display: flex; align-items: baseline; gap: 0.4rem; font-size: 0.83rem; }
+    .auto-input-name { font-family: ui-monospace, monospace; color: var(--text); font-size: 0.8rem; }
+    .auto-input-type { color: var(--accent); font-family: ui-monospace, monospace; font-size: 0.75rem; }
+    .auto-input-desc { color: var(--text-muted); font-size: 0.8rem; }
+    .auto-card-links { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .auto-link-chip {
+      font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 4px; font-weight: 600;
+      background: rgba(99,102,241,0.1); color: var(--accent); border: 1px solid rgba(99,102,241,0.2);
+    }
+    .auto-card-footer { margin-top: auto; padding-top: 0.25rem; }
+
+    /* ── Performance page ── */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.85rem; margin-bottom: 2rem; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 1.1rem 1.25rem;
+    }
+    .stat-label { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    .stat-value { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+    .stat-value.green { color: var(--green); }
+    .stat-value.red   { color: var(--red); }
+    .stat-value.blue  { color: var(--blue); }
+    .stat-sub { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.3rem; }
+
+    .perf-section { margin-bottom: 2rem; }
+    .perf-section-title { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.85rem; }
+
+    /* ── Trend chart ── */
+    .trend-chart { display: flex; flex-direction: column; gap: 0.5rem; }
+    .trend-row { display: flex; align-items: center; gap: 0.75rem; }
+    .trend-label { font-size: 0.78rem; color: var(--text-muted); width: 36px; flex-shrink: 0; text-align: right; }
+    .trend-bar-wrap { flex: 1; height: 22px; background: rgba(255,255,255,0.04); border-radius: 4px; overflow: hidden; display: flex; }
+    .trend-bar-success { background: rgba(34,197,94,0.55); height: 100%; transition: width 0.3s; }
+    .trend-bar-failed  { background: rgba(239,68,68,0.55); height: 100%; transition: width 0.3s; }
+    .trend-count { font-size: 0.78rem; color: var(--text-muted); width: 28px; flex-shrink: 0; text-align: right; }
+
+    /* ── By-type table ── */
+    .perf-table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .perf-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .perf-table thead { background: var(--surface); }
+    .perf-table th { padding: 0.6rem 1rem; text-align: left; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+    .perf-table td { padding: 0.65rem 1rem; border-top: 1px solid var(--border); }
+    .perf-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .mini-bar-wrap { width: 80px; height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden; display: flex; }
+    .mini-bar-s { background: var(--green); height: 100%; }
+    .mini-bar-f { background: var(--red); height: 100%; }
+
+    .loading-state { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 0.9rem; }
+
+    /* ── Confirm modal ── */
+    .confirm-modal { max-width: 380px; }
+    .confirm-msg { color: var(--text-muted); font-size: 0.9rem; line-height: 1.6; margin-bottom: 1.5rem; }
   </style>
 </head>
 <body>
 
 <header>
   <div class="logo">agent<span>auto</span></div>
+  <nav class="nav-tabs" id="nav-tabs">
+    <button class="nav-tab active" data-page="dashboard">Dashboard</button>
+    <button class="nav-tab" data-page="system">System</button>
+    <button class="nav-tab" data-page="automations">Automations</button>
+    <button class="nav-tab" data-page="performance">Performance</button>
+  </nav>
   <button class="btn btn-primary" id="new-run-btn">+ New Run</button>
 </header>
 
-<section class="hero" id="hero-section">
-  <button id="hero-dismiss" title="Hide intro">×</button>
-  <h1>Automate anything<br/>with <em>AI agents</em></h1>
-  <p>Define jobs, trigger them with one click, and let CrewAI agents execute them in the background.</p>
-  <div class="hero-actions">
-    <button class="btn btn-primary" id="hero-run-btn">Run automation</button>
-    <a href="/docs" class="btn btn-ghost" target="_blank">API docs</a>
-  </div>
-</section>
-
-<div class="section">
-  <div class="section-header">
-    <h2>Run History</h2>
-    <button id="hero-restore" class="hero-restore-btn hidden">show intro</button>
-  </div>
-
-  <div id="progress-panel" class="hidden">
-    <div class="progress-header">
-      <span class="pulse" id="progress-pulse"></span>
-      <span id="progress-job-name">Running…</span>
+<!-- ══════════════════════════════════════ DASHBOARD ══════════════════════════════════ -->
+<div class="page active" id="page-dashboard">
+  <section class="hero" id="hero-section">
+    <button id="hero-dismiss" title="Hide intro">×</button>
+    <h1>Automate anything<br/>with <em>AI agents</em></h1>
+    <p>Define jobs, trigger them with one click, and let CrewAI agents execute them in the background.</p>
+    <div class="hero-actions">
+      <button class="btn btn-primary" id="hero-run-btn">Run automation</button>
+      <a href="/docs" class="btn btn-ghost" target="_blank">API docs</a>
     </div>
-    <ul id="progress-log"></ul>
-  </div>
+  </section>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Job</th>
-          <th>Status</th>
-          <th>Started</th>
-          <th>Duration</th>
-          <th>Result</th>
-          <th class="th-actions"></th>
-        </tr>
-      </thead>
-      <tbody id="history-tbody">
-        <tr><td colspan="7" class="empty-state">No runs yet. Click "New Run" to get started.</td></tr>
-      </tbody>
-    </table>
+  <div class="section">
+    <div class="section-header">
+      <div class="section-header-left">
+        <h2>Run History</h2>
+        <button id="hero-restore" class="hero-restore-btn hidden">show intro</button>
+      </div>
+      <div class="section-header-right" id="bulk-actions">
+        <button class="btn btn-ghost btn-sm hidden" id="delete-selected-btn">Delete Selected</button>
+        <button class="btn btn-danger btn-sm" id="delete-all-btn">Delete All</button>
+      </div>
+    </div>
+
+    <div id="progress-panel" class="hidden">
+      <div class="progress-header">
+        <span class="pulse" id="progress-pulse"></span>
+        <span id="progress-job-name">Running…</span>
+      </div>
+      <ul id="progress-log"></ul>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="th-check"><input type="checkbox" id="select-all-cb" title="Select all" /></th>
+            <th>#</th>
+            <th>Job</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Duration</th>
+            <th>Result</th>
+            <th class="th-actions"></th>
+          </tr>
+        </thead>
+        <tbody id="history-tbody">
+          <tr><td colspan="8" class="empty-state">No runs yet. Click "New Run" to get started.</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
-<!-- Modal -->
+<!-- ══════════════════════════════════════ SYSTEM ══════════════════════════════════════ -->
+<div class="page" id="page-system">
+  <div class="page-header">
+    <h1>System Catalog</h1>
+    <p>All agents, tools, crews, and workflows with their source code and configuration.</p>
+  </div>
+
+  <div class="cat-tabs" id="cat-tabs">
+    <button class="cat-tab active" data-cat="agents">Agents</button>
+    <button class="cat-tab" data-cat="tools">Tools</button>
+    <button class="cat-tab" data-cat="crews">Crews</button>
+    <button class="cat-tab" data-cat="workflows">Workflows</button>
+  </div>
+
+  <div class="section" style="padding-top:0">
+    <div id="system-content"><div class="loading-state">Loading…</div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ AUTOMATIONS ════════════════════════════════ -->
+<div class="page" id="page-automations">
+  <div class="page-header">
+    <h1>Automations</h1>
+    <p>Available automation types — click a card to start a new run.</p>
+  </div>
+
+  <div class="section" style="padding-top:0">
+    <div class="auto-grid" id="auto-grid"><div class="loading-state">Loading…</div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ PERFORMANCE ═══════════════════════════════ -->
+<div class="page" id="page-performance">
+  <div class="page-header">
+    <h1>Performance</h1>
+    <p>Agent system health and run metrics.</p>
+  </div>
+
+  <div class="section" style="padding-top:0">
+    <div id="perf-content"><div class="loading-state">Loading…</div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ MODAL ══════════════════════════════════════ -->
 <div class="modal-overlay hidden" id="modal">
   <div class="modal">
     <div class="modal-header">
@@ -278,7 +508,6 @@
       <button class="modal-close" id="modal-close">&times;</button>
     </div>
     <form id="run-form">
-
       <div class="type-grid" id="type-grid">
         <div class="type-card active" data-type="google_form_fill">
           <div class="type-card-header"><span class="type-card-icon">📋</span><span class="type-card-name">Form Fill</span></div>
@@ -300,10 +529,7 @@
       <input type="hidden" id="job-type" value="google_form_fill" />
 
       <div id="fields-google_form_fill">
-        <div class="field">
-          <label>Company Name</label>
-          <input type="text" id="company-name" placeholder="e.g. Acme Corp" />
-        </div>
+        <div class="field"><label>Company Name</label><input type="text" id="company-name" placeholder="e.g. Acme Corp" /></div>
         <div class="field">
           <label>Company Size</label>
           <select id="company-size">
@@ -313,39 +539,18 @@
             <option value="其他">其他 (Other)</option>
           </select>
         </div>
-        <div class="field">
-          <label>AI Problem to Solve</label>
-          <textarea id="ai-problem" placeholder="Describe what you want AI to solve…"></textarea>
-        </div>
+        <div class="field"><label>AI Problem to Solve</label><textarea id="ai-problem" placeholder="Describe what you want AI to solve…"></textarea></div>
       </div>
-
       <div id="fields-web_scraper" class="hidden">
-        <div class="field">
-          <label>URL to Scrape</label>
-          <input type="url" id="scrape-url" placeholder="https://example.com" />
-        </div>
-        <div class="field">
-          <label>Question to Answer</label>
-          <textarea id="scrape-question" placeholder="What is this page about?"></textarea>
-        </div>
+        <div class="field"><label>URL to Scrape</label><input type="url" id="scrape-url" placeholder="https://example.com" /></div>
+        <div class="field"><label>Question to Answer</label><textarea id="scrape-question" placeholder="What is this page about?"></textarea></div>
       </div>
-
       <div id="fields-hacker_news_digest" class="hidden">
-        <div class="field">
-          <label>Number of Stories (1–10)</label>
-          <input type="number" id="hn-limit" value="5" min="1" max="10" />
-        </div>
+        <div class="field"><label>Number of Stories (1–10)</label><input type="number" id="hn-limit" value="5" min="1" max="10" /></div>
       </div>
-
       <div id="fields-x_scraper" class="hidden">
-        <div class="field">
-          <label>X Username</label>
-          <input type="text" id="x-username" placeholder="e.g. elonmusk (without @)" />
-        </div>
-        <div class="field">
-          <label>Number of Posts (1–10)</label>
-          <input type="number" id="x-limit" value="5" min="1" max="10" />
-        </div>
+        <div class="field"><label>X Username</label><input type="text" id="x-username" placeholder="e.g. elonmusk (without @)" /></div>
+        <div class="field"><label>Number of Posts (1–10)</label><input type="number" id="x-limit" value="5" min="1" max="10" /></div>
       </div>
 
       <div class="modal-actions">
@@ -353,6 +558,21 @@
         <button type="submit" class="btn btn-primary">Run ▶</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ CONFIRM MODAL ═════════════════════════════ -->
+<div class="modal-overlay hidden" id="confirm-modal">
+  <div class="modal confirm-modal">
+    <div class="modal-header">
+      <h3 id="confirm-title">Confirm</h3>
+      <button class="modal-close" id="confirm-close">&times;</button>
+    </div>
+    <p class="confirm-msg" id="confirm-msg"></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="confirm-cancel">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok">Delete</button>
+    </div>
   </div>
 </div>
 

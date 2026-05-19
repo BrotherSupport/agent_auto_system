@@ -1,4 +1,4 @@
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Constants ──────────────────────────────────────────────────────────────────
 
 const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper'];
 
@@ -9,13 +9,60 @@ const TYPE_META = {
   x_scraper:          { chip: 'X',    cls: 'chip-x'    },
 };
 
+const AUTO_CATALOG = {
+  google_form_fill: {
+    icon: '📋', name: 'Form Fill',
+    desc: 'Automatically fill and submit any Google Form using AI agents that inspect the form structure and match your data to the correct fields.',
+    inputs: [
+      { name: 'company_name', type: 'str', desc: 'Company name to fill in' },
+      { name: 'company_size', type: 'select', desc: 'Size tier of the company' },
+      { name: 'ai_problem',   type: 'str', desc: 'AI use-case or problem description' },
+    ],
+    crew: 'FormFillerCrew', flow: 'FormFillFlow',
+    agent: 'Form Agent', tools: ['Google Form Inspector', 'Google Form Submit'],
+  },
+  web_scraper: {
+    icon: '🌐', name: 'Web Scraper',
+    desc: 'Fetch any public web page and have an AI agent answer a custom question based strictly on the page content.',
+    inputs: [
+      { name: 'url',      type: 'str', desc: 'Full URL to fetch' },
+      { name: 'question', type: 'str', desc: 'Question to answer from page content' },
+    ],
+    crew: 'WebScraperCrew', flow: 'WebScraperFlow',
+    agent: 'Web Scraper Agent', tools: ['Web Scraper'],
+  },
+  hacker_news_digest: {
+    icon: '🔶', name: 'HN Digest',
+    desc: 'Fetch the top N Hacker News stories, summarize each in one sentence, pick the story of the day, and identify recurring themes.',
+    inputs: [
+      { name: 'limit', type: 'int (1–10)', desc: 'Number of top stories to include' },
+    ],
+    crew: 'HNDigestCrew', flow: 'HNDigestFlow',
+    agent: 'HN Analyst', tools: ['HN Top Stories'],
+  },
+  x_scraper: {
+    icon: '✕', name: 'X Scraper',
+    desc: 'Scrape recent public posts from any X (Twitter) profile, identify top content, themes, and produce a written summary.',
+    inputs: [
+      { name: 'username', type: 'str', desc: 'X handle (without the @ symbol)' },
+      { name: 'limit',    type: 'int (1–10)', desc: 'Number of recent posts to fetch' },
+    ],
+    crew: 'XScraperCrew', flow: 'XScraperFlow',
+    agent: 'X Analyst', tools: ['X Post Scraper'],
+  },
+};
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let activeEventSource = null;
-let sseStartTime      = null;
-let cachedRuns        = [];
-const elapsedTimers   = new Map();  // runId → intervalId
-let toastTimer        = null;
+let activeEventSource  = null;
+let sseStartTime       = null;
+let cachedRuns         = [];
+const elapsedTimers    = new Map();
+let toastTimer         = null;
+let selectedRunIds     = new Set();
+let systemData         = null;
+let systemCategory     = 'agents';
+let confirmResolve     = null;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -27,6 +74,30 @@ const progressJobName = document.getElementById('progress-job-name');
 const progressPulse   = document.getElementById('progress-pulse');
 const heroSection     = document.getElementById('hero-section');
 const heroRestoreBtn  = document.getElementById('hero-restore');
+const confirmModal    = document.getElementById('confirm-modal');
+
+// ── Page routing ──────────────────────────────────────────────────────────────
+
+function navigate(page) {
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.page === page));
+  document.querySelectorAll('.page').forEach(p => {
+    p.classList.toggle('active', p.id === `page-${page}`);
+  });
+  history.replaceState(null, '', `#${page}`);
+
+  if (page === 'system')      loadSystemPage();
+  if (page === 'automations') renderAutomationsPage();
+  if (page === 'performance') loadPerformancePage();
+}
+
+document.getElementById('nav-tabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.nav-tab');
+  if (tab) navigate(tab.dataset.page);
+});
+
+// Navigate to the page in the hash on load, defaulting to dashboard
+const initialPage = (location.hash.slice(1) || 'dashboard');
+navigate(['dashboard','system','automations','performance'].includes(initialPage) ? initialPage : 'dashboard');
 
 // ── Hero dismiss / restore ────────────────────────────────────────────────────
 
@@ -50,16 +121,19 @@ heroRestoreBtn.addEventListener('click', () => {
 
 // ── Modal open/close ──────────────────────────────────────────────────────────
 
-function openModal() { modal.classList.remove('hidden'); }
+function openModal(preselect) {
+  if (preselect) selectJobType(preselect);
+  modal.classList.remove('hidden');
+}
 function closeModalFn() { modal.classList.add('hidden'); }
 
-document.getElementById('new-run-btn').addEventListener('click', openModal);
-document.getElementById('hero-run-btn').addEventListener('click', openModal);
+document.getElementById('new-run-btn').addEventListener('click', () => openModal());
+document.getElementById('hero-run-btn').addEventListener('click', () => openModal());
 document.getElementById('modal-close').addEventListener('click', closeModalFn);
 document.getElementById('cancel-btn').addEventListener('click', closeModalFn);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModalFn(); });
 
-// ── Job type card selection (event delegation on grid) ────────────────────────
+// ── Job type card selection ───────────────────────────────────────────────────
 
 document.getElementById('type-grid').addEventListener('click', (e) => {
   const card = e.target.closest('.type-card');
@@ -73,32 +147,6 @@ function selectJobType(type) {
   ALL_TYPES.forEach(t =>
     document.getElementById(`fields-${t}`).classList.toggle('hidden', t !== type));
 }
-
-// ── Table event delegation ────────────────────────────────────────────────────
-// All row interactions (toggle, tab, rerun, delete, copy) go through one listener.
-
-document.getElementById('history-tbody').addEventListener('click', (e) => {
-  const actionEl = e.target.closest('[data-action]');
-
-  if (actionEl) {
-    const action = actionEl.dataset.action;
-    const runId  = parseInt(actionEl.dataset.runId,  10);
-    const jobId  = parseInt(actionEl.dataset.jobId,  10);
-    const tab    = actionEl.dataset.tab;
-
-    switch (action) {
-      case 'tab':    switchTab(runId, tab);  return;
-      case 'rerun':  rerun(jobId);           return;
-      case 'delete': deleteRun(runId);       return;
-      case 'copy':   copyResult(runId);      return;
-    }
-    return;
-  }
-
-  // Plain row click → toggle detail panel
-  const row = e.target.closest('tr.data-row');
-  if (row) toggleDetail(parseInt(row.dataset.runId, 10));
-});
 
 // ── Form submit ───────────────────────────────────────────────────────────────
 
@@ -116,21 +164,15 @@ runForm.addEventListener('submit', async (e) => {
       ai_problem:   document.getElementById('ai-problem').value.trim(),
     };
     jobName = `Form: ${company}`;
-
   } else if (jobType === 'web_scraper') {
     const url = document.getElementById('scrape-url').value.trim();
     if (!url) { showToast('URL is required', 'error'); return; }
-    payload = {
-      url,
-      question: document.getElementById('scrape-question').value.trim() || 'What is this page about?',
-    };
+    payload = { url, question: document.getElementById('scrape-question').value.trim() || 'What is this page about?' };
     jobName = `Scrape: ${new URL(url).hostname}`;
-
   } else if (jobType === 'hacker_news_digest') {
     const limit = parseInt(document.getElementById('hn-limit').value, 10) || 5;
     payload = { limit };
     jobName = `HN Digest (top ${limit})`;
-
   } else if (jobType === 'x_scraper') {
     const username = document.getElementById('x-username').value.trim().replace(/^@/, '');
     if (!username) { showToast('X username is required', 'error'); return; }
@@ -141,6 +183,7 @@ runForm.addEventListener('submit', async (e) => {
   closeModalFn();
   runForm.reset();
   selectJobType('google_form_fill');
+  navigate('dashboard');
   await triggerRun(jobType, jobName, payload);
 });
 
@@ -176,10 +219,8 @@ async function rerun(jobId) {
     const runResp = await fetch(`/api/jobs/${jobId}/run`, { method: 'POST' });
     if (!runResp.ok) throw new Error('Re-run failed');
     const { run_id } = await runResp.json();
-
-    const cached  = cachedRuns.find(r => r.job_id === jobId);
+    const cached = cachedRuns.find(r => r.job_id === jobId);
     const jobName = cached?.job_name ?? `job ${jobId}`;
-
     showProgress(jobName);
     await loadHistory();
     scrollToRun(run_id);
@@ -189,7 +230,7 @@ async function rerun(jobId) {
   }
 }
 
-// ── Delete run ────────────────────────────────────────────────────────────────
+// ── Delete single run ─────────────────────────────────────────────────────────
 
 async function deleteRun(runId) {
   const run = cachedRuns.find(r => r.id === runId);
@@ -201,12 +242,140 @@ async function deleteRun(runId) {
     const resp = await fetch(`/api/runs/${runId}`, { method: 'DELETE' });
     if (resp.status === 409) { showToast('Cannot delete an active run', 'error'); return; }
     if (!resp.ok) throw new Error('Delete failed');
+    selectedRunIds.delete(runId);
+    updateBulkActionButtons();
     await loadHistory();
     showToast('Run deleted', 'success');
   } catch (err) {
     showToast(err.message, 'error');
   }
 }
+
+// ── Bulk delete ───────────────────────────────────────────────────────────────
+
+document.getElementById('delete-selected-btn').addEventListener('click', async () => {
+  if (!selectedRunIds.size) return;
+  const ok = await confirmDialog('Delete Selected Runs', `Delete ${selectedRunIds.size} selected run(s)? Active runs will be skipped.`);
+  if (!ok) return;
+  try {
+    const ids = [...selectedRunIds].join(',');
+    const resp = await fetch(`/api/runs?ids=${ids}`, { method: 'DELETE' });
+    if (!resp.ok) throw new Error('Bulk delete failed');
+    const { deleted } = await resp.json();
+    selectedRunIds.clear();
+    updateBulkActionButtons();
+    await loadHistory();
+    showToast(`Deleted ${deleted} run(s)`, 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+document.getElementById('delete-all-btn').addEventListener('click', async () => {
+  const completedCount = cachedRuns.filter(r => r.status !== 'pending' && r.status !== 'running').length;
+  if (!completedCount) { showToast('No completed runs to delete', 'error'); return; }
+  const ok = await confirmDialog('Delete All Runs', `Delete all ${completedCount} completed run(s)? Active runs will be kept.`);
+  if (!ok) return;
+  try {
+    const resp = await fetch('/api/runs?delete_all=true', { method: 'DELETE' });
+    if (!resp.ok) throw new Error('Delete all failed');
+    const { deleted } = await resp.json();
+    selectedRunIds.clear();
+    updateBulkActionButtons();
+    await loadHistory();
+    showToast(`Deleted ${deleted} run(s)`, 'success');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+});
+
+// ── Confirm dialog ────────────────────────────────────────────────────────────
+
+function confirmDialog(title, msg) {
+  return new Promise((resolve) => {
+    document.getElementById('confirm-title').textContent = title;
+    document.getElementById('confirm-msg').textContent = msg;
+    confirmModal.classList.remove('hidden');
+    confirmResolve = resolve;
+  });
+}
+
+document.getElementById('confirm-ok').addEventListener('click', () => {
+  confirmModal.classList.add('hidden');
+  confirmResolve?.(true);
+});
+document.getElementById('confirm-cancel').addEventListener('click', () => {
+  confirmModal.classList.add('hidden');
+  confirmResolve?.(false);
+});
+document.getElementById('confirm-close').addEventListener('click', () => {
+  confirmModal.classList.add('hidden');
+  confirmResolve?.(false);
+});
+confirmModal.addEventListener('click', (e) => {
+  if (e.target === confirmModal) { confirmModal.classList.add('hidden'); confirmResolve?.(false); }
+});
+
+// ── Select all checkbox ───────────────────────────────────────────────────────
+
+document.getElementById('select-all-cb').addEventListener('change', (e) => {
+  const checked = e.target.checked;
+  cachedRuns.forEach(run => {
+    if (run.status !== 'pending' && run.status !== 'running') {
+      if (checked) selectedRunIds.add(run.id);
+      else selectedRunIds.delete(run.id);
+    }
+  });
+  document.querySelectorAll('.run-cb').forEach(cb => {
+    const run = cachedRuns.find(r => r.id === parseInt(cb.dataset.runId, 10));
+    if (run && run.status !== 'pending' && run.status !== 'running') cb.checked = checked;
+  });
+  updateBulkActionButtons();
+});
+
+function updateBulkActionButtons() {
+  const btn = document.getElementById('delete-selected-btn');
+  if (selectedRunIds.size > 0) {
+    btn.classList.remove('hidden');
+    btn.textContent = `Delete Selected (${selectedRunIds.size})`;
+  } else {
+    btn.classList.add('hidden');
+  }
+}
+
+// ── Table event delegation ────────────────────────────────────────────────────
+
+document.getElementById('history-tbody').addEventListener('click', (e) => {
+  // Checkbox toggle
+  const cb = e.target.closest('.run-cb');
+  if (cb) {
+    const runId = parseInt(cb.dataset.runId, 10);
+    if (cb.checked) selectedRunIds.add(runId);
+    else selectedRunIds.delete(runId);
+    const row = document.querySelector(`tr.data-row[data-run-id="${runId}"]`);
+    row?.classList.toggle('selected', cb.checked);
+    updateBulkActionButtons();
+    return;
+  }
+
+  const actionEl = e.target.closest('[data-action]');
+  if (actionEl) {
+    const action = actionEl.dataset.action;
+    const runId  = parseInt(actionEl.dataset.runId, 10);
+    const jobId  = parseInt(actionEl.dataset.jobId, 10);
+    const tab    = actionEl.dataset.tab;
+    switch (action) {
+      case 'tab':    switchTab(runId, tab); return;
+      case 'rerun':  rerun(jobId);          return;
+      case 'delete': deleteRun(runId);      return;
+      case 'copy':   copyResult(runId);     return;
+    }
+    return;
+  }
+
+  const row = e.target.closest('tr.data-row');
+  if (row) toggleDetail(parseInt(row.dataset.runId, 10));
+});
 
 // ── Scroll to & highlight new row ─────────────────────────────────────────────
 
@@ -231,10 +400,9 @@ function showProgress(jobName) {
 
 function finishProgress(status, durationSecs) {
   progressPulse.style.display = 'none';
-  const ok    = status === 'success';
+  const ok = status === 'success';
   const color = ok ? 'var(--green)' : 'var(--red)';
-  progressJobName.innerHTML =
-    `<span style="color:${color}">${ok ? '✓ Completed' : '✗ Failed'} in ${durationSecs}s</span>`;
+  progressJobName.innerHTML = `<span style="color:${color}">${ok ? '✓ Completed' : '✗ Failed'} in ${durationSecs}s</span>`;
   setTimeout(hideProgress, 3000);
 }
 
@@ -252,7 +420,6 @@ function appendProgressEntry(entry) {
 function startSSE(runId) {
   if (activeEventSource) activeEventSource.close();
   sseStartTime = Date.now();
-
   activeEventSource = new EventSource(`/api/runs/${runId}/stream`);
 
   activeEventSource.onmessage = (e) => {
@@ -307,20 +474,21 @@ function renderHistory(runs) {
   const tbody = document.getElementById('history-tbody');
 
   if (!runs.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No runs yet. Click "New Run" to get started.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No runs yet. Click "New Run" to get started.</td></tr>';
+    document.getElementById('select-all-cb').checked = false;
     return;
   }
 
   tbody.innerHTML = runs.map((run) => {
-    const meta      = TYPE_META[run.job_type] || { chip: run.job_type?.toUpperCase() || '?', cls: 'chip-unknown' };
-    const isActive  = run.status === 'running' || run.status === 'pending';
-    const duration  = run.finished_at
+    const meta     = TYPE_META[run.job_type] || { chip: run.job_type?.toUpperCase() || '?', cls: 'chip-unknown' };
+    const isActive = run.status === 'running' || run.status === 'pending';
+    const duration = run.finished_at
       ? `${((new Date(run.finished_at) - new Date(run.started_at)) / 1000).toFixed(1)}s`
       : '—';
-    const durCell   = isActive
+    const durCell  = isActive
       ? `<span class="elapsed-timer" data-started="${run.started_at}">…</span>`
       : duration;
-    const started   = new Date(run.started_at).toLocaleString();
+    const started  = new Date(run.started_at).toLocaleString();
 
     let resultText = '', resultJson = null;
     if (run.result) {
@@ -343,9 +511,15 @@ function renderHistory(runs) {
       : '';
 
     const deleteDis = isActive ? 'disabled title="Cannot delete an active run"' : 'title="Delete run"';
+    const cbChecked = selectedRunIds.has(run.id) ? 'checked' : '';
+    const cbDis     = isActive ? 'disabled' : '';
+    const rowSel    = selectedRunIds.has(run.id) ? 'selected' : '';
 
     return `
-      <tr class="data-row" data-run-id="${run.id}">
+      <tr class="data-row ${rowSel}" data-run-id="${run.id}">
+        <td class="td-check" onclick="event.stopPropagation()">
+          <input type="checkbox" class="run-cb" data-run-id="${run.id}" ${cbChecked} ${cbDis} />
+        </td>
         <td style="color:var(--text-muted)">#${run.id}</td>
         <td>
           <div class="job-cell">
@@ -365,7 +539,7 @@ function renderHistory(runs) {
         </td>
       </tr>
       <tr class="detail-row hidden" id="detail-${run.id}">
-        <td colspan="7" style="padding:0">
+        <td colspan="8" style="padding:0">
           <div class="detail-tabs">
             <button class="detail-tab active" data-action="tab" data-tab="result" data-run-id="${run.id}">Result</button>
             ${logTab}
@@ -382,6 +556,7 @@ function renderHistory(runs) {
   }).join('');
 
   initElapsedTimers();
+  updateBulkActionButtons();
 }
 
 function toggleDetail(runId) {
@@ -400,11 +575,9 @@ function switchTab(runId, tab) {
 function initElapsedTimers() {
   elapsedTimers.forEach((id, runId) => {
     if (!document.querySelector(`tr[data-run-id="${runId}"] .elapsed-timer`)) {
-      clearInterval(id);
-      elapsedTimers.delete(runId);
+      clearInterval(id); elapsedTimers.delete(runId);
     }
   });
-
   document.querySelectorAll('.elapsed-timer').forEach(el => {
     const runId = parseInt(el.closest('tr')?.dataset.runId, 10);
     if (!runId || elapsedTimers.has(runId)) return;
@@ -431,6 +604,376 @@ async function copyResult(runId) {
   } catch (_) {
     showToast('Copy failed — select manually', 'error');
   }
+}
+
+// ── System page ───────────────────────────────────────────────────────────────
+
+async function loadSystemPage() {
+  if (systemData) { renderSystemPage(); return; }
+  document.getElementById('system-content').innerHTML = '<div class="loading-state">Loading system catalog…</div>';
+  try {
+    const resp = await fetch('/api/system');
+    if (!resp.ok) throw new Error('Failed to load system data');
+    systemData = await resp.json();
+    renderSystemPage();
+  } catch (err) {
+    document.getElementById('system-content').innerHTML = `<div class="loading-state" style="color:var(--red)">Error: ${escHtml(err.message)}</div>`;
+  }
+}
+
+document.getElementById('cat-tabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.cat-tab');
+  if (!tab) return;
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t === tab));
+  systemCategory = tab.dataset.cat;
+  renderSystemPage();
+});
+
+function renderSystemPage() {
+  if (!systemData) return;
+  const items = systemData[systemCategory] || [];
+  const container = document.getElementById('system-content');
+
+  if (!items.length) {
+    container.innerHTML = '<div class="loading-state">No items found.</div>';
+    return;
+  }
+
+  container.innerHTML = `<div class="system-cards">${items.map(item => renderSysCard(item)).join('')}</div>`;
+
+  // Wire up card toggles
+  container.querySelectorAll('.sys-card-header').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      hdr.closest('.sys-card').classList.toggle('open');
+    });
+  });
+
+  // Wire up source code toggles
+  container.querySelectorAll('.source-toggle').forEach(tog => {
+    tog.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const body = tog.nextElementSibling;
+      const isOpen = body.classList.toggle('open');
+      tog.querySelector('.source-arrow').textContent = isOpen ? '▲' : '▼';
+    });
+  });
+}
+
+function renderSysCard(item) {
+  const cat = systemCategory;
+
+  if (cat === 'agents') {
+    return `
+    <div class="sys-card">
+      <div class="sys-card-header">
+        <div class="sys-card-title">
+          <span class="sys-card-name">${escHtml(item.name)}</span>
+          <span class="sys-card-badge">${escHtml(item.job_type || '')}</span>
+        </div>
+        <span class="sys-card-toggle">▼</span>
+      </div>
+      <div class="sys-card-body">
+        <div class="sys-card-meta">
+          <div class="meta-item"><div class="meta-label">Role</div><div class="meta-value">${escHtml(item.role)}</div></div>
+          <div class="meta-item"><div class="meta-label">Goal</div><div class="meta-value">${escHtml(item.goal)}</div></div>
+          <div class="meta-item" style="grid-column:1/-1"><div class="meta-label">Backstory</div><div class="meta-value">${escHtml(item.backstory)}</div></div>
+          <div class="meta-item">
+            <div class="meta-label">Tools</div>
+            <div class="meta-tags">${(item.tools||[]).map(t => `<span class="meta-tag">${escHtml(t)}</span>`).join('')}</div>
+          </div>
+          <div class="meta-item"><div class="meta-label">Crew</div><div class="meta-value mono">${escHtml(item.crew)}</div></div>
+          <div class="meta-item"><div class="meta-label">Task</div><div class="meta-value mono">${escHtml(item.task)}</div></div>
+        </div>
+        ${renderSourceSection(item.source_code, item.source_file)}
+      </div>
+    </div>`;
+  }
+
+  if (cat === 'tools') {
+    const inputs = (item.inputs || []).map(inp =>
+      `<div class="auto-input-row">
+         <span class="auto-input-name">${escHtml(inp.name)}</span>
+         <span class="auto-input-type">${escHtml(inp.type)}</span>
+         <span class="auto-input-desc">— ${escHtml(inp.description)}</span>
+       </div>`
+    ).join('');
+    return `
+    <div class="sys-card">
+      <div class="sys-card-header">
+        <div class="sys-card-title">
+          <span class="sys-card-name">${escHtml(item.name)}</span>
+          <span class="sys-card-sub">${escHtml(item.class)}</span>
+        </div>
+        <span class="sys-card-toggle">▼</span>
+      </div>
+      <div class="sys-card-body">
+        <div class="sys-card-meta">
+          <div class="meta-item" style="grid-column:1/-1"><div class="meta-label">Description</div><div class="meta-value">${escHtml(item.description)}</div></div>
+          <div class="meta-item">
+            <div class="meta-label">Inputs</div>
+            <div class="auto-card-inputs">${inputs}</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Used By</div>
+            <div class="meta-tags">${(item.used_by||[]).map(c => `<span class="meta-tag">${escHtml(c)}</span>`).join('')}</div>
+          </div>
+        </div>
+        ${renderSourceSection(item.source_code, item.source_file)}
+      </div>
+    </div>`;
+  }
+
+  if (cat === 'crews') {
+    const tasks = (item.tasks || []).map(t => `
+      <div class="flow-step">
+        <div class="flow-step-line"><div class="flow-step-dot"></div></div>
+        <div class="flow-step-content">
+          <div class="flow-step-name">${escHtml(t.name)}</div>
+          <div class="flow-step-desc">${escHtml(t.description)}</div>
+          <div style="margin-top:0.25rem;font-size:0.75rem;color:var(--text-muted)">Expected: <code style="font-family:ui-monospace,monospace;font-size:0.73rem">${escHtml(t.expected_output)}</code></div>
+          ${t.config_code ? renderSourceSection(t.config_code, t.config_file || '', 'Task Config') : ''}
+        </div>
+      </div>`).join('');
+
+    return `
+    <div class="sys-card">
+      <div class="sys-card-header">
+        <div class="sys-card-title">
+          <span class="sys-card-name">${escHtml(item.name)}</span>
+          <span class="sys-card-badge">process: ${escHtml(item.process)}</span>
+        </div>
+        <span class="sys-card-toggle">▼</span>
+      </div>
+      <div class="sys-card-body">
+        <div class="sys-card-meta">
+          <div class="meta-item">
+            <div class="meta-label">Agents</div>
+            <div class="meta-tags">${(item.agents||[]).map(a => `<span class="meta-tag">${escHtml(a)}</span>`).join('')}</div>
+          </div>
+          <div class="meta-item"><div class="meta-label">Flow</div><div class="meta-value mono">${escHtml(item.flow)}</div></div>
+          <div class="meta-item"><div class="meta-label">Job Type</div><div class="meta-value mono">${escHtml(item.job_type)}</div></div>
+        </div>
+        <div style="padding:0 1.1rem 0.25rem"><div class="meta-label" style="margin-bottom:0.5rem">Tasks</div></div>
+        <div class="flow-steps">${tasks}</div>
+        ${renderSourceSection(item.source_code, item.source_file)}
+      </div>
+    </div>`;
+  }
+
+  if (cat === 'workflows') {
+    const steps = (item.steps || []).map((step, i) => `
+      <div class="flow-step">
+        <div class="flow-step-line">
+          <div class="flow-step-dot"></div>
+          ${i < item.steps.length - 1 ? '<div class="flow-step-connector"></div>' : ''}
+        </div>
+        <div class="flow-step-content">
+          <div class="flow-step-dec">${escHtml(step.decorator)}</div>
+          <div class="flow-step-name">${escHtml(step.name)}</div>
+          <div class="flow-step-desc">${escHtml(step.description)}</div>
+        </div>
+      </div>`).join('');
+
+    const stateFields = (item.state_fields || []).map(f =>
+      `<div class="auto-input-row">
+         <span class="auto-input-name">${escHtml(f.name)}</span>
+         <span class="auto-input-type">${escHtml(f.type)}</span>
+         <span class="auto-input-desc">= ${escHtml(String(f.default))}</span>
+       </div>`
+    ).join('');
+
+    return `
+    <div class="sys-card">
+      <div class="sys-card-header">
+        <div class="sys-card-title">
+          <span class="sys-card-name">${escHtml(item.name)}</span>
+          <span class="sys-card-badge">${escHtml(item.job_type)}</span>
+        </div>
+        <span class="sys-card-toggle">▼</span>
+      </div>
+      <div class="sys-card-body">
+        <div class="sys-card-meta">
+          <div class="meta-item">
+            <div class="meta-label">State Fields</div>
+            <div class="auto-card-inputs">${stateFields}</div>
+          </div>
+          <div class="meta-item"><div class="meta-label">Crew</div><div class="meta-value mono">${escHtml(item.crew)}</div></div>
+        </div>
+        <div style="padding:0 1.1rem 0.25rem"><div class="meta-label" style="margin-bottom:0.5rem">Flow Steps</div></div>
+        <div class="flow-steps">${steps}</div>
+        ${renderSourceSection(item.source_code, item.source_file)}
+      </div>
+    </div>`;
+  }
+
+  return '';
+}
+
+function renderSourceSection(code, filePath, label = 'Source Code') {
+  if (!code) return '';
+  return `
+    <div class="sys-card-source">
+      <div class="source-toggle">
+        <span>${escHtml(label)}${filePath ? ` <span style="font-weight:400;opacity:0.6">${escHtml(filePath)}</span>` : ''}</span>
+        <span class="source-arrow">▼</span>
+      </div>
+      <div class="source-body">
+        <pre>${escHtml(code)}</pre>
+      </div>
+    </div>`;
+}
+
+// ── Automations page ──────────────────────────────────────────────────────────
+
+function renderAutomationsPage() {
+  const grid = document.getElementById('auto-grid');
+  grid.innerHTML = Object.entries(AUTO_CATALOG).map(([type, meta]) => {
+    const inputs = meta.inputs.map(inp =>
+      `<div class="auto-input-row">
+         <span class="auto-input-name">${escHtml(inp.name)}</span>
+         <span class="auto-input-type">${escHtml(inp.type)}</span>
+         <span class="auto-input-desc">— ${escHtml(inp.desc)}</span>
+       </div>`
+    ).join('');
+
+    return `
+    <div class="auto-card">
+      <div class="auto-card-header">
+        <div class="auto-card-icon">${meta.icon}</div>
+        <div>
+          <div class="auto-card-name">${escHtml(meta.name)}</div>
+          <div class="auto-card-type">${escHtml(type)}</div>
+        </div>
+      </div>
+      <div class="auto-card-desc">${escHtml(meta.desc)}</div>
+      <div class="auto-card-section">
+        <div class="auto-card-section-label">Inputs</div>
+        <div class="auto-card-inputs">${inputs}</div>
+      </div>
+      <div class="auto-card-section">
+        <div class="auto-card-section-label">Pipeline</div>
+        <div class="auto-card-links">
+          <span class="auto-link-chip">Flow: ${escHtml(meta.flow)}</span>
+          <span class="auto-link-chip">Crew: ${escHtml(meta.crew)}</span>
+          <span class="auto-link-chip">Agent: ${escHtml(meta.agent)}</span>
+          ${meta.tools.map(t => `<span class="auto-link-chip" style="background:rgba(59,130,246,0.1);color:var(--blue);border-color:rgba(59,130,246,0.2)">Tool: ${escHtml(t)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="auto-card-footer">
+        <button class="btn btn-primary" style="width:100%" data-run-type="${type}">▶ Run ${escHtml(meta.name)}</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  grid.querySelectorAll('[data-run-type]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      navigate('dashboard');
+      setTimeout(() => openModal(btn.dataset.runType), 80);
+    });
+  });
+}
+
+// ── Performance page ──────────────────────────────────────────────────────────
+
+async function loadPerformancePage() {
+  document.getElementById('perf-content').innerHTML = '<div class="loading-state">Loading metrics…</div>';
+  try {
+    const resp = await fetch('/api/stats');
+    if (!resp.ok) throw new Error('Failed to load stats');
+    renderPerformancePage(await resp.json());
+  } catch (err) {
+    document.getElementById('perf-content').innerHTML = `<div class="loading-state" style="color:var(--red)">Error: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderPerformancePage(s) {
+  const maxTrend = Math.max(...s.trend.map(d => d.total), 1);
+
+  const trendRows = s.trend.map(d => {
+    const sw = Math.round((d.success / maxTrend) * 100);
+    const fw = Math.round((d.failed  / maxTrend) * 100);
+    return `
+      <div class="trend-row">
+        <div class="trend-label">${escHtml(d.label)}</div>
+        <div class="trend-bar-wrap">
+          <div class="trend-bar-success" style="width:${sw}%"></div>
+          <div class="trend-bar-failed"  style="width:${fw}%"></div>
+        </div>
+        <div class="trend-count">${d.total}</div>
+      </div>`;
+  }).join('');
+
+  const typeRows = Object.entries(s.by_type).map(([type, data]) => {
+    const total = data.total || 1;
+    const sw = Math.round((data.success / total) * 100);
+    const fw = Math.round((data.failed  / total) * 100);
+    const meta = TYPE_META[type] || { chip: type.toUpperCase(), cls: 'chip-unknown' };
+    return `
+      <tr>
+        <td><span class="type-chip ${meta.cls}">${meta.chip}</span> ${escHtml(type)}</td>
+        <td style="text-align:right">${data.total}</td>
+        <td style="text-align:right;color:var(--green)">${data.success}</td>
+        <td style="text-align:right;color:var(--red)">${data.failed}</td>
+        <td>
+          <div class="mini-bar-wrap">
+            <div class="mini-bar-s" style="width:${sw}%"></div>
+            <div class="mini-bar-f" style="width:${fw}%"></div>
+          </div>
+        </td>
+        <td style="color:var(--text-muted)">${data.avg_duration > 0 ? data.avg_duration + 's' : '—'}</td>
+      </tr>`;
+  }).join('');
+
+  const successRateColor = s.success_rate >= 80 ? 'green' : s.success_rate >= 50 ? '' : 'red';
+
+  document.getElementById('perf-content').innerHTML = `
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Runs</div>
+        <div class="stat-value blue">${s.total_runs}</div>
+        <div class="stat-sub">${s.active} active</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Success Rate</div>
+        <div class="stat-value ${successRateColor}">${s.success_rate}%</div>
+        <div class="stat-sub">${s.success} succeeded</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Failed</div>
+        <div class="stat-value ${s.failed > 0 ? 'red' : ''}">${s.failed}</div>
+        <div class="stat-sub">of ${s.total_runs} total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Duration</div>
+        <div class="stat-value">${s.avg_duration_secs > 0 ? s.avg_duration_secs + 's' : '—'}</div>
+        <div class="stat-sub">completed runs</div>
+      </div>
+    </div>
+
+    <div class="perf-section">
+      <div class="perf-section-title">Last 7 Days</div>
+      <div class="trend-chart">${trendRows}</div>
+    </div>
+
+    ${typeRows ? `
+    <div class="perf-section">
+      <div class="perf-section-title">By Automation Type</div>
+      <div class="perf-table-wrap">
+        <table class="perf-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th style="text-align:right">Total</th>
+              <th style="text-align:right">Success</th>
+              <th style="text-align:right">Failed</th>
+              <th>Rate</th>
+              <th>Avg Duration</th>
+            </tr>
+          </thead>
+          <tbody>${typeRows}</tbody>
+        </table>
+      </div>
+    </div>` : ''}`;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

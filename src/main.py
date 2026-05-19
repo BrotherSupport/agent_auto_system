@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.database import init_db
-from src.routers import jobs, runs
+from src.routers import jobs, runs, system
 
 
 @asynccontextmanager
@@ -19,6 +19,7 @@ app = FastAPI(title="Agent Auto System", lifespan=lifespan)
 
 app.include_router(jobs.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
+app.include_router(system.router, prefix="/api")
 
 if Path("ui").exists():
     app.mount("/ui", StaticFiles(directory="ui"), name="ui")
