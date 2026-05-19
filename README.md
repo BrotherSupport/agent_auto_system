@@ -87,7 +87,36 @@ Returns: `username`, `post_count`, `top_post`, `themes`, `summary`, `posts`.
 
 ---
 
-## Run Commands
+## Docker Quick Start
+
+```bash
+# Build the image (first build ~5 min — downloads Playwright Chromium)
+docker build --target runtime --tag agent-auto-system:local .
+
+# Run (database persisted in a named volume)
+docker run -d \
+  --name agent-auto \
+  -p 8000:8000 \
+  -e OPENAI_API_KEY=sk-... \
+  -v agent_data:/app/data \
+  agent-auto-system:local
+
+open http://localhost:8000
+```
+
+Or with **docker compose** (recommended):
+
+```bash
+cp .env.example .env   # fill in OPENAI_API_KEY
+docker compose up --build -d
+```
+
+See **[doc/docker.md](doc/docker.md)** for full details: environment variables,
+persistent volumes, useful commands, example API calls, and CI/CD setup.
+
+---
+
+## Run Commands (local / dev)
 
 ```bash
 # Install dependencies (requires uv)

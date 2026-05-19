@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+    image: agent-auto-system:local
+    ports:
+      - "8000:8000"
+    # Pass OPENAI_API_KEY and optional GMAIL_* variables from the local .env file.
+    # Never bake secrets into the image — use env_file or -e flags instead.
+    env_file:
+      - .env
+    volumes:
+      # Persist the SQLite database across container restarts
+      - app_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 4
+
+volumes:
+  app_data:
+    driver: local

@@ -1,0 +1,179 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel any in-flight run for the same branch/PR when a new commit arrives.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 1 — Unit + integration tests (no Docker, no real API keys)
+  # ────────────────────────────────────────────────────────────────────────────
+  test:
+    name: Unit & integration tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (including dev)
+        run: uv sync --frozen
+
+      - name: Run unit tests
+        run: uv run pytest tests/unit -v --tb=short
+
+      - name: Run integration tests
+        run: uv run pytest tests/integration -v --tb=short
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 2 — Docker build + smoke tests against the running container
+  # ────────────────────────────────────────────────────────────────────────────
+  docker-smoke:
+    name: Docker build & smoke tests
+    runs-on: ubuntu-latest
+    needs: test          # only run after all tests pass
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Build ────────────────────────────────────────────────────────────────
+      - name: Build Docker image
+        run: |
+          docker build \
+            --target runtime \
+            --tag agent-auto-system:ci \
+            --label "git.sha=${{ github.sha }}" \
+            .
+
+      # ── Start container ───────────────────────────────────────────────────────
+      - name: Start container
+        run: |
+          docker run -d \
+            --name ags-ci \
+            --publish 8000:8000 \
+            --env OPENAI_API_KEY=sk-placeholder-not-used-in-smoke-tests \
+            --env DATABASE_URL=sqlite:///./data/auto.db \
+            agent-auto-system:ci
+
+      # ── Wait for the app to be healthy ────────────────────────────────────────
+      - name: Wait for app to be ready
+        run: |
+          echo "Waiting for http://localhost:8000/health ..."
+          for i in $(seq 1 24); do
+            if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+              echo "✓ App is healthy after ${i}×5 s"
+              exit 0
+            fi
+            echo "  attempt $i/24 — sleeping 5 s"
+            sleep 5
+          done
+          echo "✗ App did not become healthy within 2 min" >&2
+          docker logs ags-ci
+          exit 1
+
+      # ── Smoke tests ───────────────────────────────────────────────────────────
+      - name: "GET /health → {status: ok}"
+        run: |
+          curl -sf http://localhost:8000/health \
+            | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d['status'] == 'ok', f'unexpected: {d}'
+          print('✓ /health ok')
+          "
+
+      - name: "GET / → UI HTML served"
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/)
+          [ "$STATUS" = "200" ] && echo "✓ UI served (HTTP $STATUS)" \
+            || { echo "✗ Expected 200, got $STATUS"; exit 1; }
+
+      - name: "GET /api/system → catalog completeness"
+        run: |
+          curl -sf http://localhost:8000/api/system \
+            | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert len(d['agents'])    >= 5, f'agents: {len(d[\"agents\"])}'
+          assert len(d['tools'])     >= 6, f'tools: {len(d[\"tools\"])}'
+          assert len(d['crews'])     >= 5, f'crews: {len(d[\"crews\"])}'
+          assert len(d['workflows']) >= 5, f'workflows: {len(d[\"workflows\"])}'
+          agent_ids = {a['id'] for a in d['agents']}
+          tool_ids  = {t['id'] for t in d['tools']}
+          assert 'email_sender_agent' in agent_ids,  'email_sender_agent missing'
+          assert 'gmail_send_email'   in tool_ids,   'gmail_send_email missing'
+          assert 'web_scraper_agent'  in agent_ids,  'web_scraper_agent missing'
+          print(f'✓ catalog ok — {len(d[\"agents\"])} agents, {len(d[\"tools\"])} tools,'
+                f' {len(d[\"crews\"])} crews, {len(d[\"workflows\"])} workflows')
+          "
+
+      - name: "POST /api/jobs → create hacker_news_digest job"
+        run: |
+          JOB=$(curl -sf -X POST http://localhost:8000/api/jobs \
+            -H "Content-Type: application/json" \
+            -d '{"name":"CI smoke test","job_type":"hacker_news_digest","payload":{"limit":3}}')
+          echo "$JOB" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d.get('id') is not None,         'id missing'
+          assert d['job_type'] == 'hacker_news_digest'
+          assert d['name'] == 'CI smoke test'
+          print(f'✓ job created: id={d[\"id\"]}, type={d[\"job_type\"]}')
+          "
+
+      - name: "GET /api/jobs → non-empty list"
+        run: |
+          curl -sf http://localhost:8000/api/jobs \
+            | python3 -c "
+          import sys, json
+          jobs = json.load(sys.stdin)
+          assert isinstance(jobs, list) and len(jobs) >= 1, f'expected ≥1 job, got {jobs}'
+          print(f'✓ {len(jobs)} job(s) in list')
+          "
+
+      - name: "GET /api/stats → shape & 7-day trend"
+        run: |
+          curl -sf http://localhost:8000/api/stats \
+            | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          for key in ('total_runs','success','failed','active','success_rate',
+                      'avg_duration_secs','by_type','trend'):
+              assert key in d, f'key missing: {key}'
+          assert len(d['trend']) == 7, f'trend should have 7 days, got {len(d[\"trend\"])}'
+          print(f'✓ stats ok — total_runs={d[\"total_runs\"]}, trend_days={len(d[\"trend\"])}')
+          "
+
+      - name: "DELETE /api/runs?delete_all=true → zero deleted (no runs yet)"
+        run: |
+          curl -sf -X DELETE "http://localhost:8000/api/runs?delete_all=true" \
+            | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d['deleted'] == 0, f'expected 0, got {d}'
+          print(f'✓ bulk delete ok: {d[\"deleted\"]} deleted')
+          "
+
+      - name: "GET /docs → OpenAPI UI available"
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs)
+          [ "$STATUS" = "200" ] && echo "✓ /docs served (HTTP $STATUS)" \
+            || { echo "✗ Expected 200, got $STATUS"; exit 1; }
+
+      # ── Cleanup ───────────────────────────────────────────────────────────────
+      - name: Print container logs on failure
+        if: failure()
+        run: docker logs ags-ci
+
+      - name: Remove container
+        if: always()
+        run: docker rm -f ags-ci

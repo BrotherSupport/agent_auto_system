@@ -1,0 +1,33 @@
+# --- Python artefacts ---
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# --- Test / CI artefacts ---
+.pytest_cache/
+tests/
+.github/
+htmlcov/
+.coverage
+
+# --- Local data (never bake the real DB into the image) ---
+data/
+*.db
+*.sqlite
+*.log
+screenshots/
+
+# --- Secrets ---
+.env
+
+# --- Editor / OS ---
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# --- Docs (not needed at runtime) ---
+doc/
