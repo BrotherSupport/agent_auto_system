@@ -397,6 +397,8 @@ document.getElementById('history-tbody').addEventListener('click', (e) => {
     return;
   }
 
+  // Guard: clicks inside an open detail pane must not toggle the parent row.
+  if (e.target.closest('tr.detail-row')) return;
   const row = e.target.closest('tr.data-row');
   if (row) toggleDetail(parseInt(row.dataset.runId, 10));
 });
@@ -497,6 +499,14 @@ function renderHistory(runs) {
   cachedRuns = runs;
   const tbody = document.getElementById('history-tbody');
 
+  // Snapshot which detail rows are open and which tab is active before wiping the DOM.
+  const openState = new Map(); // runId → active pane name ('result' | 'log')
+  tbody.querySelectorAll('.detail-row:not(.hidden)').forEach(el => {
+    const runId = parseInt(el.id.replace('detail-', ''), 10);
+    const active = el.querySelector('.detail-pane.active');
+    openState.set(runId, active?.dataset.pane ?? 'result');
+  });
+
   if (!runs.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No runs yet. Click "New Run" to get started.</td></tr>';
     document.getElementById('select-all-cb').checked = false;
@@ -578,6 +588,15 @@ function renderHistory(runs) {
         </td>
       </tr>`;
   }).join('');
+
+  // Restore previously open detail rows (preserves state across periodic refreshes).
+  openState.forEach((tab, runId) => {
+    const detailRow = document.getElementById(`detail-${runId}`);
+    if (detailRow) {
+      detailRow.classList.remove('hidden');
+      switchTab(runId, tab);
+    }
+  });
 
   initElapsedTimers();
   updateBulkActionButtons();
