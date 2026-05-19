@@ -298,11 +298,23 @@
     .source-body { display: none; }
     .source-body.open { display: block; }
     .source-body pre {
-      font-family: ui-monospace, "Cascadia Code", monospace; font-size: 0.77rem;
-      padding: 0.75rem 1.1rem; color: var(--text-muted); white-space: pre; overflow-x: auto;
-      max-height: 420px; overflow-y: auto; line-height: 1.6;
-      background: #080f1e;
+      font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
+      font-size: 0.77rem; padding: 1rem 1.25rem; color: #abb2bf;
+      white-space: pre; overflow-x: auto; max-height: 480px; overflow-y: auto;
+      line-height: 1.75; background: #282c34; tab-size: 4;
     }
+
+    /* ── Syntax highlight tokens ── */
+    .hl-k  { color: #c678dd; }
+    .hl-ki { color: #c678dd; font-style: italic; }
+    .hl-s  { color: #e5c07b; }
+    .hl-c  { color: #5c6370; font-style: italic; }
+    .hl-d  { color: #98c379; }
+    .hl-fn { color: #61afef; }
+    .hl-bi { color: #56b6c2; }
+    .hl-n  { color: #d19a66; }
+    .hl-yk { color: #e06c75; }
+    .hl-yv { color: #98c379; }
 
     /* ── Flow steps ── */
     .flow-steps { display: flex; flex-direction: column; gap: 0; padding: 0 1.1rem 0.75rem; }
