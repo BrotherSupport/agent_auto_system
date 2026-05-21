@@ -32,5 +32,15 @@ def resolve(provider: str | None, model: str | None):
     effective_model = model if model and model != "default" else cfg["default"]
     api_key = os.getenv(cfg["env"])
 
-    llm = LLM(model=effective_model, api_key=api_key) if api_key else None
+    if not api_key:
+        return None, provider, effective_model
+
+    try:
+        llm = LLM(model=effective_model, api_key=api_key)
+    except ImportError as exc:
+        raise ImportError(
+            f"Provider '{provider}' requires an extra package: {exc}. "
+            "Run: uv add 'crewai[google-genai]' (Gemini) or check your install."
+        ) from exc
+
     return llm, provider, effective_model
