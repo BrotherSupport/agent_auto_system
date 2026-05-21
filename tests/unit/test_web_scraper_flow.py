@@ -35,6 +35,7 @@ def test_crew_called_with_url_only(mocker):
     mock_crew_instance = MagicMock()
     mock_crew_instance.crew.return_value.kickoff.return_value = mock_result
 
+    mocker.patch("src.automation.harness.provider.resolve", return_value=(None, "openai", "gpt-4o-mini"))
     mocker.patch(
         "src.automation.flows.web_scraper_flow.WebScraperCrew",
         return_value=mock_crew_instance,
@@ -57,6 +58,7 @@ def test_crew_not_called_with_question_even_if_passed(mocker):
     mock_crew_instance = MagicMock()
     mock_crew_instance.crew.return_value.kickoff.return_value = mock_result
 
+    mocker.patch("src.automation.harness.provider.resolve", return_value=(None, "openai", "gpt-4o-mini"))
     mocker.patch(
         "src.automation.flows.web_scraper_flow.WebScraperCrew",
         return_value=mock_crew_instance,
@@ -77,6 +79,7 @@ def test_flow_returns_crew_raw_output(mocker):
     mock_crew_instance = MagicMock()
     mock_crew_instance.crew.return_value.kickoff.return_value = mock_result
 
+    mocker.patch("src.automation.harness.provider.resolve", return_value=(None, "openai", "gpt-4o-mini"))
     mocker.patch(
         "src.automation.flows.web_scraper_flow.WebScraperCrew",
         return_value=mock_crew_instance,

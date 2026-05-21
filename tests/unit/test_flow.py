@@ -25,6 +25,7 @@ def test_flow_calls_crew_with_correct_inputs(mocker):
     mock_crew_instance = MagicMock()
     mock_crew_instance.crew.return_value.kickoff.return_value = mock_result
 
+    mocker.patch("src.automation.harness.provider.resolve", return_value=(None, "openai", "gpt-4o-mini"))
     mocker.patch(
         "src.automation.flows.form_fill_flow.FormFillerCrew",
         return_value=mock_crew_instance,
@@ -52,6 +53,7 @@ def test_flow_returns_crew_result(mocker):
     mock_crew_instance = MagicMock()
     mock_crew_instance.crew.return_value.kickoff.return_value = mock_result
 
+    mocker.patch("src.automation.harness.provider.resolve", return_value=(None, "openai", "gpt-4o-mini"))
     mocker.patch(
         "src.automation.flows.form_fill_flow.FormFillerCrew",
         return_value=mock_crew_instance,
