@@ -21,10 +21,11 @@ class FormFillState(BaseModel):
     ai_problem: str = ""
     run_id: int = 0
     usage: dict = {}
+    llm_provider: str = ""
+    llm_model: str = ""
 
 
 class FormFillFlow(Flow[FormFillState]):
-    llm = None  # injected by executor before kickoff
 
     @start()
     def validate_payload(self):
@@ -39,9 +40,11 @@ class FormFillFlow(Flow[FormFillState]):
 
     @listen(validate_payload)
     def execute_crew(self, _):
+        from src.automation.harness.provider import resolve as resolve_llm
+        llm, _, _ = resolve_llm(self.state.llm_provider or None, self.state.llm_model or None)
         append_log(self.state.run_id, "Inspecting Google Form structure...")
         crew = FormFillerCrew()
-        crew.llm = self.llm
+        crew.llm = llm
         result = crew.crew().kickoff(inputs={
             "company_name": self.state.company_name,
             "company_size": self.state.company_size,

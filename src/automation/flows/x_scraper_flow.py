@@ -20,10 +20,11 @@ class XScraperState(BaseModel):
     limit: int = 5
     run_id: int = 0
     usage: dict = {}
+    llm_provider: str = ""
+    llm_model: str = ""
 
 
 class XScraperFlow(Flow[XScraperState]):
-    llm = None  # injected by executor before kickoff
 
     @start()
     def validate_payload(self):
@@ -34,9 +35,11 @@ class XScraperFlow(Flow[XScraperState]):
 
     @listen(validate_payload)
     def execute_crew(self, _):
+        from src.automation.harness.provider import resolve as resolve_llm
+        llm, _, _ = resolve_llm(self.state.llm_provider or None, self.state.llm_model or None)
         append_log(self.state.run_id, "Fetching posts via nitter...")
         crew = XScraperCrew()
-        crew.llm = self.llm
+        crew.llm = llm
         result = crew.crew().kickoff(inputs={
             "username": self.state.username,
             "limit": self.state.limit,

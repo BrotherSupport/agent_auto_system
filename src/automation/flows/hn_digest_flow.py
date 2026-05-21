@@ -19,10 +19,11 @@ class HNDigestState(BaseModel):
     limit: int = 5
     run_id: int = 0
     usage: dict = {}
+    llm_provider: str = ""
+    llm_model: str = ""
 
 
 class HNDigestFlow(Flow[HNDigestState]):
-    llm = None  # injected by executor before kickoff
 
     @start()
     def validate_payload(self):
@@ -33,9 +34,11 @@ class HNDigestFlow(Flow[HNDigestState]):
 
     @listen(validate_payload)
     def execute_crew(self, _):
+        from src.automation.harness.provider import resolve as resolve_llm
+        llm, _, _ = resolve_llm(self.state.llm_provider or None, self.state.llm_model or None)
         append_log(self.state.run_id, "HN analyst agent reading stories...")
         crew = HNDigestCrew()
-        crew.llm = self.llm
+        crew.llm = llm
         result = crew.crew().kickoff(inputs={"limit": self.state.limit})
         self.state.usage = _extract_usage(result)
         append_log(self.state.run_id, "Digest generated, formatting result...")

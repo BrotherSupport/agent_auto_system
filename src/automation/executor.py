@@ -31,42 +31,48 @@ def _is_app_failure(job_type: str, result: dict) -> bool:
     return False
 
 
-async def _run_flow(run_id: int, job_type: str, payload: dict, llm):
-    """Execute the appropriate flow and return (result_dict, usage_dict)."""
-    inputs = {**payload, "run_id": run_id}
+async def _run_flow(run_id: int, job_type: str, payload: dict, effective_provider: str, effective_model: str):
+    """Execute the appropriate flow and return (result_dict, usage_dict).
+
+    llm_provider/llm_model are threaded through the flow state so the flow
+    resolves the LLM object itself — this avoids Flow attribute injection
+    issues where arbitrary attrs set before kickoff() may not persist.
+    """
+    inputs = {
+        **payload,
+        "run_id": run_id,
+        "llm_provider": effective_provider,
+        "llm_model": effective_model,
+    }
 
     if job_type == "google_form_fill":
         from src.automation.flows.form_fill_flow import FormFillFlow
-        flow = FormFillFlow()
-        flow.llm = llm
         append_log(run_id, "Launching form fill agent...")
+        flow = FormFillFlow()
         raw = await asyncio.to_thread(flow.kickoff, inputs=inputs)
 
     elif job_type == "web_scraper":
         from src.automation.flows.web_scraper_flow import WebScraperFlow
-        flow = WebScraperFlow()
-        flow.llm = llm
         append_log(run_id, "Launching web scraper agent...")
+        flow = WebScraperFlow()
         raw = await asyncio.to_thread(flow.kickoff, inputs=inputs)
 
     elif job_type == "email_sender":
         from src.automation.flows.email_sender_flow import EmailSenderFlow
-        flow = EmailSenderFlow()
         append_log(run_id, "Preparing email delivery...")
+        flow = EmailSenderFlow()
         raw = await asyncio.to_thread(flow.kickoff, inputs=inputs)
 
     elif job_type == "hacker_news_digest":
         from src.automation.flows.hn_digest_flow import HNDigestFlow
-        flow = HNDigestFlow()
-        flow.llm = llm
         append_log(run_id, "Contacting Hacker News API...")
+        flow = HNDigestFlow()
         raw = await asyncio.to_thread(flow.kickoff, inputs=inputs)
 
     elif job_type == "x_scraper":
         from src.automation.flows.x_scraper_flow import XScraperFlow
-        flow = XScraperFlow()
-        flow.llm = llm
         append_log(run_id, "Connecting to X profile scraper...")
+        flow = XScraperFlow()
         raw = await asyncio.to_thread(flow.kickoff, inputs=inputs)
 
     else:
@@ -95,7 +101,7 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
     llm_model = payload.pop("llm_model", None)
     max_retries = int(payload.pop("max_retries", 1))
 
-    llm, effective_provider, effective_model = resolve_llm(llm_provider, llm_model)
+    _, effective_provider, effective_model = resolve_llm(llm_provider, llm_model)
     if llm_provider:
         append_log(run_id, f"Using {effective_provider} / {effective_model}")
 
@@ -109,7 +115,7 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
 
         try:
             append_log(run_id, "Processing results...")
-            result, usage = await _run_flow(run_id, job_type, payload, llm)
+            result, usage = await _run_flow(run_id, job_type, payload, effective_provider, effective_model)
 
             tokens_in  += usage.get("prompt_tokens", 0)
             tokens_out += usage.get("completion_tokens", 0)
