@@ -166,6 +166,15 @@ def bulk_delete_runs(
     return {"deleted": len(runs)}
 
 
+def _duration_secs(r: Run) -> float | None:
+    try:
+        s = r.started_at  if r.started_at.tzinfo  else r.started_at.replace(tzinfo=timezone.utc)
+        f = r.finished_at if r.finished_at.tzinfo else r.finished_at.replace(tzinfo=timezone.utc)
+        return (f - s).total_seconds()
+    except (AttributeError, TypeError):
+        return None
+
+
 @router.get("/stats")
 def get_stats(session: Session = Depends(get_session)):
     runs = session.exec(select(Run)).all()
@@ -175,88 +184,81 @@ def get_stats(session: Session = Depends(get_session)):
     job_ids = list({r.job_id for r in runs})
     jobs = {j.id: j for j in session.exec(select(Job).where(Job.id.in_(job_ids))).all()}
 
-    completed = [r for r in runs if r.finished_at and r.status in ("success", "failed")]
-    successes = [r for r in runs if r.status == "success"]
-    failures = [r for r in runs if r.status == "failed"]
+    today = datetime.now(timezone.utc).date()
+    trend_buckets: dict = {today - timedelta(days=i): {"total": 0, "success": 0, "failed": 0}
+                           for i in range(6, -1, -1)}
 
-    durations = []
-    for r in completed:
+    n_success = n_failed = n_active = 0
+    durations: list[float] = []
+    by_type: dict = {}
+    by_provider: dict = {}
+    total_tokens_in = total_tokens_out = 0
+    total_cost = 0.0
+
+    for run in runs:
+        status = run.status
+        if status == "success":
+            n_success += 1
+        elif status == "failed":
+            n_failed += 1
+        elif status in ("pending", "running"):
+            n_active += 1
+
+        jtype = (jobs[run.job_id].job_type if run.job_id in jobs else "unknown")
+        bt = by_type.setdefault(jtype, {"total": 0, "success": 0, "failed": 0,
+                                         "pending": 0, "running": 0, "_durs": []})
+        bt["total"] += 1
+        bt[status] = bt.get(status, 0) + 1
+
+        if run.finished_at and status in ("success", "failed"):
+            d = _duration_secs(run)
+            if d is not None:
+                durations.append(d)
+                bt["_durs"].append(d)
+
+        total_tokens_in  += run.tokens_in  or 0
+        total_tokens_out += run.tokens_out or 0
+        total_cost       += run.cost_usd   or 0.0
+
+        p = run.llm_provider or "unknown"
+        bp = by_provider.setdefault(p, {"runs": 0, "tokens_in": 0, "tokens_out": 0,
+                                         "cost_usd": 0.0, "models": set()})
+        bp["runs"] += 1
+        bp["tokens_in"]  += run.tokens_in  or 0
+        bp["tokens_out"] += run.tokens_out or 0
+        bp["cost_usd"]   += run.cost_usd   or 0.0
+        if run.llm_model:
+            bp["models"].add(run.llm_model)
+
         try:
-            s = r.started_at if r.started_at.tzinfo else r.started_at.replace(tzinfo=timezone.utc)
-            f = r.finished_at if r.finished_at.tzinfo else r.finished_at.replace(tzinfo=timezone.utc)
-            durations.append((f - s).total_seconds())
-        except Exception:
+            rd = run.started_at.date()
+            if rd in trend_buckets:
+                trend_buckets[rd]["total"] += 1
+                if status in ("success", "failed"):
+                    trend_buckets[rd][status] += 1
+        except (AttributeError, TypeError):
             pass
 
-    avg_dur = round(sum(durations) / len(durations), 1) if durations else 0
-    success_rate = round(len(successes) / len(completed) * 100, 1) if completed else 0
-
-    # Breakdown by job type
-    by_type: dict = {}
-    for run in runs:
-        job = jobs.get(run.job_id)
-        jtype = job.job_type if job else "unknown"
-        if jtype not in by_type:
-            by_type[jtype] = {"total": 0, "success": 0, "failed": 0, "pending": 0, "running": 0, "_durs": []}
-        by_type[jtype]["total"] += 1
-        by_type[jtype][run.status] = by_type[jtype].get(run.status, 0) + 1
-        if run.finished_at and run.started_at and run.status in ("success", "failed"):
-            try:
-                s = run.started_at if run.started_at.tzinfo else run.started_at.replace(tzinfo=timezone.utc)
-                f = run.finished_at if run.finished_at.tzinfo else run.finished_at.replace(tzinfo=timezone.utc)
-                by_type[jtype]["_durs"].append((f - s).total_seconds())
-            except Exception:
-                pass
-
-    for jtype, data in by_type.items():
+    for data in by_type.values():
         durs = data.pop("_durs")
         data["avg_duration"] = round(sum(durs) / len(durs), 1) if durs else 0
+    for bp in by_provider.values():
+        bp["models"]   = sorted(bp["models"])
+        bp["cost_usd"] = round(bp["cost_usd"], 6)
 
-    # Last 7 days trend
-    today = datetime.now(timezone.utc).date()
-    trend = []
-    for i in range(6, -1, -1):
-        day = today - timedelta(days=i)
-        day_runs = []
-        for r in runs:
-            try:
-                rd = r.started_at.date() if hasattr(r.started_at, "date") else r.started_at
-                if rd == day:
-                    day_runs.append(r)
-            except Exception:
-                pass
-        trend.append({
-            "date": day.isoformat(),
-            "label": day.strftime("%a"),
-            "total": len(day_runs),
-            "success": len([r for r in day_runs if r.status == "success"]),
-            "failed": len([r for r in day_runs if r.status == "failed"]),
-        })
-
-    # Resource usage aggregation
-    total_tokens_in  = sum(r.tokens_in or 0 for r in runs)
-    total_tokens_out = sum(r.tokens_out or 0 for r in runs)
-    total_cost       = round(sum(r.cost_usd or 0.0 for r in runs), 6)
-
-    by_provider: dict = {}
-    for run in runs:
-        p = run.llm_provider or "unknown"
-        if p not in by_provider:
-            by_provider[p] = {"runs": 0, "tokens_in": 0, "tokens_out": 0, "cost_usd": 0.0, "models": set()}
-        by_provider[p]["runs"] += 1
-        by_provider[p]["tokens_in"]  += run.tokens_in or 0
-        by_provider[p]["tokens_out"] += run.tokens_out or 0
-        by_provider[p]["cost_usd"]   = round(by_provider[p]["cost_usd"] + (run.cost_usd or 0.0), 6)
-        if run.llm_model:
-            by_provider[p]["models"].add(run.llm_model)
-    for p in by_provider:
-        by_provider[p]["models"] = sorted(by_provider[p]["models"])
+    n_completed = n_success + n_failed
+    avg_dur      = round(sum(durations) / len(durations), 1) if durations else 0
+    success_rate = round(n_success / n_completed * 100, 1) if n_completed else 0
+    trend = [
+        {"date": d.isoformat(), "label": d.strftime("%a"), **trend_buckets[d]}
+        for d in sorted(trend_buckets)
+    ]
 
     return {
         "total_runs": len(runs),
-        "success": len(successes),
-        "failed": len(failures),
-        "active": len([r for r in runs if r.status in ("pending", "running")]),
+        "success": n_success,
+        "failed": n_failed,
+        "active": n_active,
         "success_rate": success_rate,
         "avg_duration_secs": avg_dur,
         "by_type": by_type,
@@ -264,7 +266,7 @@ def get_stats(session: Session = Depends(get_session)):
         "total_tokens_in": total_tokens_in,
         "total_tokens_out": total_tokens_out,
         "total_tokens": total_tokens_in + total_tokens_out,
-        "total_cost_usd": total_cost,
+        "total_cost_usd": round(total_cost, 6),
         "by_provider": by_provider,
     }
 
@@ -272,9 +274,9 @@ def get_stats(session: Session = Depends(get_session)):
 def _empty_stats():
     today = datetime.now(timezone.utc).date()
     trend = [
-        {"date": (today - timedelta(days=i)).isoformat(), "label": (today - timedelta(days=i)).strftime("%a"),
-         "total": 0, "success": 0, "failed": 0}
+        {"date": d.isoformat(), "label": d.strftime("%a"), "total": 0, "success": 0, "failed": 0}
         for i in range(6, -1, -1)
+        for d in (today - timedelta(days=i),)
     ]
     return {
         "total_runs": 0, "success": 0, "failed": 0, "active": 0,

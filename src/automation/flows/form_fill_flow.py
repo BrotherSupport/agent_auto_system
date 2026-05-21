@@ -2,17 +2,10 @@ from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel
 
 from src.automation.crews.form_crew.crew import FormFillerCrew
+from src.automation.flows.utils import extract_usage
 from src.automation.progress import append_log
 
 
-def _extract_usage(result) -> dict:
-    m = getattr(result, "usage_metrics", None)
-    if not m:
-        return {}
-    return {
-        "prompt_tokens":     getattr(m, "prompt_tokens", 0) or 0,
-        "completion_tokens": getattr(m, "completion_tokens", 0) or 0,
-    }
 
 
 class FormFillState(BaseModel):
@@ -49,6 +42,6 @@ class FormFillFlow(Flow[FormFillState]):
             "company_size": self.state.company_size,
             "ai_problem": self.state.ai_problem,
         })
-        self.state.usage = _extract_usage(result)
+        self.state.usage = extract_usage(result)
         append_log(self.state.run_id, "Form submission attempted, reading result...")
         return result.raw if hasattr(result, "raw") else str(result)

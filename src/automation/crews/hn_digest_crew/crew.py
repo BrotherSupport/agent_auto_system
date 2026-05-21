@@ -7,14 +7,17 @@ from src.automation.tools.hn_tool import HNTopStoriesTool
 
 _CFG = Path(__file__).parent / "config"
 
+with open(_CFG / "agents.yaml") as _f:
+    _AGENTS = yaml.safe_load(_f)
+with open(_CFG / "tasks.yaml") as _f:
+    _TASKS = yaml.safe_load(_f)
+
 
 class HNDigestCrew:
     def __init__(self, llm=None):
         self._llm = llm
-        with open(_CFG / "agents.yaml") as f:
-            self._agents = yaml.safe_load(f)
-        with open(_CFG / "tasks.yaml") as f:
-            self._tasks = yaml.safe_load(f)
+        self._agents = _AGENTS
+        self._tasks = _TASKS
 
     def crew(self) -> Crew:
         analyst = Agent(

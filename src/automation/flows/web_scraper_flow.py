@@ -2,17 +2,10 @@ from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel
 
 from src.automation.crews.web_scraper_crew.crew import WebScraperCrew
+from src.automation.flows.utils import extract_usage
 from src.automation.progress import append_log
 
 
-def _extract_usage(result) -> dict:
-    m = getattr(result, "usage_metrics", None)
-    if not m:
-        return {}
-    return {
-        "prompt_tokens":     getattr(m, "prompt_tokens", 0) or 0,
-        "completion_tokens": getattr(m, "completion_tokens", 0) or 0,
-    }
 
 
 class WebScraperState(BaseModel):
@@ -39,6 +32,6 @@ class WebScraperFlow(Flow[WebScraperState]):
         append_log(self.state.run_id, "Web scraper agent reading page content...")
         crew = WebScraperCrew(llm=llm)
         result = crew.crew().kickoff(inputs={"url": self.state.url})
-        self.state.usage = _extract_usage(result)
+        self.state.usage = extract_usage(result)
         append_log(self.state.run_id, "Agent generated summary, formatting result...")
         return result.raw if hasattr(result, "raw") else str(result)
