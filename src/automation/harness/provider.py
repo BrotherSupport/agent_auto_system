@@ -12,8 +12,15 @@ _CATALOG: dict = {
         "env": "ANTHROPIC_API_KEY",
     },
     "gemini": {
-        "models": ["gemini/gemini-1.5-flash", "gemini/gemini-1.5-pro"],
-        "default": "gemini/gemini-1.5-flash",
+        "models": [
+            "gemini/gemini-3.5-flash",
+            "gemini/gemini-3.1-flash-lite",
+            "gemini/gemini-3-flash-preview",
+            "gemini/gemini-2.5-flash",
+            "gemini/gemini-2.0-flash",
+            "gemini/gemini-2.0-flash-lite",
+        ],
+        "default": "gemini/gemini-2.5-flash",
         "env": "GEMINI_API_KEY",
     },
 }

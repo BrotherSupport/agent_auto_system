@@ -69,7 +69,14 @@ const AUTO_CATALOG = {
 const LLM_MODELS = {
   openai:    [['gpt-4o-mini', 'gpt-4o-mini (fast)'], ['gpt-4o', 'gpt-4o (smart)']],
   anthropic: [['claude-haiku-4-5-20251001', 'Haiku (fast)'], ['claude-sonnet-4-6', 'Sonnet (smart)']],
-  gemini:    [['gemini/gemini-1.5-flash', 'Gemini Flash (fast)'], ['gemini/gemini-1.5-pro', 'Gemini Pro (smart)']],
+  gemini: [
+    ['gemini/gemini-3.5-flash',       'Gemini 3.5 Flash'],
+    ['gemini/gemini-3.1-flash-lite',   'Gemini 3.1 Flash-Lite'],
+    ['gemini/gemini-3-flash-preview',  'Gemini 3 Flash (preview)'],
+    ['gemini/gemini-2.5-flash',        'Gemini 2.5 Flash'],
+    ['gemini/gemini-2.0-flash',        'Gemini 2.0 Flash'],
+    ['gemini/gemini-2.0-flash-lite',   'Gemini 2.0 Flash-Lite'],
+  ],
 };
 
 function updateModelOptions() {
