@@ -191,6 +191,10 @@ uv run uvicorn src.main:app --reload --port 8000
 
 # Open the UI
 open http://localhost:8000
+
+
+# kill app using 8000 port
+kill -9 $(lsof -ti:8000)
 ```
 
 ---
