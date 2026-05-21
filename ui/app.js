@@ -64,6 +64,21 @@ const AUTO_CATALOG = {
   },
 };
 
+// ── LLM provider → model map ──────────────────────────────────────────────────
+
+const LLM_MODELS = {
+  openai:    [['gpt-4o-mini', 'gpt-4o-mini (fast)'], ['gpt-4o', 'gpt-4o (smart)']],
+  anthropic: [['claude-haiku-4-5-20251001', 'Haiku (fast)'], ['claude-sonnet-4-6', 'Sonnet (smart)']],
+  gemini:    [['gemini/gemini-1.5-flash', 'Gemini Flash (fast)'], ['gemini/gemini-1.5-pro', 'Gemini Pro (smart)']],
+};
+
+function updateModelOptions() {
+  const provider = document.getElementById('llm-provider').value;
+  const modelSel = document.getElementById('llm-model');
+  const models = LLM_MODELS[provider] || LLM_MODELS.openai;
+  modelSel.innerHTML = models.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let activeEventSource  = null;
@@ -143,6 +158,7 @@ document.getElementById('new-run-btn').addEventListener('click', () => openModal
 document.getElementById('hero-run-btn').addEventListener('click', () => openModal());
 document.getElementById('modal-close').addEventListener('click', closeModalFn);
 document.getElementById('cancel-btn').addEventListener('click', closeModalFn);
+document.getElementById('llm-provider').addEventListener('change', updateModelOptions);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModalFn(); });
 
 // ── Job type card selection ───────────────────────────────────────────────────
@@ -204,9 +220,14 @@ runForm.addEventListener('submit', async (e) => {
     jobName = `Email: ${subject} → ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}`;
   }
 
+  // Attach LLM config to payload
+  payload.llm_provider = document.getElementById('llm-provider').value;
+  payload.llm_model    = document.getElementById('llm-model').value;
+
   closeModalFn();
   runForm.reset();
   selectJobType('google_form_fill');
+  updateModelOptions();
   navigate('dashboard');
   await triggerRun(jobType, jobName, payload);
 });
@@ -530,17 +551,44 @@ function renderHistory(runs) {
       catch (_) { resultText = run.result; }
     }
 
+    const totalTok = (run.tokens_in || 0) + (run.tokens_out || 0);
+    const provider = run.llm_provider || '';
+    const llmBadge = provider
+      ? `<span class="llm-badge llm-${provider}">${provider === 'anthropic' ? 'claude' : provider}</span>`
+      : '';
+    const costStr = run.cost_usd > 0
+      ? (run.cost_usd < 0.0001 ? '<$0.0001' : '$' + run.cost_usd.toFixed(4))
+      : '';
+    const costBadge = costStr ? `<span class="cost-badge">${costStr}</span>` : '';
+    const retryBadge = run.retry_count > 0 ? `<span class="retry-badge">${run.retry_count}↺</span>` : '';
+
     let logJson = null;
     if (run.log) { try { logJson = JSON.parse(run.log); } catch (_) {} }
 
     const logTab = logJson
       ? `<button class="detail-tab" data-action="tab" data-tab="log" data-run-id="${run.id}">Log (${logJson.length})</button>`
       : '';
+    const usageTab = totalTok > 0
+      ? `<button class="detail-tab" data-action="tab" data-tab="usage" data-run-id="${run.id}">Usage</button>`
+      : '';
     const logPane = logJson
       ? `<div class="detail-pane" id="pane-log-${run.id}" data-pane="log">
            <ul class="log-list">${logJson.map(e =>
              `<li><span class="log-ts">${escHtml(e.ts)}</span>${escHtml(e.msg)}</li>`
            ).join('')}</ul>
+         </div>`
+      : '';
+    const usagePane = totalTok > 0
+      ? `<div class="detail-pane" id="pane-usage-${run.id}" data-pane="usage">
+           <ul class="log-list" style="column-gap:2rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+             <li><span class="log-ts">provider</span>${escHtml(run.llm_provider || '—')}</li>
+             <li><span class="log-ts">model</span>${escHtml(run.llm_model || '—')}</li>
+             <li><span class="log-ts">tokens in</span>${(run.tokens_in || 0).toLocaleString()}</li>
+             <li><span class="log-ts">tokens out</span>${(run.tokens_out || 0).toLocaleString()}</li>
+             <li><span class="log-ts">total tokens</span>${totalTok.toLocaleString()}</li>
+             <li><span class="log-ts">cost</span>${costStr || '$0.000000'}</li>
+             <li><span class="log-ts">retries</span>${run.retry_count || 0}</li>
+           </ul>
          </div>`
       : '';
 
@@ -558,13 +606,19 @@ function renderHistory(runs) {
         <td>
           <div class="job-cell">
             <span class="job-name-text">${escHtml(run.job_name)}</span>
-            <span class="type-chip ${meta.cls}">${meta.chip}</span>
+            <div style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">
+              <span class="type-chip ${meta.cls}">${meta.chip}</span>
+              ${llmBadge}${retryBadge}
+            </div>
           </div>
         </td>
         <td><span class="badge badge-${run.status}">${run.status}</span></td>
         <td style="color:var(--text-muted);font-size:0.8rem">${started}</td>
         <td style="color:var(--text-muted)">${durCell}</td>
-        <td class="result-cell" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.82rem;color:var(--text-muted)">${escHtml(resultText)}</td>
+        <td class="result-cell" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.82rem;color:var(--text-muted)">
+          ${escHtml(resultText)}
+          ${costBadge ? `<div style="margin-top:0.2rem">${costBadge}${totalTok > 0 ? `<span class="cost-badge" style="margin-left:0.35rem">${totalTok.toLocaleString()}tok</span>` : ''}</div>` : ''}
+        </td>
         <td style="padding:0.65rem 0.5rem">
           <div class="row-actions">
             <button class="btn-rerun" data-action="rerun" data-job-id="${run.job_id}" data-run-id="${run.id}" title="Re-run">↺</button>
@@ -577,6 +631,7 @@ function renderHistory(runs) {
           <div class="detail-tabs">
             <button class="detail-tab active" data-action="tab" data-tab="result" data-run-id="${run.id}">Result</button>
             ${logTab}
+            ${usageTab}
           </div>
           <div class="detail-pane active" id="pane-result-${run.id}" data-pane="result">
             <div class="pane-toolbar">
@@ -585,6 +640,7 @@ function renderHistory(runs) {
             <pre>${escHtml(resultJson ? JSON.stringify(resultJson, null, 2) : (run.result || ''))}</pre>
           </div>
           ${logPane}
+          ${usagePane}
         </td>
       </tr>`;
   }).join('');
@@ -969,6 +1025,29 @@ function renderPerformancePage(s) {
 
   const successRateColor = s.success_rate >= 80 ? 'green' : s.success_rate >= 50 ? '' : 'red';
 
+  const totalCostStr = s.total_cost_usd > 0
+    ? (s.total_cost_usd < 0.01 ? s.total_cost_usd.toFixed(5) : s.total_cost_usd.toFixed(3))
+    : '0';
+  const totalTokStr = s.total_tokens > 0 ? s.total_tokens.toLocaleString() : '0';
+
+  const providerRows = Object.entries(s.by_provider || {}).map(([prov, d]) => {
+    const tok = (d.tokens_in + d.tokens_out).toLocaleString();
+    const cost = d.cost_usd > 0
+      ? (d.cost_usd < 0.01 ? d.cost_usd.toFixed(5) : d.cost_usd.toFixed(3))
+      : '0';
+    const provLabel = prov === 'anthropic' ? 'claude' : prov;
+    const badgeCls  = `llm-${prov}`;
+    const models    = (d.models || []).join(', ') || '—';
+    return `
+      <tr>
+        <td><span class="llm-badge ${badgeCls}">${provLabel}</span></td>
+        <td style="text-align:right">${d.runs}</td>
+        <td style="text-align:right;color:var(--text-muted)">${tok}</td>
+        <td style="text-align:right;color:var(--yellow)">$${cost}</td>
+        <td style="color:var(--text-muted);font-size:0.78rem;font-family:ui-monospace,monospace">${escHtml(models)}</td>
+      </tr>`;
+  }).join('');
+
   document.getElementById('perf-content').innerHTML = `
     <div class="stat-grid">
       <div class="stat-card">
@@ -990,6 +1069,16 @@ function renderPerformancePage(s) {
         <div class="stat-label">Avg Duration</div>
         <div class="stat-value">${s.avg_duration_secs > 0 ? s.avg_duration_secs + 's' : '—'}</div>
         <div class="stat-sub">completed runs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Tokens</div>
+        <div class="stat-value orange" style="font-size:1.4rem">${totalTokStr}</div>
+        <div class="stat-sub">${(s.total_tokens_in||0).toLocaleString()} in · ${(s.total_tokens_out||0).toLocaleString()} out</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Total Cost</div>
+        <div class="stat-value yellow" style="font-size:1.4rem">$${totalCostStr}</div>
+        <div class="stat-sub">USD (estimated)</div>
       </div>
     </div>
 
@@ -1014,6 +1103,25 @@ function renderPerformancePage(s) {
             </tr>
           </thead>
           <tbody>${typeRows}</tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    ${providerRows ? `
+    <div class="perf-section">
+      <div class="perf-section-title">LLM Resource Usage</div>
+      <div class="provider-table-wrap">
+        <table class="provider-table">
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th style="text-align:right">Runs</th>
+              <th style="text-align:right">Tokens</th>
+              <th style="text-align:right">Cost (USD)</th>
+              <th>Models Used</th>
+            </tr>
+          </thead>
+          <tbody>${providerRows}</tbody>
         </table>
       </div>
     </div>` : ''}`;

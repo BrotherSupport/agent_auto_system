@@ -57,6 +57,12 @@ def list_runs(
             "log": run.log,
             "started_at": run.started_at,
             "finished_at": run.finished_at,
+            "llm_provider": run.llm_provider,
+            "llm_model": run.llm_model,
+            "tokens_in": run.tokens_in or 0,
+            "tokens_out": run.tokens_out or 0,
+            "cost_usd": run.cost_usd or 0.0,
+            "retry_count": run.retry_count or 0,
         })
     return result
 
@@ -227,6 +233,25 @@ def get_stats(session: Session = Depends(get_session)):
             "failed": len([r for r in day_runs if r.status == "failed"]),
         })
 
+    # Resource usage aggregation
+    total_tokens_in  = sum(r.tokens_in or 0 for r in runs)
+    total_tokens_out = sum(r.tokens_out or 0 for r in runs)
+    total_cost       = round(sum(r.cost_usd or 0.0 for r in runs), 6)
+
+    by_provider: dict = {}
+    for run in runs:
+        p = run.llm_provider or "unknown"
+        if p not in by_provider:
+            by_provider[p] = {"runs": 0, "tokens_in": 0, "tokens_out": 0, "cost_usd": 0.0, "models": set()}
+        by_provider[p]["runs"] += 1
+        by_provider[p]["tokens_in"]  += run.tokens_in or 0
+        by_provider[p]["tokens_out"] += run.tokens_out or 0
+        by_provider[p]["cost_usd"]   = round(by_provider[p]["cost_usd"] + (run.cost_usd or 0.0), 6)
+        if run.llm_model:
+            by_provider[p]["models"].add(run.llm_model)
+    for p in by_provider:
+        by_provider[p]["models"] = sorted(by_provider[p]["models"])
+
     return {
         "total_runs": len(runs),
         "success": len(successes),
@@ -236,6 +261,11 @@ def get_stats(session: Session = Depends(get_session)):
         "avg_duration_secs": avg_dur,
         "by_type": by_type,
         "trend": trend,
+        "total_tokens_in": total_tokens_in,
+        "total_tokens_out": total_tokens_out,
+        "total_tokens": total_tokens_in + total_tokens_out,
+        "total_cost_usd": total_cost,
+        "by_provider": by_provider,
     }
 
 
@@ -249,6 +279,8 @@ def _empty_stats():
     return {
         "total_runs": 0, "success": 0, "failed": 0, "active": 0,
         "success_rate": 0, "avg_duration_secs": 0, "by_type": {}, "trend": trend,
+        "total_tokens_in": 0, "total_tokens_out": 0, "total_tokens": 0,
+        "total_cost_usd": 0.0, "by_provider": {},
     }
 
 

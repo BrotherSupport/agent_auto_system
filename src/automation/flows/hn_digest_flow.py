@@ -5,12 +5,24 @@ from src.automation.crews.hn_digest_crew.crew import HNDigestCrew
 from src.automation.progress import append_log
 
 
+def _extract_usage(result) -> dict:
+    m = getattr(result, "usage_metrics", None)
+    if not m:
+        return {}
+    return {
+        "prompt_tokens":     getattr(m, "prompt_tokens", 0) or 0,
+        "completion_tokens": getattr(m, "completion_tokens", 0) or 0,
+    }
+
+
 class HNDigestState(BaseModel):
     limit: int = 5
     run_id: int = 0
+    usage: dict = {}
 
 
 class HNDigestFlow(Flow[HNDigestState]):
+    llm = None  # injected by executor before kickoff
 
     @start()
     def validate_payload(self):
@@ -22,8 +34,9 @@ class HNDigestFlow(Flow[HNDigestState]):
     @listen(validate_payload)
     def execute_crew(self, _):
         append_log(self.state.run_id, "HN analyst agent reading stories...")
-        result = HNDigestCrew().crew().kickoff(inputs={
-            "limit": self.state.limit,
-        })
+        crew = HNDigestCrew()
+        crew.llm = self.llm
+        result = crew.crew().kickoff(inputs={"limit": self.state.limit})
+        self.state.usage = _extract_usage(result)
         append_log(self.state.run_id, "Digest generated, formatting result...")
         return result.raw if hasattr(result, "raw") else str(result)

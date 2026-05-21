@@ -5,14 +5,26 @@ from src.automation.crews.form_crew.crew import FormFillerCrew
 from src.automation.progress import append_log
 
 
+def _extract_usage(result) -> dict:
+    m = getattr(result, "usage_metrics", None)
+    if not m:
+        return {}
+    return {
+        "prompt_tokens":     getattr(m, "prompt_tokens", 0) or 0,
+        "completion_tokens": getattr(m, "completion_tokens", 0) or 0,
+    }
+
+
 class FormFillState(BaseModel):
     company_name: str = ""
     company_size: str = ""
     ai_problem: str = ""
     run_id: int = 0
+    usage: dict = {}
 
 
 class FormFillFlow(Flow[FormFillState]):
+    llm = None  # injected by executor before kickoff
 
     @start()
     def validate_payload(self):
@@ -28,10 +40,13 @@ class FormFillFlow(Flow[FormFillState]):
     @listen(validate_payload)
     def execute_crew(self, _):
         append_log(self.state.run_id, "Inspecting Google Form structure...")
-        result = FormFillerCrew().crew().kickoff(inputs={
+        crew = FormFillerCrew()
+        crew.llm = self.llm
+        result = crew.crew().kickoff(inputs={
             "company_name": self.state.company_name,
             "company_size": self.state.company_size,
             "ai_problem": self.state.ai_problem,
         })
+        self.state.usage = _extract_usage(result)
         append_log(self.state.run_id, "Form submission attempted, reading result...")
         return result.raw if hasattr(result, "raw") else str(result)

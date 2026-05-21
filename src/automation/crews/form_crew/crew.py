@@ -8,6 +8,7 @@ from src.automation.tools.google_form_tools import GoogleFormInspectorTool, Goog
 class FormFillerCrew:
     agents_config = "config/agents.yaml"
     tasks_config = "config/tasks.yaml"
+    llm = None  # set by flow before crew() is called
 
     @agent
     def form_agent(self) -> Agent:
@@ -15,6 +16,7 @@ class FormFillerCrew:
             config=self.agents_config["form_agent"],
             tools=[GoogleFormInspectorTool(), GoogleFormSubmitTool()],
             verbose=False,
+            llm=self.llm,
         )
 
     @task

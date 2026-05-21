@@ -8,6 +8,7 @@ from src.automation.tools.hn_tool import HNTopStoriesTool
 class HNDigestCrew:
     agents_config = "config/agents.yaml"
     tasks_config = "config/tasks.yaml"
+    llm = None  # set by flow before crew() is called
 
     @agent
     def hn_analyst(self) -> Agent:
@@ -15,6 +16,7 @@ class HNDigestCrew:
             config=self.agents_config["hn_analyst"],
             tools=[HNTopStoriesTool()],
             verbose=False,
+            llm=self.llm,
         )
 
     @task

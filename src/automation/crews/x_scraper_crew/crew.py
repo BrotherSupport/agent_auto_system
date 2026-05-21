@@ -8,6 +8,7 @@ from src.automation.tools.x_scraper_tool import XScraperTool
 class XScraperCrew:
     agents_config = "config/agents.yaml"
     tasks_config = "config/tasks.yaml"
+    llm = None  # set by flow before crew() is called
 
     @agent
     def x_analyst(self) -> Agent:
@@ -15,6 +16,7 @@ class XScraperCrew:
             config=self.agents_config["x_analyst"],
             tools=[XScraperTool()],
             verbose=False,
+            llm=self.llm,
         )
 
     @task

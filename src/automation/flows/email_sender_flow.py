@@ -13,6 +13,7 @@ class EmailSenderState(BaseModel):
     body: str = ""
     cc: str = ""
     run_id: int = 0
+    usage: dict = {}  # email uses no LLM; always empty
 
 
 class EmailSenderFlow(Flow[EmailSenderState]):
@@ -28,7 +29,7 @@ class EmailSenderFlow(Flow[EmailSenderState]):
 
     @listen(validate_payload)
     def send_email(self, _):
-        append_log(self.state.run_id, f"Connecting to Gmail SMTP...")
+        append_log(self.state.run_id, "Connecting to Gmail SMTP...")
         tool = GmailSendTool()
         result = tool._run(
             to=self.state.to,

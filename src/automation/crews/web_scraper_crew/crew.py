@@ -8,6 +8,7 @@ from src.automation.tools.web_scraper_tool import WebScraperTool
 class WebScraperCrew:
     agents_config = "config/agents.yaml"
     tasks_config = "config/tasks.yaml"
+    llm = None  # set by flow before crew() is called
 
     @agent
     def web_scraper_agent(self) -> Agent:
@@ -15,6 +16,7 @@ class WebScraperCrew:
             config=self.agents_config["web_scraper_agent"],
             tools=[WebScraperTool()],
             verbose=False,
+            llm=self.llm,
         )
 
     @task

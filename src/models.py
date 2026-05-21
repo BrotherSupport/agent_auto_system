@@ -19,3 +19,10 @@ class Run(SQLModel, table=True):
     log: Optional[str] = None  # JSON array of {ts, msg} progress entries
     started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     finished_at: Optional[datetime] = None
+    # Harness fields
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
+    tokens_in: int = 0
+    tokens_out: int = 0
+    cost_usd: float = 0.0
+    retry_count: int = 0

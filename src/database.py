@@ -23,6 +23,12 @@ def init_db():
     with engine.connect() as conn:
         for ddl in [
             "ALTER TABLE run ADD COLUMN log VARCHAR",
+            "ALTER TABLE run ADD COLUMN llm_provider VARCHAR",
+            "ALTER TABLE run ADD COLUMN llm_model VARCHAR",
+            "ALTER TABLE run ADD COLUMN tokens_in INTEGER DEFAULT 0",
+            "ALTER TABLE run ADD COLUMN tokens_out INTEGER DEFAULT 0",
+            "ALTER TABLE run ADD COLUMN cost_usd REAL DEFAULT 0.0",
+            "ALTER TABLE run ADD COLUMN retry_count INTEGER DEFAULT 0",
         ]:
             try:
                 conn.execute(text(ddl))

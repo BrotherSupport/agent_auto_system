@@ -401,6 +401,33 @@
     /* ── Confirm modal ── */
     .confirm-modal { max-width: 380px; }
     .confirm-msg { color: var(--text-muted); font-size: 0.9rem; line-height: 1.6; margin-bottom: 1.5rem; }
+
+    /* ── LLM / harness UI ── */
+    .llm-badge {
+      font-size: 0.58rem; font-weight: 700; padding: 0.05rem 0.28rem;
+      border-radius: 3px; letter-spacing: 0.04em; border: 1px solid;
+    }
+    .llm-openai    { background: rgba(16,185,129,0.1); color: #10b981; border-color: rgba(16,185,129,0.2); }
+    .llm-anthropic { background: rgba(251,191,36,0.1); color: #ca8a04; border-color: rgba(251,191,36,0.2); }
+    .llm-gemini    { background: rgba(59,130,246,0.1); color: var(--blue); border-color: rgba(59,130,246,0.2); }
+    .llm-unknown   { background: rgba(100,116,139,0.1); color: var(--gray); border-color: rgba(100,116,139,0.2); }
+    .cost-badge    { font-size: 0.68rem; color: var(--text-muted); font-family: ui-monospace, monospace; }
+    .retry-badge   { font-size: 0.58rem; font-weight: 700; padding: 0.05rem 0.3rem; border-radius: 3px;
+                     background: rgba(251,146,60,0.12); color: var(--orange); border: 1px solid rgba(251,146,60,0.2); }
+
+    .llm-config-sep { border: none; border-top: 1px solid var(--border); margin: 0.75rem 0 1rem; }
+    .llm-config-header { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.6rem; }
+    .llm-config-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+
+    /* ── Provider stats table ── */
+    .provider-table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .provider-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .provider-table thead { background: var(--surface); }
+    .provider-table th { padding: 0.6rem 1rem; text-align: left; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+    .provider-table td { padding: 0.65rem 1rem; border-top: 1px solid var(--border); }
+    .provider-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .stat-value.yellow { color: var(--yellow); }
+    .stat-value.orange { color: var(--orange); }
   </style>
 </head>
 <body>
@@ -586,6 +613,26 @@
         </div>
         <div style="font-size:0.75rem;color:var(--text-muted);background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
           Requires <code style="font-family:ui-monospace,monospace">GMAIL_ADDRESS</code> and <code style="font-family:ui-monospace,monospace">GMAIL_APP_PASSWORD</code> in <code style="font-family:ui-monospace,monospace">.env</code>
+        </div>
+      </div>
+
+      <hr class="llm-config-sep" />
+      <div class="llm-config-header">LLM Provider</div>
+      <div class="llm-config-row">
+        <div class="field" style="margin-bottom:0">
+          <label>Provider</label>
+          <select id="llm-provider">
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic (Claude)</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Model</label>
+          <select id="llm-model">
+            <option value="gpt-4o-mini">gpt-4o-mini (fast)</option>
+            <option value="gpt-4o">gpt-4o (smart)</option>
+          </select>
         </div>
       </div>
 
