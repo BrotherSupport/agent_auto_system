@@ -1,33 +1,32 @@
+import yaml
+from pathlib import Path
+
 from crewai import Agent, Crew, Process, Task
-from crewai.project import CrewBase, agent, crew, task
 
 from src.automation.tools.x_scraper_tool import XScraperTool
 
+_CFG = Path(__file__).parent / "config"
 
-@CrewBase
+
 class XScraperCrew:
-    agents_config = "config/agents.yaml"
-    tasks_config = "config/tasks.yaml"
-    llm = None  # set by flow before crew() is called
+    def __init__(self, llm=None):
+        self._llm = llm
+        with open(_CFG / "agents.yaml") as f:
+            self._agents = yaml.safe_load(f)
+        with open(_CFG / "tasks.yaml") as f:
+            self._tasks = yaml.safe_load(f)
 
-    @agent
-    def x_analyst(self) -> Agent:
-        return Agent(
-            config=self.agents_config["x_analyst"],
+    def crew(self) -> Crew:
+        agent = Agent(
+            config=self._agents["x_analyst"],
             tools=[XScraperTool()],
             verbose=False,
-            llm=self.llm,
+            llm=self._llm,
         )
-
-    @task
-    def x_scrape_task(self) -> Task:
-        return Task(config=self.tasks_config["x_scrape_task"])
-
-    @crew
-    def crew(self) -> Crew:
+        task = Task(config={**self._tasks["x_scrape_task"], "agent": agent})
         return Crew(
-            agents=self.agents,
-            tasks=self.tasks,
+            agents=[agent],
+            tasks=[task],
             process=Process.sequential,
             verbose=False,
         )

@@ -38,8 +38,7 @@ class XScraperFlow(Flow[XScraperState]):
         from src.automation.harness.provider import resolve as resolve_llm
         llm, _, _ = resolve_llm(self.state.llm_provider or None, self.state.llm_model or None)
         append_log(self.state.run_id, "Fetching posts via nitter...")
-        crew = XScraperCrew()
-        crew.llm = llm
+        crew = XScraperCrew(llm=llm)
         result = crew.crew().kickoff(inputs={
             "username": self.state.username,
             "limit": self.state.limit,

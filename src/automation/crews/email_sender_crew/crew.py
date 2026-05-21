@@ -1,31 +1,32 @@
+import yaml
+from pathlib import Path
+
 from crewai import Agent, Crew, Process, Task
-from crewai.project import CrewBase, agent, crew, task
 
 from src.automation.tools.gmail_send_tool import GmailSendTool
 
+_CFG = Path(__file__).parent / "config"
 
-@CrewBase
+
 class EmailSenderCrew:
-    agents_config = "config/agents.yaml"
-    tasks_config = "config/tasks.yaml"
+    def __init__(self, llm=None):
+        self._llm = llm
+        with open(_CFG / "agents.yaml") as f:
+            self._agents = yaml.safe_load(f)
+        with open(_CFG / "tasks.yaml") as f:
+            self._tasks = yaml.safe_load(f)
 
-    @agent
-    def email_sender_agent(self) -> Agent:
-        return Agent(
-            config=self.agents_config["email_sender_agent"],
+    def crew(self) -> Crew:
+        agent = Agent(
+            config=self._agents["email_sender_agent"],
             tools=[GmailSendTool()],
             verbose=False,
+            llm=self._llm,
         )
-
-    @task
-    def send_email_task(self) -> Task:
-        return Task(config=self.tasks_config["send_email_task"])
-
-    @crew
-    def crew(self) -> Crew:
+        task = Task(config={**self._tasks["send_email_task"], "agent": agent})
         return Crew(
-            agents=self.agents,
-            tasks=self.tasks,
+            agents=[agent],
+            tasks=[task],
             process=Process.sequential,
             verbose=False,
         )

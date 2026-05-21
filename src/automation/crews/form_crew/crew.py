@@ -1,33 +1,32 @@
+import yaml
+from pathlib import Path
+
 from crewai import Agent, Crew, Process, Task
-from crewai.project import CrewBase, agent, crew, task
 
 from src.automation.tools.google_form_tools import GoogleFormInspectorTool, GoogleFormSubmitTool
 
+_CFG = Path(__file__).parent / "config"
 
-@CrewBase
+
 class FormFillerCrew:
-    agents_config = "config/agents.yaml"
-    tasks_config = "config/tasks.yaml"
-    llm = None  # set by flow before crew() is called
+    def __init__(self, llm=None):
+        self._llm = llm
+        with open(_CFG / "agents.yaml") as f:
+            self._agents = yaml.safe_load(f)
+        with open(_CFG / "tasks.yaml") as f:
+            self._tasks = yaml.safe_load(f)
 
-    @agent
-    def form_agent(self) -> Agent:
-        return Agent(
-            config=self.agents_config["form_agent"],
+    def crew(self) -> Crew:
+        agent = Agent(
+            config=self._agents["form_agent"],
             tools=[GoogleFormInspectorTool(), GoogleFormSubmitTool()],
             verbose=False,
-            llm=self.llm,
+            llm=self._llm,
         )
-
-    @task
-    def fill_form_task(self) -> Task:
-        return Task(config=self.tasks_config["fill_form_task"])
-
-    @crew
-    def crew(self) -> Crew:
+        task = Task(config={**self._tasks["fill_form_task"], "agent": agent})
         return Crew(
-            agents=self.agents,
-            tasks=self.tasks,
+            agents=[agent],
+            tasks=[task],
             process=Process.sequential,
             verbose=False,
         )

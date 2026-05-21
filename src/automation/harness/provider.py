@@ -33,7 +33,10 @@ def resolve(provider: str | None, model: str | None):
     api_key = os.getenv(cfg["env"])
 
     if not api_key:
-        return None, provider, effective_model
+        raise EnvironmentError(
+            f"API key for provider '{provider}' is not set. "
+            f"Add {cfg['env']} to your .env file."
+        )
 
     try:
         llm = LLM(model=effective_model, api_key=api_key)

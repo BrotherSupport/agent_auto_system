@@ -37,8 +37,7 @@ class HNDigestFlow(Flow[HNDigestState]):
         from src.automation.harness.provider import resolve as resolve_llm
         llm, _, _ = resolve_llm(self.state.llm_provider or None, self.state.llm_model or None)
         append_log(self.state.run_id, "HN analyst agent reading stories...")
-        crew = HNDigestCrew()
-        crew.llm = llm
+        crew = HNDigestCrew(llm=llm)
         result = crew.crew().kickoff(inputs={"limit": self.state.limit})
         self.state.usage = _extract_usage(result)
         append_log(self.state.run_id, "Digest generated, formatting result...")

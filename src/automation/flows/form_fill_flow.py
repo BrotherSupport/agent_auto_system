@@ -43,8 +43,7 @@ class FormFillFlow(Flow[FormFillState]):
         from src.automation.harness.provider import resolve as resolve_llm
         llm, _, _ = resolve_llm(self.state.llm_provider or None, self.state.llm_model or None)
         append_log(self.state.run_id, "Inspecting Google Form structure...")
-        crew = FormFillerCrew()
-        crew.llm = llm
+        crew = FormFillerCrew(llm=llm)
         result = crew.crew().kickoff(inputs={
             "company_name": self.state.company_name,
             "company_size": self.state.company_size,
