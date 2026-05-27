@@ -12,6 +12,8 @@ _HEADERS = {
     )
 }
 
+_MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MB
+
 
 class ScrapeInput(BaseModel):
     url: str
@@ -28,7 +30,13 @@ class WebScraperTool(BaseTool):
 
     def _run(self, url: str) -> dict:
         req = urllib.request.Request(url, headers=_HEADERS)
-        html = urllib.request.urlopen(req, timeout=30).read().decode("utf-8", errors="replace")
+        resp = urllib.request.urlopen(req, timeout=30)
+
+        content_length = resp.headers.get("Content-Length")
+        if content_length and int(content_length) > _MAX_RESPONSE_BYTES:
+            return {"url": url, "error": f"Page too large ({content_length} bytes), skipping"}
+
+        html = resp.read(_MAX_RESPONSE_BYTES).decode("utf-8", errors="replace")
 
         # Title
         title_m = re.search(r"<title[^>]*>([^<]+)</title>", html, re.I)

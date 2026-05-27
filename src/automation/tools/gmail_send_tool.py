@@ -69,11 +69,14 @@ class GmailSendTool(BaseTool):
 
         recipients = _parse_emails(to) + (_parse_emails(cc) if cc else [])
 
-        with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT) as server:
-            server.ehlo()
-            server.starttls()
-            server.login(gmail_address, app_password)
-            server.sendmail(gmail_address, recipients, msg.as_string())
+        try:
+            with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT) as server:
+                server.ehlo()
+                server.starttls()
+                server.login(gmail_address, app_password)
+                server.sendmail(gmail_address, recipients, msg.as_string())
+        except Exception as exc:
+            return {"sent": False, "error": f"SMTP error: {exc}"}
 
         return {
             "sent": True,

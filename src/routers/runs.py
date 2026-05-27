@@ -5,8 +5,11 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import text
 from sqlmodel import Session, select
 
+from src.automation.registry import cancel as cancel_task
+from src.automation.registry import register, unregister
 from src.database import get_engine, get_session
 from src.models import Job, Run
 
@@ -26,9 +29,29 @@ async def trigger_run(job_id: int, session: Session = Depends(get_session)):
     run_id = run.id
 
     payload = json.loads(job.payload)
-    asyncio.create_task(_run_in_background(run_id, job.job_type, payload))
+    task = asyncio.create_task(_run_in_background(run_id, job.job_type, payload))
+    register(run_id, task)
 
     return {"run_id": run_id, "status": "pending"}
+
+
+@router.post("/runs/{run_id}/cancel", status_code=200)
+async def cancel_run(run_id: int, session: Session = Depends(get_session)):
+    run = session.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status not in ("pending", "running"):
+        raise HTTPException(status_code=409, detail="Run is not active")
+
+    was_cancelled = cancel_task(run_id)
+    if was_cancelled:
+        run.status = "failed"
+        run.result = json.dumps({"error": "Cancelled by user"})
+        run.finished_at = datetime.now(timezone.utc)
+        session.add(run)
+        session.commit()
+
+    return {"cancelled": was_cancelled, "run_id": run_id}
 
 
 @router.get("/runs")
@@ -129,7 +152,7 @@ async def stream_run(run_id: int):
                 if run.status in ("success", "failed"):
                     break
 
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)
         except asyncio.CancelledError:
             pass
 
@@ -166,100 +189,126 @@ def bulk_delete_runs(
     return {"deleted": len(runs)}
 
 
-def _duration_secs(r: Run) -> float | None:
-    try:
-        s = r.started_at  if r.started_at.tzinfo  else r.started_at.replace(tzinfo=timezone.utc)
-        f = r.finished_at if r.finished_at.tzinfo else r.finished_at.replace(tzinfo=timezone.utc)
-        return (f - s).total_seconds()
-    except (AttributeError, TypeError):
-        return None
-
-
 @router.get("/stats")
-def get_stats(session: Session = Depends(get_session)):
-    runs = session.exec(select(Run)).all()
-    if not runs:
-        return _empty_stats()
-
-    job_ids = list({r.job_id for r in runs})
-    jobs = {j.id: j for j in session.exec(select(Job).where(Job.id.in_(job_ids))).all()}
-
+def get_stats():
+    engine = get_engine()
     today = datetime.now(timezone.utc).date()
-    trend_buckets: dict = {today - timedelta(days=i): {"total": 0, "success": 0, "failed": 0}
-                           for i in range(6, -1, -1)}
 
-    n_success = n_failed = n_active = 0
-    durations: list[float] = []
-    by_type: dict = {}
-    by_provider: dict = {}
-    total_tokens_in = total_tokens_out = 0
-    total_cost = 0.0
+    with engine.connect() as conn:
+        total_runs = conn.execute(text("SELECT COUNT(*) FROM run")).scalar() or 0
+        if not total_runs:
+            return _empty_stats()
 
-    for run in runs:
-        status = run.status
-        if status == "success":
-            n_success += 1
-        elif status == "failed":
-            n_failed += 1
-        elif status in ("pending", "running"):
-            n_active += 1
+        # Overall counts, token totals, and average duration
+        row = conn.execute(text("""
+            SELECT
+                SUM(CASE WHEN status='success' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status='failed'  THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status IN ('pending','running') THEN 1 ELSE 0 END),
+                SUM(COALESCE(tokens_in,  0)),
+                SUM(COALESCE(tokens_out, 0)),
+                SUM(COALESCE(cost_usd,   0.0)),
+                AVG(CASE WHEN finished_at IS NOT NULL AND status IN ('success','failed')
+                    THEN (julianday(finished_at) - julianday(started_at)) * 86400 END)
+            FROM run
+        """)).fetchone()
 
-        jtype = (jobs[run.job_id].job_type if run.job_id in jobs else "unknown")
-        bt = by_type.setdefault(jtype, {"total": 0, "success": 0, "failed": 0,
-                                         "pending": 0, "running": 0, "_durs": []})
-        bt["total"] += 1
-        bt[status] = bt.get(status, 0) + 1
+        n_success, n_failed, n_active = row[0] or 0, row[1] or 0, row[2] or 0
+        total_tokens_in  = row[3] or 0
+        total_tokens_out = row[4] or 0
+        total_cost       = row[5] or 0.0
+        avg_dur          = round(row[6], 1) if row[6] is not None else 0
 
-        if run.finished_at and status in ("success", "failed"):
-            d = _duration_secs(run)
-            if d is not None:
-                durations.append(d)
-                bt["_durs"].append(d)
+        # By type: counts + weighted average duration per job_type
+        type_rows = conn.execute(text("""
+            SELECT
+                COALESCE(j.job_type, 'unknown') AS jtype,
+                r.status,
+                COUNT(*) AS cnt,
+                SUM(CASE WHEN r.finished_at IS NOT NULL AND r.status IN ('success','failed')
+                    THEN (julianday(r.finished_at) - julianday(r.started_at)) * 86400 ELSE 0 END) AS sum_dur,
+                SUM(CASE WHEN r.finished_at IS NOT NULL AND r.status IN ('success','failed')
+                    THEN 1 ELSE 0 END) AS cnt_dur
+            FROM run r
+            LEFT JOIN job j ON r.job_id = j.id
+            GROUP BY jtype, r.status
+        """)).fetchall()
 
-        total_tokens_in  += run.tokens_in  or 0
-        total_tokens_out += run.tokens_out or 0
-        total_cost       += run.cost_usd   or 0.0
+        by_type: dict = {}
+        for jtype, status, cnt, sum_dur, cnt_dur in type_rows:
+            bt = by_type.setdefault(jtype, {
+                "total": 0, "success": 0, "failed": 0, "pending": 0, "running": 0,
+                "_sum_dur": 0.0, "_cnt_dur": 0,
+            })
+            bt["total"] += cnt
+            bt[status] = bt.get(status, 0) + cnt
+            bt["_sum_dur"] += sum_dur or 0.0
+            bt["_cnt_dur"] += cnt_dur or 0
 
-        p = run.llm_provider or "unknown"
-        bp = by_provider.setdefault(p, {"runs": 0, "tokens_in": 0, "tokens_out": 0,
-                                         "cost_usd": 0.0, "models": set()})
-        bp["runs"] += 1
-        bp["tokens_in"]  += run.tokens_in  or 0
-        bp["tokens_out"] += run.tokens_out or 0
-        bp["cost_usd"]   += run.cost_usd   or 0.0
-        if run.llm_model:
-            bp["models"].add(run.llm_model)
+        for bt in by_type.values():
+            sd, cd = bt.pop("_sum_dur"), bt.pop("_cnt_dur")
+            bt["avg_duration"] = round(sd / cd, 1) if cd else 0
 
-        try:
-            rd = run.started_at.date()
-            if rd in trend_buckets:
-                trend_buckets[rd]["total"] += 1
-                if status in ("success", "failed"):
-                    trend_buckets[rd][status] += 1
-        except (AttributeError, TypeError):
-            pass
+        # By provider
+        prov_rows = conn.execute(text("""
+            SELECT
+                COALESCE(llm_provider, 'unknown') AS provider,
+                COUNT(*) AS runs,
+                SUM(COALESCE(tokens_in,  0)),
+                SUM(COALESCE(tokens_out, 0)),
+                SUM(COALESCE(cost_usd,   0.0))
+            FROM run
+            GROUP BY COALESCE(llm_provider, 'unknown')
+        """)).fetchall()
 
-    for data in by_type.values():
-        durs = data.pop("_durs")
-        data["avg_duration"] = round(sum(durs) / len(durs), 1) if durs else 0
-    for bp in by_provider.values():
-        bp["models"]   = sorted(bp["models"])
-        bp["cost_usd"] = round(bp["cost_usd"], 6)
+        by_provider: dict = {}
+        for provider, runs, ti, to_, cost in prov_rows:
+            by_provider[provider] = {
+                "runs": runs, "tokens_in": ti or 0, "tokens_out": to_ or 0,
+                "cost_usd": round(cost or 0.0, 6), "models": [],
+            }
+
+        model_rows = conn.execute(text("""
+            SELECT DISTINCT COALESCE(llm_provider, 'unknown'), llm_model
+            FROM run WHERE llm_model IS NOT NULL
+        """)).fetchall()
+        for provider, model in model_rows:
+            if provider in by_provider:
+                by_provider[provider]["models"].append(model)
+        for bp in by_provider.values():
+            bp["models"].sort()
+
+        # 7-day trend (only days with runs; fill gaps below)
+        trend_rows = conn.execute(text("""
+            SELECT
+                DATE(started_at) AS day,
+                COUNT(*) AS total,
+                SUM(CASE WHEN status='success' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN status='failed'  THEN 1 ELSE 0 END)
+            FROM run
+            WHERE DATE(started_at) >= DATE('now', '-6 days')
+            GROUP BY DATE(started_at)
+        """)).fetchall()
+
+        trend_map = {
+            row[0]: {"total": row[1], "success": row[2] or 0, "failed": row[3] or 0}
+            for row in trend_rows
+        }
 
     n_completed = n_success + n_failed
-    avg_dur      = round(sum(durations) / len(durations), 1) if durations else 0
-    success_rate = round(n_success / n_completed * 100, 1) if n_completed else 0
-    trend = [
-        {"date": d.isoformat(), "label": d.strftime("%a"), **trend_buckets[d]}
-        for d in sorted(trend_buckets)
-    ]
+    trend = []
+    for i in range(6, -1, -1):
+        d = today - timedelta(days=i)
+        ds = d.isoformat()
+        bucket = trend_map.get(ds, {"total": 0, "success": 0, "failed": 0})
+        trend.append({"date": ds, "label": d.strftime("%a"), **bucket})
 
     return {
-        "total_runs": len(runs),
+        "total_runs": total_runs,
         "success": n_success,
         "failed": n_failed,
         "active": n_active,
-        "success_rate": success_rate,
+        "success_rate": round(n_success / n_completed * 100, 1) if n_completed else 0,
         "avg_duration_secs": avg_dur,
         "by_type": by_type,
         "trend": trend,
@@ -288,4 +337,7 @@ def _empty_stats():
 
 async def _run_in_background(run_id: int, job_type: str, payload: dict):
     from src.automation.executor import execute_run
-    await execute_run(run_id, job_type, payload)
+    try:
+        await execute_run(run_id, job_type, payload)
+    finally:
+        unregister(run_id)

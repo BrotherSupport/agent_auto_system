@@ -110,6 +110,8 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
                 _update_run(run_id, "success", result, **metrics)
             return
 
+        except asyncio.CancelledError:
+            raise  # DB status already updated by the cancel endpoint
         except Exception as exc:
             if attempt < max_retries:
                 append_log(run_id, f"Error (will retry): {str(exc)[:200]}")

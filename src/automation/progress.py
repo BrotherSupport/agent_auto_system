@@ -1,21 +1,27 @@
 import json
+import logging
 from datetime import datetime, timezone
 
-from sqlmodel import Session
+from sqlalchemy import text
 
-from src.database import get_engine
+logger = logging.getLogger(__name__)
 
 
-def append_log(run_id: int, message: str):
+def append_log(run_id: int, message: str) -> None:
     if not run_id:
         return
-    with Session(get_engine()) as s:
-        from src.models import Run
-        run = s.get(Run, run_id)
-        if run is None:
-            return
-        entries = json.loads(run.log) if run.log else []
-        entries.append({"ts": datetime.now(timezone.utc).strftime("%H:%M:%S"), "msg": message})
-        run.log = json.dumps(entries)
-        s.add(run)
-        s.commit()
+    entry = json.dumps({"ts": datetime.now(timezone.utc).strftime("%H:%M:%S"), "msg": message})
+    try:
+        from src.database import get_engine
+        engine = get_engine()
+        with engine.connect() as conn:
+            conn.execute(
+                text(
+                    "UPDATE run SET log = json_insert(COALESCE(log, '[]'), '$[#]', json(:entry)) "
+                    "WHERE id = :run_id"
+                ),
+                {"entry": entry, "run_id": run_id},
+            )
+            conn.commit()
+    except Exception as exc:
+        logger.warning("append_log failed for run_id=%s: %s", run_id, exc)

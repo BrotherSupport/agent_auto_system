@@ -2,10 +2,13 @@
 Scrape recent posts from a public X (Twitter) profile.
 Strategy: try multiple nitter instances (plain HTTP), then fall back to
 Playwright on x.com which can extract posts before login walls appear.
+
+Set NITTER_INSTANCES (comma-separated URLs) in .env to override the default list.
 """
 import html as _html_mod
 import http.cookiejar
 import json
+import os
 import re
 import urllib.error
 import urllib.request
@@ -26,7 +29,7 @@ _HEADERS = {
     "Upgrade-Insecure-Requests": "1",
 }
 
-_NITTER_INSTANCES = [
+_NITTER_DEFAULTS = [
     "https://nitter.tux.pizza",
     "https://nitter.cz",
     "https://nitter.rawbit.ninja",
@@ -34,6 +37,14 @@ _NITTER_INSTANCES = [
     "https://nitter.privacyredirect.com",
     "https://xcancel.com",
 ]
+
+
+def _get_nitter_instances() -> list[str]:
+    """Return nitter instance list from NITTER_INSTANCES env var, or fall back to defaults."""
+    env = os.getenv("NITTER_INSTANCES", "").strip()
+    if env:
+        return [u.strip() for u in env.split(",") if u.strip()]
+    return _NITTER_DEFAULTS
 
 
 class XScrapeInput(BaseModel):
@@ -54,7 +65,7 @@ class XScraperTool(BaseTool):
         errors: list[str] = []
 
         # 1. Try nitter instances
-        for base in _NITTER_INSTANCES:
+        for base in _get_nitter_instances():
             try:
                 jar = http.cookiejar.CookieJar()
                 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
@@ -172,16 +183,13 @@ def _scrape_with_playwright(handle: str, limit: int) -> list[dict]:
             locale="en-US",
         )
         page = ctx.new_page()
-        # Block media and tracking to speed up render
         page.route("**/*.{png,jpg,jpeg,gif,mp4,webm,svg,woff,woff2}", lambda r: r.abort())
 
         try:
             page.goto(f"https://x.com/{handle}", timeout=30000, wait_until="domcontentloaded")
-            # Wait until at least one tweet article appears (up to 10 s)
             try:
                 page.wait_for_selector('article[data-testid="tweet"]', timeout=10000)
             except Exception:
-                # Dismiss any modal and retry
                 page.keyboard.press("Escape")
                 page.wait_for_timeout(2000)
 

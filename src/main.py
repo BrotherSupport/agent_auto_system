@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -5,13 +6,18 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.database import init_db
+from src.database import init_db, reconcile_stale_runs
 from src.routers import jobs, runs, system
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    stale = reconcile_stale_runs()
+    if stale:
+        logger.warning("Marked %d stale run(s) as failed on startup", stale)
     yield
 
 
