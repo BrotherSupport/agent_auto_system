@@ -14,6 +14,7 @@ class JobCreate(BaseModel):
     name: str
     job_type: str = "google_form_fill"
     payload: dict
+    schedule: str | None = None  # cron expression, e.g. "0 8 * * *"
 
 
 @router.get("/jobs")
@@ -23,7 +24,7 @@ def list_jobs(session: Session = Depends(get_session)):
 
 @router.post("/jobs", status_code=201)
 def create_job(data: JobCreate, session: Session = Depends(get_session)):
-    job = Job(name=data.name, job_type=data.job_type, payload=json.dumps(data.payload))
+    job = Job(name=data.name, job_type=data.job_type, payload=json.dumps(data.payload), schedule=data.schedule)
     session.add(job)
     session.commit()
     session.refresh(job)

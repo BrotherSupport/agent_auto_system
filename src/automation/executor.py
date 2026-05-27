@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 
 from sqlmodel import Session
@@ -10,6 +11,8 @@ from src.automation.harness.validator import validate
 from src.automation.progress import append_log
 from src.database import get_engine
 from src.models import Run
+
+logger = logging.getLogger(__name__)
 
 
 def _update_run(run_id: int, status: str, result: dict | None = None, **metrics):
@@ -64,6 +67,7 @@ async def _run_flow(run_id: int, job_type: str, payload: dict, effective_provide
 
 
 async def execute_run(run_id: int, job_type: str, payload: dict):
+    logger.info("Starting run_id=%d job_type=%s", run_id, job_type)
     _update_run(run_id, "running")
     append_log(run_id, f"Starting {job_type}...")
 
@@ -115,10 +119,12 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
         except Exception as exc:
             if attempt < max_retries:
                 append_log(run_id, f"Error (will retry): {str(exc)[:200]}")
+                logger.warning("run_id=%d attempt=%d raised %s, retrying", run_id, attempt, exc)
                 continue
             cost    = estimate_cost(effective_model, tokens_in, tokens_out)
             metrics = dict(llm_provider=effective_provider, llm_model=effective_model,
                            tokens_in=tokens_in, tokens_out=tokens_out,
                            cost_usd=cost, retry_count=attempt)
+            logger.error("run_id=%d failed after %d attempt(s): %s", run_id, attempt + 1, exc)
             append_log(run_id, f"Error: {str(exc)[:200]}")
             _update_run(run_id, "failed", {"error": str(exc)}, **metrics)

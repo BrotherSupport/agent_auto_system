@@ -49,6 +49,39 @@ async def test_list_runs_after_trigger(client, seed_job, mocker):
     assert len(resp.json()) == 2
 
 
+async def test_run_transitions_to_success(client, seed_job, mocker):
+    async def immediate_success(run_id, job_type, payload):
+        from src.automation.executor import _update_run
+        _update_run(run_id, "success", {"digest": "Top stories today"})
+
+    mocker.patch("src.routers.runs._run_in_background", side_effect=immediate_success)
+    trig = await client.post(f"/api/jobs/{seed_job.id}/run")
+    assert trig.status_code == 202
+    run_id = trig.json()["run_id"]
+
+    import asyncio
+    await asyncio.sleep(0.1)
+
+    resp = await client.get(f"/api/runs/{run_id}")
+    assert resp.json()["status"] == "success"
+
+
+async def test_run_transitions_to_failed(client, seed_job, mocker):
+    async def immediate_failure(run_id, job_type, payload):
+        from src.automation.executor import _update_run
+        _update_run(run_id, "failed", {"error": "something broke"})
+
+    mocker.patch("src.routers.runs._run_in_background", side_effect=immediate_failure)
+    trig = await client.post(f"/api/jobs/{seed_job.id}/run")
+    run_id = trig.json()["run_id"]
+
+    import asyncio
+    await asyncio.sleep(0.1)
+
+    resp = await client.get(f"/api/runs/{run_id}")
+    assert resp.json()["status"] == "failed"
+
+
 async def test_sse_stream_returns_event_stream(client, db_session, seed_job):
     # Seed a completed run so the generator exits immediately
     run = Run(job_id=seed_job.id, status="success", result=json.dumps({"submitted": True}))

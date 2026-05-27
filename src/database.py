@@ -29,6 +29,7 @@ def init_db():
             "ALTER TABLE run ADD COLUMN tokens_out INTEGER DEFAULT 0",
             "ALTER TABLE run ADD COLUMN cost_usd REAL DEFAULT 0.0",
             "ALTER TABLE run ADD COLUMN retry_count INTEGER DEFAULT 0",
+            "ALTER TABLE job ADD COLUMN schedule VARCHAR",
             # Indexes for common query patterns
             "CREATE INDEX IF NOT EXISTS ix_run_job_id ON run(job_id)",
             "CREATE INDEX IF NOT EXISTS ix_run_status ON run(status)",

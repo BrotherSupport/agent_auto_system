@@ -1,4 +1,7 @@
+import logging
 import os
+
+logger = logging.getLogger(__name__)
 
 _CATALOG: dict = {
     "openai": {
@@ -46,6 +49,7 @@ def resolve(provider: str | None, model: str | None, temperature: float = 0.7):
     api_key = os.getenv(cfg["env"])
 
     if not api_key:
+        logger.error("API key %s not set for provider '%s'", cfg["env"], effective_provider)
         raise EnvironmentError(
             f"API key for provider '{effective_provider}' is not set. "
             f"Add {cfg['env']} to your .env file."

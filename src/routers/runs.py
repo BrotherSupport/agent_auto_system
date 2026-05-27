@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -13,6 +14,7 @@ from src.automation.registry import register, unregister
 from src.database import get_engine, get_session
 from src.models import Job, Run
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -31,6 +33,7 @@ async def trigger_run(job_id: int, session: Session = Depends(get_session)):
     payload = json.loads(job.payload)
     task = asyncio.create_task(_run_in_background(run_id, job.job_type, payload))
     register(run_id, task)
+    logger.info("Triggered run_id=%d for job_id=%d (%s)", run_id, job_id, job.job_type)
 
     return {"run_id": run_id, "status": "pending"}
 

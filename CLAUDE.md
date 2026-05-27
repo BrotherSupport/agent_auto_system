@@ -74,7 +74,9 @@ Shared helper: `flows/utils.py::extract_usage()` — extract token counts from `
 
 ### Database
 
-SQLite via SQLModel. Schema migrations are `ALTER TABLE ADD COLUMN` statements in `database.init_db()` — add new columns there. Run table harness columns: `llm_provider`, `llm_model`, `tokens_in`, `tokens_out`, `cost_usd`, `retry_count`.
+SQLite via SQLModel. Schema migrations are `ALTER TABLE ADD COLUMN` statements in `database.init_db()` — add new columns there. Run table harness columns: `llm_provider`, `llm_model`, `tokens_in`, `tokens_out`, `cost_usd`, `retry_count`. Job table has a `schedule` column (cron expression string, nullable).
+
+**Production deployment (PostgreSQL)**: Set `DATABASE_URL=postgresql+psycopg2://user:pass@host/db` in `.env`. SQLModel/SQLAlchemy handles the dialect switch automatically. WAL mode (SQLite default for writes) is not needed with Postgres. Run `uv add psycopg2-binary` to install the driver. The `ALTER TABLE` migration DDL is SQLite-specific; for Postgres use `ADD COLUMN IF NOT EXISTS` instead.
 
 ### UI (`ui/`)
 
@@ -86,3 +88,20 @@ Single-page vanilla JS app, no build step. `LLM_MODELS` dict in `app.js` control
 - **Flow state**: `llm_provider`/`llm_model` must be declared as fields in each flow's state Pydantic model to survive `kickoff(inputs=...)` population.
 - **DB migrations**: `init_db()` in `database.py` runs on startup and is idempotent — each `ALTER TABLE` is wrapped in a try/except that ignores "column already exists".
 - **Stats endpoint**: `get_stats()` does a single pass over all runs; keep it that way to avoid N+1-style multi-pass patterns.
+- **schedule field**: `Job.schedule` stores a cron expression (e.g. `"0 8 * * *"`). No scheduler runs yet — this field is reserved for future APScheduler integration. Expose it through `JobCreate.schedule` so the UI can persist it.
+
+## Adding a new job type
+
+To add a job type today you must touch these five places:
+1. `src/automation/executor.py` — add entry to `_FLOW_MAP`
+2. `src/automation/flows/` — create `<name>_flow.py` with `Flow[StateModel]` subclass
+3. `src/automation/crews/<name>_crew/` — create crew package (YAML configs + `crew.py`)
+4. `src/routers/system.py` — add entry to `_CATALOG`
+5. `ui/app.js` — add job type to the UI form
+
+A future registration-based approach (each flow module declares its own metadata) would reduce this to one or two files.
+
+## Future scalability notes
+
+- **Task queue**: `asyncio.create_task` keeps all automation in-process. For horizontal scaling or crash resilience, migrate to ARQ (Redis-backed) or Dramatiq. The executor interface (`execute_run(run_id, job_type, payload)`) is already queue-friendly.
+- **Job scheduling**: `Job.schedule` (cron string) is persisted but not yet acted on. Wire up APScheduler in the `lifespan` context to poll for due jobs and call `execute_run`.

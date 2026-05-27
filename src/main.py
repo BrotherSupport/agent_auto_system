@@ -1,12 +1,14 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
-from src.database import init_db, reconcile_stale_runs
+from src.database import get_engine, init_db, reconcile_stale_runs
 from src.routers import jobs, runs, system
 
 logger = logging.getLogger(__name__)
@@ -38,4 +40,19 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    db_ok = False
+    try:
+        with get_engine().connect() as conn:
+            conn.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        logger.exception("Health check: DB connectivity failed")
+
+    from src.automation.harness.provider import _CATALOG
+    providers = {name: bool(os.getenv(cfg["env"])) for name, cfg in _CATALOG.items()}
+
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "db": db_ok,
+        "providers": providers,
+    }

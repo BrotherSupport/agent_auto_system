@@ -8,6 +8,7 @@ class Job(SQLModel, table=True):
     name: str
     job_type: str = "google_form_fill"
     payload: str  # JSON string
+    schedule: Optional[str] = None  # cron expression, e.g. "0 8 * * *"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
