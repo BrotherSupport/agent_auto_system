@@ -3,6 +3,7 @@ import json
 from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel
 
+from src.automation.flows.base import FlowMixin
 from src.automation.progress import append_log
 from src.automation.tools.gmail_send_tool import GmailSendTool
 
@@ -13,16 +14,17 @@ class EmailSenderState(BaseModel):
     body: str = ""
     cc: str = ""
     run_id: int = 0
-    usage: dict = {}  # email uses no LLM; always empty
+    usage: dict = {}
+    llm_provider: str = ""
+    llm_model: str = ""
+    previous_error: str = ""
 
 
-class EmailSenderFlow(Flow[EmailSenderState]):
+class EmailSenderFlow(FlowMixin, Flow[EmailSenderState]):
 
     @start()
     def validate_payload(self):
-        missing = [f for f in ("to", "subject", "body") if not getattr(self.state, f, "")]
-        if missing:
-            raise ValueError(f"Missing required fields: {missing}")
+        self._check_required("to", "subject", "body")
         recipients = [e.strip() for e in self.state.to.split(",") if e.strip()]
         append_log(self.state.run_id, f"Sending to {len(recipients)} recipient(s): {self.state.to}")
         return self.state.model_dump()

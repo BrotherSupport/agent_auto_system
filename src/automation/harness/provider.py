@@ -28,29 +28,35 @@ _CATALOG: dict = {
 PROVIDER_MODELS: dict[str, list[str]] = {k: v["models"] for k, v in _CATALOG.items()}
 
 
-def resolve(provider: str | None, model: str | None):
-    """Return (llm_instance_or_None, effective_provider, effective_model)."""
-    from crewai import LLM
-
+def normalize(provider: str | None, model: str | None) -> tuple[str, str]:
+    """Return (effective_provider, effective_model) without creating an LLM instance."""
     if not provider:
         provider = "openai"
-
     cfg = _CATALOG.get(provider, _CATALOG["openai"])
     effective_model = model if model and model != "default" else cfg["default"]
+    return provider, effective_model
+
+
+def resolve(provider: str | None, model: str | None, temperature: float = 0.7):
+    """Return (llm_instance, effective_provider, effective_model)."""
+    from crewai import LLM
+
+    effective_provider, effective_model = normalize(provider, model)
+    cfg = _CATALOG.get(effective_provider, _CATALOG["openai"])
     api_key = os.getenv(cfg["env"])
 
     if not api_key:
         raise EnvironmentError(
-            f"API key for provider '{provider}' is not set. "
+            f"API key for provider '{effective_provider}' is not set. "
             f"Add {cfg['env']} to your .env file."
         )
 
     try:
-        llm = LLM(model=effective_model, api_key=api_key)
+        llm = LLM(model=effective_model, api_key=api_key, temperature=temperature)
     except ImportError as exc:
         raise ImportError(
-            f"Provider '{provider}' requires an extra package: {exc}. "
+            f"Provider '{effective_provider}' requires an extra package: {exc}. "
             "Run: uv add 'crewai[google-genai]' (Gemini) or check your install."
         ) from exc
 
-    return llm, provider, effective_model
+    return llm, effective_provider, effective_model

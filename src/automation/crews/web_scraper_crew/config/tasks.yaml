@@ -3,6 +3,7 @@ scrape_task:
     Fetch the URL "{url}" using the web_scraper tool and return a comprehensive
     structured summary of all content found on the page.
     Include the page title, a paragraph summary, key points, headings, word count, and notable links.
+    If retrying, fix this issue from the previous attempt: {previous_error}
   expected_output: >
     A JSON object with exactly these keys:
     - "url": the scraped URL (string)

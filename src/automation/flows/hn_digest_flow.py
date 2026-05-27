@@ -2,10 +2,9 @@ from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel
 
 from src.automation.crews.hn_digest_crew.crew import HNDigestCrew
+from src.automation.flows.base import FlowMixin
 from src.automation.flows.utils import extract_usage
 from src.automation.progress import append_log
-
-
 
 
 class HNDigestState(BaseModel):
@@ -14,9 +13,10 @@ class HNDigestState(BaseModel):
     usage: dict = {}
     llm_provider: str = ""
     llm_model: str = ""
+    previous_error: str = ""
 
 
-class HNDigestFlow(Flow[HNDigestState]):
+class HNDigestFlow(FlowMixin, Flow[HNDigestState]):
 
     @start()
     def validate_payload(self):
@@ -28,10 +28,17 @@ class HNDigestFlow(Flow[HNDigestState]):
     @listen(validate_payload)
     def execute_crew(self, _):
         from src.automation.harness.provider import resolve as resolve_llm
-        llm, _, _ = resolve_llm(self.state.llm_provider or None, self.state.llm_model or None)
+        llm, _, _ = resolve_llm(
+            self.state.llm_provider or None,
+            self.state.llm_model or None,
+            temperature=0.4,
+        )
         append_log(self.state.run_id, "HN analyst agent reading stories...")
         crew = HNDigestCrew(llm=llm)
-        result = crew.crew().kickoff(inputs={"limit": self.state.limit})
+        result = crew.crew().kickoff(inputs={
+            "limit": self.state.limit,
+            "previous_error": self.state.previous_error,
+        })
         self.state.usage = extract_usage(result)
         append_log(self.state.run_id, "Digest generated, formatting result...")
         return result.raw if hasattr(result, "raw") else str(result)

@@ -11,6 +11,7 @@ x_scrape_task:
     From the fetched posts: pick the top_post (highest likes, or first post
     if all likes are 0), identify 2-3 recurring themes, and write a one-
     paragraph summary of what this person has been posting about.
+    If retrying, fix this issue from the previous attempt: {previous_error}
   expected_output: >
     A JSON object with exactly these keys:
     - "username": the X handle (string)

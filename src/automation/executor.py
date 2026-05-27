@@ -5,8 +5,7 @@ from datetime import datetime, timezone
 from sqlmodel import Session
 
 from src.automation.harness.costs import estimate_cost
-from src.automation.harness.provider import resolve as resolve_llm
-from src.automation.harness.tracker import update_run_metrics
+from src.automation.harness.provider import normalize as normalize_llm
 from src.automation.harness.validator import validate
 from src.automation.progress import append_log
 from src.database import get_engine
@@ -25,16 +24,6 @@ def _update_run(run_id: int, status: str, result: dict | None = None, **metrics)
             setattr(run, k, v)
         s.add(run)
         s.commit()
-
-
-def _is_app_failure(job_type: str, result: dict) -> bool:
-    if "error" in result:
-        return True
-    if job_type == "google_form_fill" and not result.get("submitted", True):
-        return True
-    if job_type == "email_sender" and result.get("sent") is False:
-        return True
-    return False
 
 
 _FLOW_MAP = {
@@ -82,18 +71,23 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
     llm_model    = payload.pop("llm_model", None)
     max_retries  = int(payload.pop("max_retries", 1))
 
-    _, effective_provider, effective_model = resolve_llm(llm_provider, llm_model)
+    effective_provider, effective_model = normalize_llm(llm_provider, llm_model)
     if llm_provider:
         append_log(run_id, f"Using {effective_provider} / {effective_model}")
 
     tokens_in = tokens_out = 0
+    vr = None
 
     for attempt in range(max_retries + 1):
         if attempt > 0:
             append_log(run_id, f"Retrying (attempt {attempt + 1}/{max_retries + 1})...")
 
+        current_payload = dict(payload)
+        if attempt > 0 and vr is not None:
+            current_payload["previous_error"] = vr.reason
+
         try:
-            result, usage = await _run_flow(run_id, job_type, payload, effective_provider, effective_model)
+            result, usage = await _run_flow(run_id, job_type, current_payload, effective_provider, effective_model)
 
             tokens_in  += usage.get("prompt_tokens", 0)
             tokens_out += usage.get("completion_tokens", 0)
@@ -108,7 +102,7 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
                            tokens_in=tokens_in, tokens_out=tokens_out,
                            cost_usd=cost, retry_count=attempt)
 
-            if _is_app_failure(job_type, result) or not vr.valid:
+            if not vr.valid:
                 append_log(run_id, f"Automation reported failure: {result.get('error', vr.reason)}")
                 _update_run(run_id, "failed", result, **metrics)
             else:

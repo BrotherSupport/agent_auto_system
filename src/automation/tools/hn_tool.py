@@ -3,13 +3,13 @@ import urllib.request
 from typing import Type
 
 from crewai.tools import BaseTool
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 _HN_BASE = "https://hacker-news.firebaseio.com/v0"
 
 
 class HNFetchInput(BaseModel):
-    limit: int = 5
+    limit: int = Field(default=5, ge=1, le=10)
 
 
 class HNTopStoriesTool(BaseTool):
@@ -22,7 +22,7 @@ class HNTopStoriesTool(BaseTool):
 
     def _run(self, limit: int = 5) -> list:
         ids_resp = urllib.request.urlopen(f"{_HN_BASE}/topstories.json", timeout=15)
-        story_ids = json.loads(ids_resp.read())[: min(limit, 10)]
+        story_ids = json.loads(ids_resp.read())[:limit]
 
         stories = []
         for sid in story_ids:
