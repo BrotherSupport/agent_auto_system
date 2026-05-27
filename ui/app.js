@@ -97,6 +97,8 @@ let selectedRunIds     = new Set();
 let systemData         = null;
 let systemCategory     = 'agents';
 let confirmResolve     = null;
+let runsOffset         = 0;
+const RUNS_PAGE_SIZE   = 50;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -258,6 +260,7 @@ async function triggerRun(jobType, jobName, payload) {
     showProgress(jobName);
     await loadHistory();
     scrollToRun(run_id);
+    document.getElementById(`detail-${run_id}`)?.classList.remove('hidden');
     startSSE(run_id);
   } catch (err) {
     showToast(err.message, 'error');
@@ -276,6 +279,7 @@ async function rerun(jobId) {
     showProgress(jobName);
     await loadHistory();
     scrollToRun(run_id);
+    document.getElementById(`detail-${run_id}`)?.classList.remove('hidden');
     startSSE(run_id);
   } catch (err) {
     showToast(err.message, 'error');
@@ -515,15 +519,18 @@ function updateRow(runId, data) {
 
 // ── History table ─────────────────────────────────────────────────────────────
 
-async function loadHistory() {
+async function loadHistory(reset = true) {
   try {
-    const resp = await fetch('/api/runs?limit=50');
+    if (reset) runsOffset = 0;
+    const resp = await fetch(`/api/runs?limit=${RUNS_PAGE_SIZE}&offset=${runsOffset}`);
     if (!resp.ok) return;
-    renderHistory(await resp.json());
+    const newRuns = await resp.json();
+    const allRuns = reset ? newRuns : [...cachedRuns, ...newRuns];
+    renderHistory(allRuns, newRuns.length === RUNS_PAGE_SIZE);
   } catch (_) {}
 }
 
-function renderHistory(runs) {
+function renderHistory(runs, hasMore = false) {
   cachedRuns = runs;
   const tbody = document.getElementById('history-tbody');
 
@@ -599,10 +606,12 @@ function renderHistory(runs) {
          </div>`
       : '';
 
-    const deleteDis = isActive ? 'disabled title="Cannot delete an active run"' : 'title="Delete run"';
-    const cbChecked = selectedRunIds.has(run.id) ? 'checked' : '';
-    const cbDis     = isActive ? 'disabled' : '';
-    const rowSel    = selectedRunIds.has(run.id) ? 'selected' : '';
+    const deleteDis  = isActive ? 'disabled title="Cannot delete an active run"' : 'title="Delete run"';
+    const rerunLabel = run.status === 'failed' ? '↺ Retry' : '↺';
+    const rerunCls   = run.status === 'failed' ? 'btn-rerun btn-retry' : 'btn-rerun';
+    const cbChecked  = selectedRunIds.has(run.id) ? 'checked' : '';
+    const cbDis      = isActive ? 'disabled' : '';
+    const rowSel     = selectedRunIds.has(run.id) ? 'selected' : '';
 
     return `
       <tr class="data-row ${rowSel}" data-run-id="${run.id}">
@@ -628,7 +637,7 @@ function renderHistory(runs) {
         </td>
         <td style="padding:0.65rem 0.5rem">
           <div class="row-actions">
-            <button class="btn-rerun" data-action="rerun" data-job-id="${run.job_id}" data-run-id="${run.id}" title="Re-run">↺</button>
+            <button class="${rerunCls}" data-action="rerun" data-job-id="${run.job_id}" data-run-id="${run.id}" title="Re-run">${rerunLabel}</button>
             <button class="btn-delete" data-action="delete" data-run-id="${run.id}" ${deleteDis}>🗑</button>
           </div>
         </td>
@@ -661,6 +670,7 @@ function renderHistory(runs) {
     }
   });
 
+  document.getElementById('load-more-btn')?.classList.toggle('hidden', !hasMore);
   initElapsedTimers();
   updateBulkActionButtons();
 }
@@ -1334,6 +1344,11 @@ function showToast(msg, type = 'error') {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+
+document.getElementById('load-more-btn').addEventListener('click', async () => {
+  runsOffset += RUNS_PAGE_SIZE;
+  await loadHistory(false);
+});
 
 loadHistory();
 setInterval(() => { if (!activeEventSource) loadHistory(); }, 5000);

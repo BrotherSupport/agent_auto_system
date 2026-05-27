@@ -147,6 +147,8 @@
       cursor: pointer; transition: border-color 0.15s, color 0.15s;
     }
     .btn-rerun:hover          { border-color: var(--accent); color: var(--accent); }
+    .btn-retry                { color: var(--red) !important; border-color: rgba(239,68,68,0.35) !important; font-size: 0.72rem !important; }
+    .btn-retry:hover          { border-color: var(--red) !important; }
     .btn-delete:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
     .btn-delete:disabled      { opacity: 0.28; cursor: not-allowed; }
     .row-actions              { display: flex; gap: 0.3rem; }
@@ -493,6 +495,9 @@
           <tr><td colspan="8" class="empty-state">No runs yet. Click "New Run" to get started.</td></tr>
         </tbody>
       </table>
+    </div>
+    <div style="text-align:center;padding:0.75rem 0 0.25rem">
+      <button id="load-more-btn" class="btn btn-ghost btn-sm hidden">Load More</button>
     </div>
   </div>
 </div>
