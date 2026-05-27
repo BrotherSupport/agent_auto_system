@@ -1,5 +1,4 @@
 """Unit tests for WebScraperTool — verifies structured extraction without network."""
-import json
 from unittest.mock import MagicMock, patch
 
 import pytest

@@ -1,6 +1,6 @@
-import yaml
 from pathlib import Path
 
+import yaml
 from crewai import Agent, Crew, Process, Task
 
 from src.automation.tools.web_scraper_tool import WebScraperTool

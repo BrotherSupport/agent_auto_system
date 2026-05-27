@@ -1,12 +1,9 @@
 """Integration tests for bulk-delete and stats endpoints."""
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
-import pytest
-
 from src.models import Job, Run
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -24,7 +21,7 @@ def _make_job(session, job_type: str = "web_scraper") -> Job:
 
 def _make_run(session, job_id: int, status: str = "success",
               duration_secs: int = 10) -> Run:
-    started = datetime.now(timezone.utc)
+    started = datetime.now(UTC)
     finished = started + timedelta(seconds=duration_secs) if status in ("success", "failed") else None
     run = Run(
         job_id=job_id,

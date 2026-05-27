@@ -50,7 +50,7 @@ def resolve(provider: str | None, model: str | None, temperature: float = 0.7):
 
     if not api_key:
         logger.error("API key %s not set for provider '%s'", cfg["env"], effective_provider)
-        raise EnvironmentError(
+        raise OSError(
             f"API key for provider '{effective_provider}' is not set. "
             f"Add {cfg['env']} to your .env file."
         )

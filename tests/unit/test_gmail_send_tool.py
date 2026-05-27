@@ -1,11 +1,9 @@
 """Unit tests for GmailSendTool — no real SMTP connections made."""
-import smtplib
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.automation.tools.gmail_send_tool import GmailSendTool, _parse_emails
-
 
 # ── _parse_emails helper ──────────────────────────────────────────────────────
 

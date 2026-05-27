@@ -1,6 +1,5 @@
 import re
 import urllib.request
-from typing import Type
 
 from crewai.tools import BaseTool
 from pydantic import BaseModel
@@ -26,7 +25,7 @@ class WebScraperTool(BaseTool):
         "headings, main text, outbound links, and word count. "
         "Use this to extract everything from a page before summarising it."
     )
-    args_schema: Type[BaseModel] = ScrapeInput
+    args_schema: type[BaseModel] = ScrapeInput
 
     def _run(self, url: str) -> dict:
         req = urllib.request.Request(url, headers=_HEADERS)
@@ -61,7 +60,7 @@ class WebScraperTool(BaseTool):
 
         # Outbound links
         all_links = re.findall(r'<a[^>]+href=["\']([^"\']+)["\']', html, re.I)
-        links = [l for l in all_links if l.startswith("http")][:12]
+        links = [link for link in all_links if link.startswith("http")][:12]
 
         # Clean main text
         clean = re.sub(r"<script[^>]*>.*?</script>", " ", html, flags=re.DOTALL | re.I)

@@ -3,7 +3,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-
 # ── Validation ────────────────────────────────────────────────────────────────
 
 def test_raises_on_missing_url():

@@ -1,5 +1,4 @@
 """Integration tests for GET /api/system — catalog shape and completeness."""
-import pytest
 
 
 async def test_system_returns_200(client):

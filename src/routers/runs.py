@@ -1,8 +1,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -50,7 +49,7 @@ async def cancel_run(run_id: int, session: Session = Depends(get_session)):
     if was_cancelled:
         run.status = "failed"
         run.result = json.dumps({"error": "Cancelled by user"})
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = datetime.now(UTC)
         session.add(run)
         session.commit()
 
@@ -168,7 +167,7 @@ async def stream_run(run_id: int):
 
 @router.delete("/runs", status_code=200)
 def bulk_delete_runs(
-    ids: Optional[str] = Query(None, description="Comma-separated run IDs"),
+    ids: str | None = Query(None, description="Comma-separated run IDs"),
     delete_all: bool = Query(False),
     session: Session = Depends(get_session),
 ):
@@ -195,7 +194,7 @@ def bulk_delete_runs(
 @router.get("/stats")
 def get_stats():
     engine = get_engine()
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
 
     with engine.connect() as conn:
         total_runs = conn.execute(text("SELECT COUNT(*) FROM run")).scalar() or 0
@@ -324,7 +323,7 @@ def get_stats():
 
 
 def _empty_stats():
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     trend = [
         {"date": d.isoformat(), "label": d.strftime("%a"), "total": 0, "success": 0, "failed": 0}
         for i in range(6, -1, -1)

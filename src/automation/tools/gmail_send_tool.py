@@ -11,7 +11,6 @@ import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional, Type
 
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -28,7 +27,7 @@ class SendEmailInput(BaseModel):
     to: str = Field(description="Recipient email address(es), comma-separated")
     subject: str = Field(description="Email subject line")
     body: str = Field(description="HTML or plain-text email body")
-    cc: Optional[str] = Field(default=None, description="CC recipients, comma-separated")
+    cc: str | None = Field(default=None, description="CC recipients, comma-separated")
 
 
 class GmailSendTool(BaseTool):
@@ -38,14 +37,14 @@ class GmailSendTool(BaseTool):
         "Provide recipient(s), subject, and body (HTML or plain text). "
         "Optionally include CC recipients."
     )
-    args_schema: Type[BaseModel] = SendEmailInput
+    args_schema: type[BaseModel] = SendEmailInput
 
     def _run(
         self,
         to: str,
         subject: str,
         body: str,
-        cc: Optional[str] = None,
+        cc: str | None = None,
     ) -> dict:
         gmail_address = os.environ.get("GMAIL_ADDRESS", "").strip()
         app_password = os.environ.get("GMAIL_APP_PASSWORD", "").strip()

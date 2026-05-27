@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import text
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def append_log(run_id: int, message: str) -> None:
     if not run_id:
         return
-    entry = json.dumps({"ts": datetime.now(timezone.utc).strftime("%H:%M:%S"), "msg": message})
+    entry = json.dumps({"ts": datetime.now(UTC).strftime("%H:%M:%S"), "msg": message})
     try:
         from src.database import get_engine
         engine = get_engine()

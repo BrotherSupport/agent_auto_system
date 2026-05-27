@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Literal, Type
+from typing import Literal
 
 from crewai.tools import BaseTool
 from playwright.sync_api import Page, sync_playwright
@@ -22,7 +22,7 @@ class PlaywrightFormTool(BaseTool):
         "Fill and submit the AI Consultant Google Form. "
         "Args: url, company_name, company_size (0-10 | 11-100 | 200 up | 其他), ai_problem."
     )
-    args_schema: Type[BaseModel] = FormInput
+    args_schema: type[BaseModel] = FormInput
 
     def _run(
         self,

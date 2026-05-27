@@ -1,5 +1,4 @@
 import json
-import pytest
 from unittest.mock import AsyncMock
 
 from src.models import Run

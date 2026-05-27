@@ -1,6 +1,5 @@
 import pytest
 
-
 # ── validator ─────────────────────────────────────────────────────────────────
 
 def test_validate_google_form_success():

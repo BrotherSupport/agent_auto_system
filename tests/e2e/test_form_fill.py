@@ -4,7 +4,7 @@ import pytest
 @pytest.mark.e2e
 def test_playwright_tool_submits_form():
     """Requires a real browser and live Google Form."""
-    from src.automation.tools.playwright_form_tool import PlaywrightFormTool, FORM_URL
+    from src.automation.tools.playwright_form_tool import FORM_URL, PlaywrightFormTool
 
     tool = PlaywrightFormTool()
     result = tool._run(

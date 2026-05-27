@@ -1,7 +1,6 @@
 import json
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Type
 
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
@@ -34,7 +33,7 @@ class HNTopStoriesTool(BaseTool):
         "Fetch the top stories from Hacker News. "
         "Returns a list of stories with title, url, score, and comment count."
     )
-    args_schema: Type[BaseModel] = HNFetchInput
+    args_schema: type[BaseModel] = HNFetchInput
 
     def _run(self, limit: int = 5) -> list:
         ids_resp = urllib.request.urlopen(f"{_HN_BASE}/topstories.json", timeout=15)

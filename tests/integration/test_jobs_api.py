@@ -1,4 +1,3 @@
-import pytest
 
 PAYLOAD = {
     "name": "My Form Job",

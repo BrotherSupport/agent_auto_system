@@ -6,7 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
-from src.models import Job, Run  # ensure both tables are in metadata
+from src.models import Job  # ensure both tables are in metadata
 
 
 @pytest.fixture(scope="function")

@@ -1,9 +1,8 @@
 """Unit tests for EmailSenderFlow — validate inputs and direct tool invocation."""
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # ── Validation ────────────────────────────────────────────────────────────────
 

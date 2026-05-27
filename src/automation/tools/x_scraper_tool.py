@@ -7,12 +7,10 @@ Set NITTER_INSTANCES (comma-separated URLs) in .env to override the default list
 """
 import html as _html_mod
 import http.cookiejar
-import json
 import os
 import re
 import urllib.error
 import urllib.request
-from typing import Type
 
 from crewai.tools import BaseTool
 from pydantic import BaseModel
@@ -58,7 +56,7 @@ class XScraperTool(BaseTool):
         "Fetch recent posts from a public X (Twitter) user profile. "
         "Returns post text, date, likes, and retweets for each post."
     )
-    args_schema: Type[BaseModel] = XScrapeInput
+    args_schema: type[BaseModel] = XScrapeInput
 
     def _run(self, username: str, limit: int = 5) -> dict:
         handle = username.lstrip("@")

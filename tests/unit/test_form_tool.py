@@ -1,9 +1,7 @@
 import json
-import urllib.error
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
-from pydantic import ValidationError
 
 from src.automation.tools.google_form_tools import (
     GoogleFormInspectorTool,

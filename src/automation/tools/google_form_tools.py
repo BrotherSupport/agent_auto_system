@@ -16,7 +16,6 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Type
 
 from crewai.tools import BaseTool
 from pydantic import BaseModel
@@ -43,7 +42,7 @@ class GoogleFormInspectorTool(BaseTool):
         "title, entry_id, type (short_answer | paragraph | radio | dropdown), and options "
         "for radio/dropdown. Call this FIRST to discover entry IDs before submitting."
     )
-    args_schema: Type[BaseModel] = InspectInput
+    args_schema: type[BaseModel] = InspectInput
 
     def _run(self, url: str) -> dict:
         html = _fetch_html(url)
@@ -68,7 +67,7 @@ class GoogleFormSubmitTool(BaseTool):
         "entry_id (digits only, no 'entry.' prefix) to the answer string. "
         "For radio questions the value must exactly match one of the listed options."
     )
-    args_schema: Type[BaseModel] = SubmitInput
+    args_schema: type[BaseModel] = SubmitInput
 
     def _run(self, form_id: str, responses: dict) -> dict:
         view_url = f"https://docs.google.com/forms/d/e/{form_id}/viewform"

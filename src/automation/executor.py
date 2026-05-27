@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlmodel import Session
 
@@ -22,7 +22,7 @@ def _update_run(run_id: int, status: str, result: dict | None = None, **metrics)
         if result is not None:
             run.result = json.dumps(result)
         if status in ("success", "failed"):
-            run.finished_at = datetime.now(timezone.utc)
+            run.finished_at = datetime.now(UTC)
         for k, v in metrics.items():
             setattr(run, k, v)
         s.add(run)
