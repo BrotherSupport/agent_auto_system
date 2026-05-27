@@ -1,7 +1,24 @@
 # Agent Auto System
 
-A CrewAI-powered automation platform with **harness engineering** built in. Define jobs, trigger them via API or UI, and let AI agents execute them with multi-LLM support, automatic result validation, and full resource tracking.
+A CrewAI-powered automation platform with **harness engineering** built in. Define jobs, trigger them via API or UI, and let AI agents execute them with multi-LLM support, automatic result validation, retry with error context, run cancellation, and full resource tracking.
 
+---
+
+## What Changed (Recent Engineering Audit)
+
+The codebase went through a structured 10-section audit. Key improvements:
+
+| Area | What was improved |
+|---|---|
+| **Code quality** | Extracted `FlowMixin` base class; added `normalize()` to harness to avoid double LLM instantiation; deleted dead `tracker.py`; added `Field(ge=1, le=10)` constraint to `HNFetchInput` |
+| **AI / LLM layer** | Per-flow `temperature=` control (0.0 for form fill → 0.4 for HN digest); `previous_error` injected into retry payloads so the LLM knows what failed |
+| **Reliability** | Stale-run reconciliation on server restart; `registry.py` task registry for cancellation; `CancelledError` propagates cleanly; SMTP wrapped in try/except; web scraper caps response at 10 MB |
+| **Performance** | `append_log` uses `json_insert` SQL (atomic, no read-modify-write); DB indexes on `run.job_id / status / started_at`; HN fetcher uses `ThreadPoolExecutor`; SSE poll interval reduced to 0.5 s |
+| **Testing** | 160 unit + integration tests; executor retry logic, harness modules, HN/X flow tests fully covered |
+| **Observability** | Structured `logging` in executor, router, harness; `/health` now checks DB connectivity and reports configured LLM providers |
+| **Architecture** | `Job.schedule` cron field persisted; PostgreSQL deployment documented; CLAUDE.md expanded with invariants and scalability notes |
+| **UI / UX** | Detail row auto-opens after trigger; "↺ Retry" prominently styled on failed runs; "Load More" pagination button |
+| **Tooling** | `ruff` + `mypy` configured; `.pre-commit-config.yaml`; CI pipeline updated with lint step |
 
 ---
 
@@ -13,79 +30,104 @@ A CrewAI-powered automation platform with **harness engineering** built in. Defi
 │  • LLM selector  • Live progress feed  • Run history        │
 │  • SSE real-time status + log streaming                     │
 │  • Usage tab (tokens / cost)  • Resource stats page         │
+│  • Auto-open detail row  • Load More pagination             │
+│  • Retry button on failed runs                              │
 └────────────────────┬────────────────────────────────────────┘
                      │ HTTP / SSE
 ┌────────────────────▼────────────────────────────────────────┐
 │  FastAPI  (src/main.py)                                     │
-│  • /api/jobs  CRUD                                          │
-│  • /api/jobs/{id}/run  → 202, spawns background task        │
-│  • /api/runs/{id}/stream  → SSE (status + log stream)       │
-│  • /api/stats  → run metrics + token/cost aggregates        │
+│  • POST /api/jobs  CRUD                                     │
+│  • POST /api/jobs/{id}/run  → 202, spawns background task   │
+│  • POST /api/runs/{id}/cancel  → cancels in-flight task     │
+│  • GET  /api/runs/{id}/stream  → SSE (status + log stream)  │
+│  • GET  /api/stats  → run metrics + token/cost aggregates   │
+│  • GET  /health  → DB check + provider key status           │
 └───────────────┬─────────────────────────┬───────────────────┘
                 │                         │
      ┌──────────▼──────────┐   ┌──────────▼──────────────────┐
      │  SQLite (SQLModel)  │   │  Harness Executor            │
-     │  jobs / runs tables │   │  • resolves LLM provider     │
+     │  jobs / runs tables │   │  • normalize() provider/model│
      │  + harness columns  │   │  • dispatches job_type       │
      │    llm_provider     │   │  • validates result quality  │
-     │    llm_model        │   │  • auto-retries on failure   │
+     │    llm_model        │   │  • retries + injects error   │
      │    tokens_in/out    │   │  • tracks tokens + cost      │
      │    cost_usd         │   │                              │
      │    retry_count      │   │  Flows → Crews → Tools       │
-     └─────────────────────┘   │  ├ FormFillFlow              │
-                                │  ├ WebScraperFlow            │
-                                │  ├ HNDigestFlow              │
-                                │  ├ XScraperFlow              │
+     │  + indexes on       │   │  ├ FormFillFlow   (temp=0.0) │
+     │    job_id/status/   │   │  ├ WebScraperFlow (temp=0.1) │
+     │    started_at       │   │  ├ HNDigestFlow   (temp=0.4) │
+     └─────────────────────┘   │  ├ XScraperFlow   (temp=0.3) │
                                 │  └ EmailSenderFlow           │
                                 └─────────────────────────────┘
                                            │
                           ┌────────────────▼────────────────┐
                           │  src/automation/harness/        │
-                          │  ├ provider.py  LLM factory     │
+                          │  ├ provider.py  normalize +     │
+                          │  │              resolve (LLM)   │
                           │  ├ validator.py result checks   │
-                          │  ├ costs.py     pricing table   │
-                          │  └ tracker.py  DB persistence   │
+                          │  └ costs.py     pricing table   │
+                          └─────────────────────────────────┘
+                                           │
+                          ┌────────────────▼────────────────┐
+                          │  src/automation/registry.py     │
+                          │  thread-safe task dict keyed by │
+                          │  run_id; cancel() + unregister()│
                           └─────────────────────────────────┘
 ```
 
 **Key design choices:**
-- FastAPI returns `202` immediately; flows run in `asyncio.create_task`
-- SSE (`/api/runs/{id}/stream`) pushes live status **and** granular log entries — no polling
-- CrewAI Flow manages state; each Crew handles one automation domain
-- SQLite is sufficient for a single-node automation runner
-- The harness layer sits between the executor and CrewAI — it owns LLM selection, validation, retries, and cost tracking without touching business logic
+- FastAPI returns `202` immediately; flows run in `asyncio.create_task` and are registered in `registry.py` for cancellation
+- SSE (`/api/runs/{id}/stream`) pushes live status **and** granular log entries at 0.5 s poll interval
+- `append_log` uses `json_insert` SQL — atomically appends to the JSON array with no read phase
+- `normalize()` resolves `(provider, model)` strings without creating an LLM; `resolve()` creates the LLM for crew injection — avoids double instantiation
+- Stale running/pending rows are marked failed at startup via `reconcile_stale_runs()`
+- SQLite is sufficient for single-node; set `DATABASE_URL=postgresql+psycopg2://…` for production
 
 ---
 
 ## Harness Engineering
 
-Harness engineering treats the LLM execution layer as infrastructure: standardized, observable, and resilient. Four concerns are addressed:
+The harness layer sits between the executor and CrewAI. It owns LLM selection, validation, retries, and cost tracking without touching business logic.
 
 ### 1 — Multi-LLM Support
 
-`src/automation/harness/provider.py` is a factory that resolves any provider to a `crewai.LLM` instance. The job payload carries `llm_provider` and `llm_model`; the executor strips them before passing inputs to the flow.
+`src/automation/harness/provider.py` exposes two functions:
+
+| Function | What it does |
+|---|---|
+| `normalize(provider, model)` | Returns `(effective_provider, effective_model)` strings — no API call, no key check |
+| `resolve(provider, model, temperature)` | Creates a `crewai.LLM` instance; raises `EnvironmentError` if the API key is missing |
+
+The executor calls `normalize()` for logging/metrics; each flow calls `resolve()` with a job-specific `temperature`.
 
 | Provider | Fast model | Smart model | Env var |
 |---|---|---|---|
 | `openai` | `gpt-4o-mini` | `gpt-4o` | `OPENAI_API_KEY` |
 | `anthropic` | `claude-haiku-4-5-20251001` | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY` |
-| `gemini` | `gemini/gemini-1.5-flash` | `gemini/gemini-1.5-pro` | `GEMINI_API_KEY` |
+| `gemini` | `gemini/gemini-2.0-flash-lite` | `gemini/gemini-2.5-flash` | `GEMINI_API_KEY` |
 
-Crews receive an injected `llm=` argument; `None` preserves the existing CrewAI default (OpenAI). Switching provider is a UI dropdown — no code change required.
+### 2 — Automatic Result Validation + Retry with Error Context
 
-### 2 — Automatic Result Validation + Retry
-
-`src/automation/harness/validator.py` runs after every crew execution. It checks job-type-specific invariants:
+`src/automation/harness/validator.py` runs after every crew execution:
 
 | Job type | Validation rule |
 |---|---|
 | `google_form_fill` | `result.submitted is True` |
 | `email_sender` | `result.sent is True` |
-| `web_scraper` | `content` or `title` field present and non-empty |
+| `web_scraper` | `content` or `title` field present |
 | `hacker_news_digest` | `stories` or `digest` field present |
 | `x_scraper` | `posts` or `summary` field present |
+| All types | Result content ≥ 20 characters; no `error` key |
 
-If validation fails and `retry_count < max_retries` (default 1), the executor re-runs the flow automatically and logs the retry. This catches soft failures — cases where the LLM responded but produced unusable output — without any application code changes.
+On failure the executor injects `previous_error: <reason>` into the retry payload. Every task YAML includes:
+
+```yaml
+description: |
+  …task description…
+  If retrying, fix this issue from the previous attempt: {previous_error}
+```
+
+This lets the LLM self-correct on the second attempt instead of repeating the same mistake.
 
 ### 3 — Resource Usage Tracking
 
@@ -93,35 +135,32 @@ Every completed run records:
 
 | Column | Meaning |
 |---|---|
-| `llm_provider` | Which provider was used (`openai`, `anthropic`, `gemini`) |
+| `llm_provider` | Which provider was used |
 | `llm_model` | Exact model string |
-| `tokens_in` | Prompt tokens consumed (from `CrewOutput.usage_metrics`) |
+| `tokens_in` | Prompt tokens (from `CrewOutput.usage_metrics`) |
 | `tokens_out` | Completion tokens generated |
-| `cost_usd` | Estimated cost in USD (from `src/automation/harness/costs.py` pricing table) |
+| `cost_usd` | Estimated cost from `costs.py` pricing table |
 | `retry_count` | How many retries were needed |
 
-`/api/stats` aggregates these across all runs and returns `total_tokens`, `total_cost_usd`, and a `by_provider` breakdown. Columns are added to the existing DB via `ALTER TABLE` migrations on startup — no manual intervention needed.
+`/api/stats` aggregates these server-side with a single SQL pass (no Python-side aggregation).
 
-### 4 — UI Integration
+### 4 — Run Cancellation
 
-- **New Run modal**: Provider + Model dropdowns (model list updates on provider change)
-- **Run table rows**: Provider badge (color-coded), cost, total tokens, retry indicator
-- **Usage detail tab**: Per-run breakdown of provider, model, tokens in/out, cost, retries
-- **Performance page**: Two new stat cards (Total Tokens, Total Cost) + LLM Resource Usage table by provider
+`POST /api/runs/{id}/cancel` looks up the asyncio `Task` in `registry.py`, calls `task.cancel()`, and marks the run as `failed` with `{"error": "Cancelled by user"}`. The executor re-raises `CancelledError` so it propagates cleanly without writing a second failure record.
 
 ---
 
 ## Automation Jobs
 
-| Job Type | Description | Payload Fields | LLM Required |
+| Job Type | Description | Payload Fields | LLM Temperature |
 |---|---|---|---|
-| `google_form_fill` | AI fills a Google Form via HTTP | `company_name`, `company_size`, `ai_problem` | Yes |
-| `web_scraper` | Fetches any URL and returns structured summary | `url` | Yes |
-| `hacker_news_digest` | Reads HN top stories and writes a digest | `limit` (1–10) | Yes |
-| `x_scraper` | Scrapes recent posts from a public X profile | `username`, `limit` (1–10) | Yes |
-| `email_sender` | Sends email via Gmail SMTP | `to`, `subject`, `body`, `cc` (opt) | No |
+| `google_form_fill` | AI fills a Google Form via HTTP | `company_name`, `company_size`, `ai_problem` | 0.0 (deterministic) |
+| `web_scraper` | Fetches any URL and returns structured summary | `url` | 0.1 |
+| `hacker_news_digest` | Reads HN top stories and writes a digest | `limit` (1–10) | 0.4 |
+| `x_scraper` | Scrapes recent posts from a public X profile | `username`, `limit` (1–10) | 0.3 |
+| `email_sender` | Sends email via Gmail SMTP | `to`, `subject`, `body`, `cc` (opt) | — (no LLM) |
 
-All LLM-backed jobs accept optional `llm_provider` and `llm_model` fields in their payload to override the default provider.
+All LLM-backed jobs accept optional `llm_provider`, `llm_model`, and `max_retries` fields in their payload.
 
 ---
 
@@ -130,14 +169,101 @@ All LLM-backed jobs accept optional `llm_provider` and `llm_model` fields in the
 | Feature | Detail |
 |---|---|
 | **Multi-LLM** | Switch between OpenAI, Anthropic Claude, and Google Gemini per run from the UI |
-| **Auto-validation + retry** | Harness validates every result against job-type rules; retries on soft failure |
+| **Auto-validation + retry** | Harness validates every result; retries with `previous_error` context so the LLM self-corrects |
+| **Run cancellation** | `POST /api/runs/{id}/cancel` stops the in-flight asyncio task immediately |
+| **Temperature control** | Per-job-type temperature (0.0 for form fill → 0.4 for digest); set via `resolve()` |
 | **Token + cost tracking** | Every run records prompt/completion tokens and estimated USD cost |
-| **Resource stats** | Performance page shows total tokens, total cost, and per-provider breakdown |
-| **Live progress log** | SSE streams granular step-by-step log entries to the UI in real time |
-| **Failure detection** | Checks application-level results (`submitted: false`) — not just exceptions |
-| **Job templates** | Reusable job definitions stored in DB with typed JSON payloads |
-| **Async execution** | Runs never block the API; background tasks update status in real time |
-| **Tabbed detail view** | Expandable run rows show **Result**, **Log**, and **Usage** tabs |
+| **Resource stats** | Performance page: total tokens, total cost, per-provider breakdown, 7-day trend |
+| **Live progress log** | SSE streams granular step-by-step log entries at 0.5 s intervals |
+| **Stale run recovery** | Server restart marks any `running`/`pending` rows as `failed` automatically |
+| **Atomic log append** | `append_log` uses `json_insert` SQL — one write, no read phase |
+| **DB indexes** | Indexes on `run.job_id`, `run.status`, `run.started_at` for fast queries |
+| **Parallel HN fetching** | Stories fetched concurrently via `ThreadPoolExecutor` (~1 s vs ~10 s serial) |
+| **Configurable nitter** | `NITTER_INSTANCES` env var overrides the X scraper's default nitter list |
+| **Job scheduling field** | `Job.schedule` stores a cron expression (e.g. `"0 8 * * *"`) — reserved for APScheduler |
+| **Load More pagination** | Runs table fetches 50 at a time; "Load More" button appends the next page |
+| **Auto-open detail row** | After triggering a run the result pane opens immediately without a manual click |
+| **Retry button** | Failed runs show "↺ Retry" in red — one click to re-run without navigating to Jobs |
+| **Rich /health endpoint** | Reports DB connectivity + which LLM provider API keys are configured |
+
+---
+
+## Testing
+
+```bash
+# Run all unit + integration tests
+uv run pytest tests/unit tests/integration -v
+
+# Run with coverage report
+uv run pytest tests/unit tests/integration -v --cov=src --cov-report=term-missing
+
+# Skip e2e tests (require real browser + API keys)
+uv run pytest tests/unit tests/integration -v -m "not e2e"
+```
+
+**160 tests** across 14 test files:
+
+| File | What it covers |
+|---|---|
+| `test_executor.py` | Retry logic, CancelledError propagation, `previous_error` injection |
+| `test_harness.py` | Validator dispatch, cost estimation, provider normalize/resolve |
+| `test_flow.py` | FormFillFlow validation + crew invocation |
+| `test_web_scraper_flow.py` | WebScraperFlow; confirms no `question` field |
+| `test_email_flow.py` | EmailSenderFlow validation |
+| `test_hn_digest_flow.py` | HNDigestFlow limit validation + crew invocation |
+| `test_x_scraper_flow.py` | XScraperFlow username validation + crew invocation |
+| `test_web_scraper_tool.py` | HTML parsing, link extraction, text truncation |
+| `test_gmail_send_tool.py` | SMTP send path |
+| `test_form_tool.py` | Google Form inspection |
+| `test_models.py` | SQLModel field defaults |
+| `test_runs_api.py` | API surface + run outcome transitions |
+| `test_bulk_delete_stats.py` | Bulk delete, stats aggregation |
+| `test_db.py` + `test_jobs_api.py` + `test_system_api.py` | DB, jobs CRUD, system catalog |
+
+---
+
+## Observability
+
+**Structured logging** — `logging.getLogger(__name__)` is configured in:
+- `src/automation/executor.py` — run start, per-attempt warnings, final errors
+- `src/routers/runs.py` — trigger events
+- `src/automation/harness/provider.py` — missing API key errors
+
+**Health endpoint** — `GET /health` returns:
+
+```json
+{
+  "status": "ok",
+  "db": true,
+  "providers": {
+    "openai": true,
+    "anthropic": false,
+    "gemini": false
+  }
+}
+```
+
+`status` is `"degraded"` if the DB is unreachable. Suitable for container readiness probes.
+
+---
+
+## Tooling
+
+```bash
+# Lint (ruff — covers E, F, I, UP rules)
+uv run ruff check src/ tests/
+
+# Format
+uv run ruff format src/ tests/
+
+# Type check
+uv run mypy src/
+
+# Install pre-commit hooks (run on every commit)
+uv run pre-commit install
+```
+
+CI runs ruff → unit tests → integration tests → Docker smoke tests on every push.
 
 ---
 
@@ -171,36 +297,35 @@ See **[doc/docker.md](doc/docker.md)** for full details.
 
 ---
 
-## Run Commands (local / dev)
+## Local Development
 
 ```bash
 # Install dependencies (requires uv)
 uv sync
 
-# Install Playwright browser
+# Install Playwright browser (needed for form_fill)
 uv run playwright install chromium
 
 # Set up environment
 cp .env.example .env
-# → add at least OPENAI_API_KEY (or ANTHROPIC_API_KEY / GEMINI_API_KEY)
+# → add at least one of: OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY
 
 # Run tests
 uv run pytest tests/unit tests/integration -v
 
-# Start dev server
+# Start dev server (auto-reload)
 uv run uvicorn src.main:app --reload --port 8000
 
 # Open the UI
 open http://localhost:8000
 
-
-# kill app using 8000 port
+# Kill whatever is on port 8000
 kill -9 $(lsof -ti:8000)
 ```
 
 ---
 
-## Flow: How a Run Works
+## How a Run Works
 
 ```
 1. User picks automation type, fills fields, selects LLM provider + model
@@ -210,28 +335,27 @@ kill -9 $(lsof -ti:8000)
 3. POST /api/jobs/{id}/run  → creates run row (status=pending) → 202
         ↓
 4. UI opens EventSource on /api/runs/{run_id}/stream
-   + shows live progress panel
+   + shows live progress panel + auto-opens detail row
         ↓
 5. Harness executor:
-   ├─ strips llm_provider / llm_model from payload
-   ├─ resolves LLM instance via provider.py
-   ├─ logs "Using anthropic / claude-haiku-4-5-20251001" if non-default
-   └─ dispatches to correct Flow with injected LLM
+   ├─ pops llm_provider / llm_model / max_retries from payload
+   ├─ calls normalize() → (effective_provider, effective_model) for logging
+   └─ dispatches to correct Flow
         ↓
-6. Flow → Crew → Tool(s) → structured JSON result
+6. Flow calls resolve(provider, model, temperature=<job-specific>)
+   → injects crewai.LLM into Crew constructor
+        ↓
+7. Flow → Crew → Tool(s) → structured JSON result
    (usage_metrics captured from CrewOutput)
         ↓
-7. Harness validator checks result quality
-   ├─ passes → continue
-   └─ fails + retries remaining → re-run flow (logged)
+8. Harness validator checks result quality
+   ├─ passes → proceed to step 10
+   └─ fails + retries remaining
+        ├─ injects previous_error into next attempt's payload
+        └─ re-runs flow (LLM sees what went wrong)
         ↓
-8. Executor checks app-level failures
-   ├─ submitted: false  → status = "failed"
-   ├─ error key present → status = "failed"
-   └─ otherwise         → status = "success"
-        ↓
-9. tracker.py writes llm_provider, llm_model, tokens_in, tokens_out,
-   cost_usd, retry_count to the run row
+9. Executor writes llm_provider, llm_model, tokens_in, tokens_out,
+   cost_usd, retry_count to the run row in a single _update_run() call
         ↓
 10. SSE streams terminal status → UI updates badge, result cell,
     Usage tab; Performance page reflects new token/cost totals
@@ -243,24 +367,29 @@ kill -9 $(lsof -ti:8000)
 
 ```
 agent_auto_system/
-├── .env
-├── pyproject.toml
+├── .env.example
+├── .pre-commit-config.yaml      # ruff + mypy hooks
+├── pyproject.toml               # ruff, mypy, pytest-cov config
+├── .github/workflows/ci.yml    # lint → unit → integration → Docker smoke
 ├── src/
-│   ├── main.py
-│   ├── database.py          # init_db handles migrations (ALTER TABLE ADD COLUMN)
-│   ├── models.py            # Job, Run (+ harness columns)
+│   ├── main.py                  # lifespan: init_db + reconcile_stale_runs
+│   ├── database.py              # init_db (migrations), reconcile_stale_runs
+│   ├── models.py                # Job (+ schedule field), Run (+ harness columns)
 │   ├── routers/
-│   │   ├── jobs.py
-│   │   └── runs.py          # SSE, stats (token/cost aggregates)
+│   │   ├── jobs.py              # CRUD; JobCreate exposes schedule field
+│   │   ├── runs.py              # trigger, cancel, SSE stream, stats, bulk delete
+│   │   └── system.py           # catalog endpoint
 │   └── automation/
-│       ├── executor.py      # harness-aware dispatcher
-│       ├── progress.py      # append_log() helper
-│       ├── harness/         # ← harness engineering module
-│       │   ├── provider.py  #   LLM factory (OpenAI / Anthropic / Gemini)
-│       │   ├── validator.py #   per-job result validation + retry logic
-│       │   ├── costs.py     #   token pricing table → USD estimate
-│       │   └── tracker.py   #   persists metrics to Run row
+│       ├── executor.py         # normalize → dispatch → retry → _update_run
+│       ├── progress.py         # append_log (json_insert atomic write)
+│       ├── registry.py         # thread-safe asyncio task registry (cancel)
+│       ├── harness/
+│       │   ├── provider.py     # normalize() + resolve(temperature=)
+│       │   ├── validator.py    # per-job-type result checks (_CHECKS dict)
+│       │   └── costs.py        # pricing table → USD estimate
 │       ├── flows/
+│       │   ├── base.py         # FlowMixin: _check_required, _log
+│       │   ├── utils.py        # extract_usage(CrewOutput)
 │       │   ├── form_fill_flow.py
 │       │   ├── web_scraper_flow.py
 │       │   ├── hn_digest_flow.py
@@ -274,12 +403,17 @@ agent_auto_system/
 │       │   └── email_sender_crew/
 │       └── tools/
 │           ├── google_form_tools.py
-│           ├── web_scraper_tool.py
-│           ├── hn_tool.py
-│           ├── x_scraper_tool.py
-│           └── gmail_send_tool.py
+│           ├── web_scraper_tool.py  # 10 MB cap, Content-Length check
+│           ├── hn_tool.py           # ThreadPoolExecutor parallel fetch
+│           ├── x_scraper_tool.py    # NITTER_INSTANCES env var + playwright fallback
+│           └── gmail_send_tool.py   # SMTP wrapped in try/except
 ├── tests/
-└── ui/
-    ├── index.html           # LLM selector, Usage tab, resource stat cards
-    └── app.js               # provider/model dropdowns, cost/token display
+│   ├── conftest.py              # StaticPool in-memory DB, async client fixture
+│   ├── unit/                   # 100+ unit tests
+│   └── integration/            # 60+ integration tests
+├── ui/
+│   ├── index.html               # LLM selector, pagination, retry button CSS
+│   └── app.js                   # provider/model dropdowns, Load More, auto-open
+└── doc/
+    └── improvements.md          # 10-section audit (source for all improvements)
 ```
