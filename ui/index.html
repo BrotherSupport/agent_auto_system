@@ -33,7 +33,7 @@
       display: flex; align-items: center; gap: 1.5rem;
       position: sticky; top: 0; background: var(--bg); z-index: 10;
     }
-    .logo { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; flex-shrink: 0; }
+    .logo { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; flex-shrink: 0; text-decoration: none; color: var(--text); cursor: pointer; }
     .logo span { color: var(--accent); }
 
     /* ── Nav tabs ── */
@@ -435,7 +435,7 @@
 <body>
 
 <header>
-  <div class="logo">agent<span>auto</span></div>
+  <a href="/" class="logo">agent<span>auto</span></a>
   <nav class="nav-tabs" id="nav-tabs">
     <button class="nav-tab active" data-page="dashboard">Dashboard</button>
     <button class="nav-tab" data-page="system">System</button>
