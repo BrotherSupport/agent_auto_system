@@ -79,6 +79,85 @@ const LLM_MODELS = {
   ],
 };
 
+// ── Flow step definitions (label + log trigger substring) ─────────────────────
+
+const FLOW_STEPS = {
+  google_form_fill: [
+    { label: 'Start',        trigger: 'Starting' },
+    { label: 'Validate',     trigger: 'Payload validated' },
+    { label: 'Inspect Form', trigger: 'Inspecting Google Form' },
+    { label: 'Submit',       trigger: 'Form submission attempted' },
+    { label: 'Done',         trigger: 'completed successfully' },
+  ],
+  web_scraper: [
+    { label: 'Start',    trigger: 'Starting' },
+    { label: 'Validate', trigger: 'Payload validated' },
+    { label: 'Scrape',   trigger: 'scraper agent reading' },
+    { label: 'Analyze',  trigger: 'generated summary' },
+    { label: 'Done',     trigger: 'completed successfully' },
+  ],
+  hacker_news_digest: [
+    { label: 'Start',     trigger: 'Starting' },
+    { label: 'Validate',  trigger: 'Fetching top' },
+    { label: 'Fetch',     trigger: 'analyst agent reading' },
+    { label: 'Digest',    trigger: 'Digest generated' },
+    { label: 'Done',      trigger: 'completed successfully' },
+  ],
+  x_scraper: [
+    { label: 'Start',     trigger: 'Starting' },
+    { label: 'Validate',  trigger: 'Validated payload' },
+    { label: 'Fetch',     trigger: 'Fetching posts' },
+    { label: 'Analyze',   trigger: 'Analysis complete' },
+    { label: 'Done',      trigger: 'completed successfully' },
+  ],
+  email_sender: [
+    { label: 'Start',    trigger: 'Starting' },
+    { label: 'Validate', trigger: 'Sending to' },
+    { label: 'Send',     trigger: 'Connecting to Gmail' },
+    { label: 'Done',     trigger: 'completed successfully' },
+  ],
+};
+
+function inferStepStates(jobType, logs, finalStatus) {
+  const steps = FLOW_STEPS[jobType];
+  if (!steps) return null;
+  const msgs = (logs || []).map(e => e.msg || '');
+  // Find the highest triggered step index
+  let reached = -1;
+  steps.forEach((s, i) => {
+    if (msgs.some(m => m.includes(s.trigger))) reached = i;
+  });
+  return steps.map((_, i) => {
+    if (i < reached) return 'done';
+    if (i === reached) {
+      if (finalStatus === 'failed')  return 'failed';
+      if (finalStatus === 'success') return 'done';
+      return 'running';
+    }
+    return 'pending';
+  });
+}
+
+function renderStepGraph(jobType, logs, finalStatus) {
+  const steps = FLOW_STEPS[jobType];
+  if (!steps) return '';
+  const states = inferStepStates(jobType, logs, finalStatus) || steps.map(() => 'pending');
+  const icons = { done: '✓', running: '…', failed: '✕', pending: '' };
+  const parts = [];
+  steps.forEach((s, i) => {
+    const st = states[i];
+    parts.push(`<div class="step-node sn-${st}"><div class="step-dot">${icons[st] || (i + 1)}</div><div class="step-label">${escHtml(s.label)}</div></div>`);
+    if (i < steps.length - 1) {
+      let connCls = '';
+      if (states[i] === 'done') {
+        connCls = states[i + 1] === 'running' ? 'sc-partial' : 'sc-done';
+      }
+      parts.push(`<div class="step-conn ${connCls}"></div>`);
+    }
+  });
+  return `<div class="step-graph">${parts.join('')}</div>`;
+}
+
 function updateModelOptions() {
   const provider = document.getElementById('llm-provider').value;
   const modelSel = document.getElementById('llm-model');
@@ -99,6 +178,8 @@ let systemCategory     = 'agents';
 let confirmResolve     = null;
 let runsOffset         = 0;
 const RUNS_PAGE_SIZE   = 50;
+let activeJobType      = null;
+let activeLogs         = [];
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -257,7 +338,7 @@ async function triggerRun(jobType, jobName, payload) {
     if (!runResp.ok) throw new Error('Failed to trigger run');
     const { run_id } = await runResp.json();
 
-    showProgress(jobName);
+    showProgress(jobName, jobType);
     await loadHistory();
     scrollToRun(run_id);
     document.getElementById(`detail-${run_id}`)?.classList.remove('hidden');
@@ -276,7 +357,7 @@ async function rerun(jobId) {
     const { run_id } = await runResp.json();
     const cached = cachedRuns.find(r => r.job_id === jobId);
     const jobName = cached?.job_name ?? `job ${jobId}`;
-    showProgress(jobName);
+    showProgress(jobName, cached?.job_type);
     await loadHistory();
     scrollToRun(run_id);
     document.getElementById(`detail-${run_id}`)?.classList.remove('hidden');
@@ -449,11 +530,15 @@ function scrollToRun(runId) {
 
 // ── Progress panel ────────────────────────────────────────────────────────────
 
-function showProgress(jobName) {
+function showProgress(jobName, jobType) {
+  activeJobType = jobType || null;
+  activeLogs = [];
   progressLog.innerHTML = '';
   progressJobName.textContent = jobName;
   progressPulse.style.display = '';
   progressPanel.classList.remove('hidden');
+  document.getElementById('progress-step-graph').innerHTML =
+    renderStepGraph(activeJobType, activeLogs, 'running');
 }
 
 function finishProgress(status, durationSecs) {
@@ -461,16 +546,22 @@ function finishProgress(status, durationSecs) {
   const ok = status === 'success';
   const color = ok ? 'var(--green)' : 'var(--red)';
   progressJobName.innerHTML = `<span style="color:${color}">${ok ? '✓ Completed' : '✗ Failed'} in ${durationSecs}s</span>`;
-  setTimeout(hideProgress, 3000);
+  document.getElementById('progress-step-graph').innerHTML =
+    renderStepGraph(activeJobType, activeLogs, status);
+  setTimeout(hideProgress, 3500);
 }
 
 function hideProgress() { progressPanel.classList.add('hidden'); }
 
 function appendProgressEntry(entry) {
+  activeLogs.push(entry);
   const li = document.createElement('li');
   li.innerHTML = `<span class="log-ts">${escHtml(entry.ts)}</span>${escHtml(entry.msg)}`;
   progressLog.appendChild(li);
   progressLog.scrollTop = progressLog.scrollHeight;
+  // Live-update the step graph as new log entries arrive
+  document.getElementById('progress-step-graph').innerHTML =
+    renderStepGraph(activeJobType, activeLogs, 'running');
 }
 
 // ── Server-Sent Events ────────────────────────────────────────────────────────
@@ -579,6 +670,10 @@ function renderHistory(runs, hasMore = false) {
     let logJson = null;
     if (run.log) { try { logJson = JSON.parse(run.log); } catch (_) {} }
 
+    const hasFlow = !!FLOW_STEPS[run.job_type];
+    const flowTab = hasFlow
+      ? `<button class="detail-tab" data-action="tab" data-tab="flow" data-run-id="${run.id}">Flow</button>`
+      : '';
     const logTab = logJson
       ? `<button class="detail-tab" data-action="tab" data-tab="log" data-run-id="${run.id}">Log (${logJson.length})</button>`
       : '';
@@ -603,6 +698,13 @@ function renderHistory(runs, hasMore = false) {
              <li><span class="log-ts">cost</span>${costStr || '$0.000000'}</li>
              <li><span class="log-ts">retries</span>${run.retry_count || 0}</li>
            </ul>
+         </div>`
+      : '';
+    const flowPane = hasFlow
+      ? `<div class="detail-pane" id="pane-flow-${run.id}" data-pane="flow">
+           <div class="flow-tab-graph">
+             ${renderStepGraph(run.job_type, logJson || [], run.status)}
+           </div>
          </div>`
       : '';
 
@@ -646,6 +748,7 @@ function renderHistory(runs, hasMore = false) {
         <td colspan="8" style="padding:0">
           <div class="detail-tabs">
             <button class="detail-tab active" data-action="tab" data-tab="result" data-run-id="${run.id}">Result</button>
+            ${flowTab}
             ${logTab}
             ${usageTab}
           </div>
@@ -655,6 +758,7 @@ function renderHistory(runs, hasMore = false) {
             </div>
             <pre>${escHtml(resultJson ? JSON.stringify(resultJson, null, 2) : (run.result || ''))}</pre>
           </div>
+          ${flowPane}
           ${logPane}
           ${usagePane}
         </td>
@@ -1047,22 +1151,74 @@ function renderPerformancePage(s) {
     : '0';
   const totalTokStr = s.total_tokens > 0 ? s.total_tokens.toLocaleString() : '0';
 
-  const providerRows = Object.entries(s.by_provider || {}).map(([prov, d]) => {
-    const tok = (d.tokens_in + d.tokens_out).toLocaleString();
-    const cost = d.cost_usd > 0
-      ? (d.cost_usd < 0.01 ? d.cost_usd.toFixed(5) : d.cost_usd.toFixed(3))
-      : '0';
-    const provLabel = prov === 'anthropic' ? 'claude' : prov;
+  // Per-provider cards with per-model breakdown
+  const byModel = s.by_model || {};
+  const allModelToks = Object.values(byModel).flat().map(m => m.tokens_in + m.tokens_out);
+  const maxModelTok  = Math.max(...allModelToks, 1);
+
+  const providerCards = Object.entries(s.by_provider || {}).map(([prov, d]) => {
+    const provLabel = prov === 'anthropic' ? 'Claude' : prov === 'openai' ? 'OpenAI' : prov === 'gemini' ? 'Gemini' : prov;
     const badgeCls  = `llm-${prov}`;
-    const models    = (d.models || []).join(', ') || '—';
-    return `
-      <tr>
-        <td><span class="llm-badge ${badgeCls}">${provLabel}</span></td>
-        <td style="text-align:right">${d.runs}</td>
-        <td style="text-align:right;color:var(--text-muted)">${tok}</td>
-        <td style="text-align:right;color:var(--yellow)">$${cost}</td>
-        <td style="color:var(--text-muted);font-size:0.78rem;font-family:ui-monospace,monospace">${escHtml(models)}</td>
+    const provTok   = d.tokens_in + d.tokens_out;
+    const provCost  = d.cost_usd > 0 ? (d.cost_usd < 0.01 ? '$' + d.cost_usd.toFixed(5) : '$' + d.cost_usd.toFixed(3)) : '$0';
+    const provTokStr = provTok > 999 ? (provTok / 1000).toFixed(1) + 'k' : provTok.toString();
+
+    const models = byModel[prov] || [];
+    const modelRows = models.map(m => {
+      const tok  = m.tokens_in + m.tokens_out;
+      const inW  = Math.round((m.tokens_in  / Math.max(tok, 1)) * 100);
+      const outW = 100 - inW;
+      const barW = Math.round((tok / maxModelTok) * 72);
+      const sr   = m.runs > 0 ? Math.round((m.success / m.runs) * 100) : 0;
+      const srCls = sr >= 80 ? 'srate-high' : sr >= 50 ? 'srate-mid' : 'srate-low';
+      const costStr = m.cost_usd > 0 ? (m.cost_usd < 0.0001 ? '<$0.0001' : '$' + m.cost_usd.toFixed(4)) : '$0';
+      const modelShort = m.model.split('/').pop();
+      const durStr = m.avg_duration > 0 ? m.avg_duration + 's' : '—';
+      return `<tr>
+        <td><span class="model-name-mono">${escHtml(modelShort)}</span></td>
+        <td style="text-align:right">${m.runs}</td>
+        <td><span class="srate-pill ${srCls}">${sr}%</span></td>
+        <td>
+          <div class="tok-bar-wrap" style="width:${barW}px" title="${m.tokens_in.toLocaleString()} in · ${m.tokens_out.toLocaleString()} out">
+            <div class="tok-bar-in"  style="width:${inW}%"></div>
+            <div class="tok-bar-out" style="width:${outW}%"></div>
+          </div>
+          <div style="font-size:0.65rem;color:var(--text-muted);margin-top:0.15rem">${tok.toLocaleString()}</div>
+        </td>
+        <td style="color:var(--yellow);font-family:ui-monospace,monospace;font-size:0.8rem">${costStr}</td>
+        <td style="color:var(--text-muted)">${durStr}</td>
       </tr>`;
+    }).join('');
+
+    return `
+    <div class="llm-pcard pcard-${prov}">
+      <div class="llm-pcard-header">
+        <span class="llm-badge ${badgeCls}" style="font-size:0.75rem;padding:0.1rem 0.5rem">${escHtml(provLabel)}</span>
+        <span class="llm-pcard-name">${escHtml(provLabel)}</span>
+        <div class="llm-pcard-stats">
+          <div class="llm-pcard-stat">
+            <div class="llm-pcard-stat-val blue">${d.runs}</div>
+            <div class="llm-pcard-stat-lab">Runs</div>
+          </div>
+          <div class="llm-pcard-stat">
+            <div class="llm-pcard-stat-val" style="color:var(--text-muted)">${provTokStr}</div>
+            <div class="llm-pcard-stat-lab">Tokens</div>
+          </div>
+          <div class="llm-pcard-stat">
+            <div class="llm-pcard-stat-val yellow">${provCost}</div>
+            <div class="llm-pcard-stat-lab">Cost</div>
+          </div>
+        </div>
+      </div>
+      ${modelRows ? `<table class="llm-model-table">
+        <thead><tr>
+          <th>Model</th><th style="text-align:right">Runs</th><th>Success</th>
+          <th>Tokens <span style="opacity:0.5;font-weight:400">■ in ■ out</span></th>
+          <th>Cost</th><th>Avg Dur</th>
+        </tr></thead>
+        <tbody>${modelRows}</tbody>
+      </table>` : ''}
+    </div>`;
   }).join('');
 
   document.getElementById('perf-content').innerHTML = `
@@ -1124,23 +1280,10 @@ function renderPerformancePage(s) {
       </div>
     </div>` : ''}
 
-    ${providerRows ? `
+    ${providerCards ? `
     <div class="perf-section">
-      <div class="perf-section-title">LLM Resource Usage</div>
-      <div class="provider-table-wrap">
-        <table class="provider-table">
-          <thead>
-            <tr>
-              <th>Provider</th>
-              <th style="text-align:right">Runs</th>
-              <th style="text-align:right">Tokens</th>
-              <th style="text-align:right">Cost (USD)</th>
-              <th>Models Used</th>
-            </tr>
-          </thead>
-          <tbody>${providerRows}</tbody>
-        </table>
-      </div>
+      <div class="perf-section-title">LLM Usage — by Provider &amp; Model</div>
+      <div class="llm-provider-cards">${providerCards}</div>
     </div>` : ''}`;
 }
 

@@ -280,6 +280,36 @@ def get_stats():
         for bp in by_provider.values():
             bp["models"].sort()
 
+        # Per-model detailed breakdown
+        model_detail_rows = conn.execute(text("""
+            SELECT
+                COALESCE(llm_provider, 'unknown') AS provider,
+                COALESCE(llm_model, 'unknown') AS model,
+                COUNT(*) AS runs,
+                SUM(CASE WHEN status='success' THEN 1 ELSE 0 END) AS n_success,
+                SUM(COALESCE(tokens_in, 0)) AS ti,
+                SUM(COALESCE(tokens_out, 0)) AS tot,
+                SUM(COALESCE(cost_usd, 0.0)) AS cost,
+                AVG(CASE WHEN finished_at IS NOT NULL AND status IN ('success','failed')
+                    THEN (julianday(finished_at) - julianday(started_at)) * 86400 END) AS avg_dur
+            FROM run
+            WHERE llm_model IS NOT NULL
+            GROUP BY provider, model
+            ORDER BY cost DESC
+        """)).fetchall()
+
+        by_model: dict = {}
+        for prov, model, runs, n_success, ti, tot, cost, avg_dur in model_detail_rows:
+            by_model.setdefault(prov, []).append({
+                "model": model,
+                "runs": runs,
+                "success": n_success or 0,
+                "tokens_in": ti or 0,
+                "tokens_out": tot or 0,
+                "cost_usd": round(cost or 0.0, 6),
+                "avg_duration": round(avg_dur, 1) if avg_dur else 0,
+            })
+
         # 7-day trend (only days with runs; fill gaps below)
         trend_rows = conn.execute(text("""
             SELECT
@@ -319,6 +349,7 @@ def get_stats():
         "total_tokens": total_tokens_in + total_tokens_out,
         "total_cost_usd": round(total_cost, 6),
         "by_provider": by_provider,
+        "by_model": by_model,
     }
 
 
@@ -333,7 +364,7 @@ def _empty_stats():
         "total_runs": 0, "success": 0, "failed": 0, "active": 0,
         "success_rate": 0, "avg_duration_secs": 0, "by_type": {}, "trend": trend,
         "total_tokens_in": 0, "total_tokens_out": 0, "total_tokens": 0,
-        "total_cost_usd": 0.0, "by_provider": {},
+        "total_cost_usd": 0.0, "by_provider": {}, "by_model": {},
     }
 
 

@@ -430,6 +430,63 @@
     .provider-table tr:hover td { background: rgba(255,255,255,0.02); }
     .stat-value.yellow { color: var(--yellow); }
     .stat-value.orange { color: var(--orange); }
+
+    /* ── Step graph ── */
+    .step-graph { display: flex; align-items: flex-start; padding: 0.6rem 0 0.25rem; overflow-x: auto; gap: 0; }
+    .step-node { display: flex; flex-direction: column; align-items: center; gap: 0.3rem; min-width: 68px; }
+    .step-dot {
+      width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; background: var(--bg); color: var(--text-muted);
+      flex-shrink: 0; transition: all 0.2s;
+    }
+    .step-node.sn-done    .step-dot { background: var(--green); border-color: var(--green); color: #fff; }
+    .step-node.sn-running .step-dot { background: rgba(59,130,246,0.15); border-color: var(--blue); color: var(--blue); animation: pulse 1.2s infinite; }
+    .step-node.sn-failed  .step-dot { background: rgba(239,68,68,0.12); border-color: var(--red); color: var(--red); }
+    .step-label { font-size: 0.62rem; font-weight: 600; text-align: center; color: var(--text-muted); line-height: 1.25; max-width: 64px; }
+    .step-node.sn-done    .step-label { color: var(--green); }
+    .step-node.sn-running .step-label { color: var(--blue); }
+    .step-node.sn-failed  .step-label { color: var(--red); }
+    .step-conn { flex: 1; height: 2px; background: var(--border); min-width: 10px; max-width: 40px; margin-top: 14px; flex-shrink: 0; transition: background 0.3s; }
+    .step-conn.sc-done { background: var(--green); }
+    .step-conn.sc-partial { background: linear-gradient(to right, var(--green) 60%, var(--blue)); }
+
+    /* ── Progress panel step graph area ── */
+    #progress-step-graph { padding: 0 0 0.25rem; }
+    #progress-step-graph .step-graph { padding-top: 0.35rem; }
+
+    /* ── Detail row flow tab ── */
+    .flow-tab-graph { padding: 0.75rem 1rem; }
+    .flow-tab-graph .step-graph { padding-bottom: 0.5rem; }
+
+    /* ── LLM provider cards (performance) ── */
+    .llm-provider-cards { display: flex; flex-direction: column; gap: 1rem; }
+    .llm-pcard { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .llm-pcard.pcard-openai    { border-left: 3px solid #10b981; }
+    .llm-pcard.pcard-anthropic { border-left: 3px solid #ca8a04; }
+    .llm-pcard.pcard-gemini    { border-left: 3px solid var(--blue); }
+    .llm-pcard.pcard-unknown   { border-left: 3px solid var(--gray); }
+    .llm-pcard-header { display: flex; align-items: center; gap: 0.85rem; padding: 0.85rem 1.1rem; background: rgba(255,255,255,0.02); }
+    .llm-pcard-name { font-size: 0.95rem; font-weight: 700; flex: 1; }
+    .llm-pcard-stats { display: flex; gap: 1.5rem; }
+    .llm-pcard-stat { text-align: right; }
+    .llm-pcard-stat-val { font-size: 0.9rem; font-weight: 700; }
+    .llm-pcard-stat-lab { font-size: 0.62rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .llm-model-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .llm-model-table th { padding: 0.4rem 1.1rem; text-align: left; color: var(--text-muted); font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; background: rgba(0,0,0,0.15); }
+    .llm-model-table td { padding: 0.55rem 1.1rem; border-top: 1px solid rgba(51,65,85,0.5); vertical-align: middle; }
+    .llm-model-table tr:hover td { background: rgba(255,255,255,0.025); }
+    .model-name-mono { font-family: ui-monospace, monospace; font-size: 0.78rem; color: var(--text); }
+    .tok-bar-wrap { width: 72px; height: 5px; background: rgba(255,255,255,0.07); border-radius: 3px; overflow: hidden; display: flex; }
+    .tok-bar-in  { background: var(--blue); height: 100%; }
+    .tok-bar-out { background: var(--accent); height: 100%; }
+    .srate-pill {
+      display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 0.08rem 0.4rem;
+      border-radius: 99px; min-width: 42px; text-align: center;
+    }
+    .srate-high { background: rgba(34,197,94,0.15); color: var(--green); }
+    .srate-mid  { background: rgba(234,179,8,0.15);  color: var(--yellow); }
+    .srate-low  { background: rgba(239,68,68,0.15);  color: var(--red); }
   </style>
 </head>
 <body>
@@ -474,6 +531,7 @@
         <span class="pulse" id="progress-pulse"></span>
         <span id="progress-job-name">Running…</span>
       </div>
+      <div id="progress-step-graph"></div>
       <ul id="progress-log"></ul>
     </div>
 
