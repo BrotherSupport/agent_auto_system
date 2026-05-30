@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 from datetime import UTC, datetime
 
 from sqlmodel import Session
@@ -12,6 +13,7 @@ from src.automation.pipeline import execute_pipeline
 from src.automation.progress import append_log
 from src.database import get_engine
 from src.models import Run
+from src.telemetry import record_run as _record_run
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +73,7 @@ async def _run_flow(run_id: int, job_type: str, payload: dict, effective_provide
 async def execute_run(run_id: int, job_type: str, payload: dict):
     logger.info("Starting run_id=%d job_type=%s", run_id, job_type)
     _update_run(run_id, "running")
+    _t0 = time.monotonic()
     append_log(run_id, f"Starting {job_type}...")
 
     llm_provider = payload.pop("llm_provider", None)
@@ -114,9 +117,13 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
 
             if not vr.valid:
                 append_log(run_id, f"Automation reported failure: {result.get('error', vr.reason)}")
+                _record_run(job_type=job_type, status="failed", duration_secs=time.monotonic() - _t0,
+                            provider=effective_provider, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost)
                 _update_run(run_id, "failed", result, **metrics)
             else:
                 append_log(run_id, "Automation completed successfully!")
+                _record_run(job_type=job_type, status="success", duration_secs=time.monotonic() - _t0,
+                            provider=effective_provider, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost)
                 _update_run(run_id, "success", result, **metrics)
             return
 
@@ -133,4 +140,6 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
                            cost_usd=cost, retry_count=attempt)
             logger.error("run_id=%d failed after %d attempt(s): %s", run_id, attempt + 1, exc)
             append_log(run_id, f"Error: {str(exc)[:200]}")
+            _record_run(job_type=job_type, status="failed", duration_secs=time.monotonic() - _t0,
+                        provider=effective_provider, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost)
             _update_run(run_id, "failed", {"error": str(exc)}, **metrics)

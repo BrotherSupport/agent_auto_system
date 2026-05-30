@@ -154,3 +154,36 @@ def test_resolve_raises_when_api_key_missing(monkeypatch):
     from src.automation.harness.provider import resolve
     with pytest.raises(EnvironmentError, match="OPENAI_API_KEY"):
         resolve("openai", "gpt-4o-mini")
+
+
+# ── pipeline validator ─────────────────────────────────────────────────────────
+
+def test_validate_pipeline_success():
+    from src.automation.harness.validator import validate
+    r = {"steps": [{"step": 1, "job_type": "x_scraper", "result": {"summary": "good content here"}}], "final_result": {"summary": "good content here"}}
+    vr = validate("pipeline", r)
+    assert vr.valid
+
+def test_validate_pipeline_no_steps():
+    from src.automation.harness.validator import validate
+    vr = validate("pipeline", {"final_result": {}})
+    assert not vr.valid
+    assert "pipeline" in vr.reason
+
+def test_validate_pipeline_empty_steps():
+    from src.automation.harness.validator import validate
+    vr = validate("pipeline", {"steps": [], "final_result": {}})
+    assert not vr.valid
+
+# ── google_sheet_reader validator ─────────────────────────────────────────────
+
+def test_validate_google_sheet_success():
+    from src.automation.harness.validator import validate
+    r = {"columns": ["id", "name"], "row_count": 3, "summary": "A product price list", "data": []}
+    vr = validate("google_sheet_reader", r)
+    assert vr.valid
+
+def test_validate_google_sheet_no_data():
+    from src.automation.harness.validator import validate
+    vr = validate("google_sheet_reader", {"error": "could not read sheet"})
+    assert not vr.valid

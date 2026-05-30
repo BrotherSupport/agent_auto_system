@@ -10,12 +10,14 @@ from sqlalchemy import text
 
 from src.database import get_engine, init_db, reconcile_stale_runs
 from src.routers import jobs, runs, system
+from src import telemetry as _tel
 
 logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _tel.setup(app)
     init_db()
     stale = reconcile_stale_runs()
     if stale:

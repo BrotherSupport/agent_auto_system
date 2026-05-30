@@ -26,6 +26,7 @@ async def test_all_expected_agents_present(client):
     assert "hn_analyst" in ids
     assert "x_analyst" in ids
     assert "email_sender_agent" in ids
+    assert "google_sheet_agent" in ids
 
 
 async def test_each_agent_has_required_fields(client):
@@ -56,6 +57,7 @@ async def test_all_expected_tools_present(client):
     assert "hn_top_stories" in ids
     assert "x_post_scraper" in ids
     assert "gmail_send_email" in ids
+    assert "google_sheet_reader" in ids
 
 
 async def test_gmail_tool_has_inputs(client):
@@ -93,6 +95,7 @@ async def test_all_expected_crews_present(client):
     assert "hn_digest_crew" in ids
     assert "x_scraper_crew" in ids
     assert "email_sender_crew" in ids
+    assert "google_sheet_crew" in ids
 
 
 async def test_crews_have_tasks_with_config_code(client):
@@ -121,6 +124,8 @@ async def test_all_expected_workflows_present(client):
     assert "hn_digest_flow" in ids
     assert "x_scraper_flow" in ids
     assert "email_sender_flow" in ids
+    assert "google_sheet_flow" in ids
+    assert "pipeline" in ids
 
 
 async def test_web_scraper_flow_has_no_question_state_field(client):
@@ -152,3 +157,17 @@ async def test_workflows_have_source_code(client):
     data = (await client.get("/api/system")).json()
     for wf in data["workflows"]:
         assert wf.get("source_code"), f"Workflow {wf['id']} missing source_code"
+
+
+async def test_google_sheet_tool_has_url_and_limit_inputs(client):
+    data = (await client.get("/api/system")).json()
+    tool = next(t for t in data["tools"] if t["id"] == "google_sheet_reader")
+    input_names = {inp["name"] for inp in tool["inputs"]}
+    assert "url" in input_names
+    assert "limit" in input_names
+
+
+async def test_pipeline_workflow_has_source_code(client):
+    data = (await client.get("/api/system")).json()
+    pipeline_wf = next(w for w in data["workflows"] if w["id"] == "pipeline")
+    assert pipeline_wf.get("source_code")

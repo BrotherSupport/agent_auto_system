@@ -6,12 +6,12 @@ services:
     image: agent-auto-system:local
     ports:
       - "8000:8000"
-    # Pass OPENAI_API_KEY and optional GMAIL_* variables from the local .env file.
-    # Never bake secrets into the image — use env_file or -e flags instead.
     env_file:
       - .env
+    environment:
+      OTEL_ENABLED: "true"
+      OTEL_SERVICE_NAME: agent-auto-system
     volumes:
-      # Persist the SQLite database across container restarts
       - app_data:/app/data
     restart: unless-stopped
     healthcheck:
@@ -25,6 +25,23 @@ services:
       start_period: 30s
       retries: 4
 
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prom_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   app_data:
+    driver: local
+  prom_data:
     driver: local

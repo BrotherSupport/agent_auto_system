@@ -144,3 +144,66 @@ async def test_previous_error_injected_on_retry(test_engine, seeded_run, mocker)
     assert len(captured_payloads) == 2
     assert "previous_error" in captured_payloads[1]
     assert captured_payloads[1]["previous_error"]
+
+
+@pytest.fixture
+def seeded_pipeline_run(test_engine):
+    with Session(test_engine) as s:
+        job = Job(
+            name="pipeline test",
+            job_type="pipeline",
+            payload=json.dumps({
+                "steps": [
+                    {"job_type": "hacker_news_digest", "payload": {"limit": 3}},
+                ]
+            }),
+        )
+        s.add(job)
+        s.commit()
+        s.refresh(job)
+        run = Run(job_id=job.id, status="pending")
+        s.add(run)
+        s.commit()
+        s.refresh(run)
+        return run.id
+
+
+async def test_execute_run_dispatches_to_pipeline(test_engine, seeded_pipeline_run, mocker):
+    mocker.patch("src.automation.executor.get_engine", return_value=test_engine)
+    mocker.patch("src.automation.progress.append_log")
+    mock_execute_pipeline = mocker.patch(
+        "src.automation.executor.execute_pipeline",
+        new=AsyncMock(return_value=(
+            {
+                "steps": [{"step": 1, "job_type": "hacker_news_digest", "result": {"digest": "Top stories today", "stories": [1]}}],
+                "final_result": {"digest": "Top stories today", "stories": [1]},
+            },
+            {"prompt_tokens": 50, "completion_tokens": 25},
+        )),
+    )
+
+    from src.automation.executor import execute_run
+    await execute_run(
+        seeded_pipeline_run,
+        "pipeline",
+        {"steps": [{"job_type": "hacker_news_digest", "payload": {"limit": 3}}]},
+    )
+
+    run = _get_run(test_engine, seeded_pipeline_run)
+    assert run.status == "success"
+    assert mock_execute_pipeline.called
+
+
+async def test_execute_run_pipeline_unknown_type_falls_through(test_engine, seeded_run, mocker):
+    mocker.patch("src.automation.executor.get_engine", return_value=test_engine)
+    mocker.patch("src.automation.progress.append_log")
+    mocker.patch(
+        "src.automation.executor._run_flow",
+        new=AsyncMock(side_effect=ValueError("Unknown job_type: nonexistent_type")),
+    )
+
+    from src.automation.executor import execute_run
+    await execute_run(seeded_run, "nonexistent_type", {"max_retries": 0})
+
+    run = _get_run(test_engine, seeded_run)
+    assert run.status == "failed"

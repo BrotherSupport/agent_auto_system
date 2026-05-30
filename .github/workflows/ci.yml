@@ -106,15 +106,17 @@ jobs:
             | python3 -c "
           import sys, json
           d = json.load(sys.stdin)
-          assert len(d['agents'])    >= 5, f'agents: {len(d[\"agents\"])}'
-          assert len(d['tools'])     >= 6, f'tools: {len(d[\"tools\"])}'
-          assert len(d['crews'])     >= 5, f'crews: {len(d[\"crews\"])}'
-          assert len(d['workflows']) >= 5, f'workflows: {len(d[\"workflows\"])}'
+          assert len(d['agents'])    >= 6, f'agents: {len(d[\"agents\"])}'
+          assert len(d['tools'])     >= 7, f'tools: {len(d[\"tools\"])}'
+          assert len(d['crews'])     >= 6, f'crews: {len(d[\"crews\"])}'
+          assert len(d['workflows']) >= 7, f'workflows: {len(d[\"workflows\"])}'
           agent_ids = {a['id'] for a in d['agents']}
           tool_ids  = {t['id'] for t in d['tools']}
-          assert 'email_sender_agent' in agent_ids,  'email_sender_agent missing'
-          assert 'gmail_send_email'   in tool_ids,   'gmail_send_email missing'
-          assert 'web_scraper_agent'  in agent_ids,  'web_scraper_agent missing'
+          assert 'email_sender_agent'  in agent_ids,  'email_sender_agent missing'
+          assert 'gmail_send_email'    in tool_ids,   'gmail_send_email missing'
+          assert 'web_scraper_agent'   in agent_ids,  'web_scraper_agent missing'
+          assert 'google_sheet_agent'  in agent_ids,  'google_sheet_agent missing'
+          assert 'google_sheet_reader' in tool_ids,   'google_sheet_reader missing'
           print(f'✓ catalog ok — {len(d[\"agents\"])} agents, {len(d[\"tools\"])} tools,'
                 f' {len(d[\"crews\"])} crews, {len(d[\"workflows\"])} workflows')
           "
