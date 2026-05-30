@@ -1,13 +1,14 @@
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender'];
+const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'pipeline'];
 
 const TYPE_META = {
-  google_form_fill:   { chip: 'FORM',  cls: 'chip-form'  },
-  web_scraper:        { chip: 'WEB',   cls: 'chip-web'   },
-  hacker_news_digest: { chip: 'HN',    cls: 'chip-hn'    },
-  x_scraper:          { chip: 'X',     cls: 'chip-x'     },
-  email_sender:       { chip: 'EMAIL', cls: 'chip-email' },
+  google_form_fill:   { chip: 'FORM',  cls: 'chip-form'     },
+  web_scraper:        { chip: 'WEB',   cls: 'chip-web'      },
+  hacker_news_digest: { chip: 'HN',    cls: 'chip-hn'       },
+  x_scraper:          { chip: 'X',     cls: 'chip-x'        },
+  email_sender:       { chip: 'EMAIL', cls: 'chip-email'    },
+  pipeline:           { chip: 'PIPE',  cls: 'chip-pipeline' },
 };
 
 const AUTO_CATALOG = {
@@ -61,6 +62,15 @@ const AUTO_CATALOG = {
     ],
     crew: 'EmailSenderCrew', flow: 'EmailSenderFlow',
     agent: 'Email Sender Agent', tools: ['Gmail Send'],
+  },
+  pipeline: {
+    icon: '🔗', name: 'Pipeline',
+    desc: 'Chain multiple automations in sequence. Each step\'s output is available to later steps via {{steps.N.result}} or {{steps.N.result.field}} template variables in any payload field.',
+    inputs: [
+      { name: 'steps', type: 'list', desc: 'Ordered list of {job_type, payload} step definitions' },
+    ],
+    crew: 'Per-step crew', flow: 'Pipeline (execute_pipeline)',
+    agent: 'Per step', tools: ['All step tools'],
   },
 };
 
@@ -122,7 +132,6 @@ function inferStepStates(jobType, logs, finalStatus) {
   const steps = FLOW_STEPS[jobType];
   if (!steps) return null;
   const msgs = (logs || []).map(e => e.msg || '');
-  // Find the highest triggered step index
   let reached = -1;
   steps.forEach((s, i) => {
     if (msgs.some(m => m.includes(s.trigger))) reached = i;
@@ -138,23 +147,98 @@ function inferStepStates(jobType, logs, finalStatus) {
   });
 }
 
+function parseLogTs(ts) {
+  if (!ts) return null;
+  const p = ts.split(':').map(Number);
+  if (p.length !== 3 || p.some(isNaN)) return null;
+  return p[0] * 3600 + p[1] * 60 + p[2];
+}
+
+function fmtDur(secs) {
+  if (secs === null || secs === undefined) return null;
+  return secs < 1 ? '<1s' : secs + 's';
+}
+
+function computeStepDurations(steps, logs, finalStatus) {
+  const entries = logs || [];
+  const triggerTs = steps.map(s => {
+    const e = entries.find(e => (e.msg || '').includes(s.trigger));
+    return e ? parseLogTs(e.ts) : null;
+  });
+  return triggerTs.map((ts, i) => {
+    if (ts === null) return null;
+    for (let j = i + 1; j < triggerTs.length; j++) {
+      if (triggerTs[j] !== null) return Math.max(0, triggerTs[j] - ts);
+    }
+    if (finalStatus === 'success' || finalStatus === 'failed') {
+      const last = entries[entries.length - 1];
+      if (last) { const lt = parseLogTs(last.ts); if (lt !== null) return Math.max(0, lt - ts); }
+    }
+    return null;
+  });
+}
+
 function renderStepGraph(jobType, logs, finalStatus) {
+  if (jobType === 'pipeline') return renderPipelineStepGraph(logs, finalStatus);
   const steps = FLOW_STEPS[jobType];
   if (!steps) return '';
   const states = inferStepStates(jobType, logs, finalStatus) || steps.map(() => 'pending');
+  const durations = computeStepDurations(steps, logs, finalStatus);
   const icons = { done: '✓', running: '…', failed: '✕', pending: '' };
   const parts = [];
   steps.forEach((s, i) => {
     const st = states[i];
-    parts.push(`<div class="step-node sn-${st}"><div class="step-dot">${icons[st] || (i + 1)}</div><div class="step-label">${escHtml(s.label)}</div></div>`);
+    const dur = durations[i] !== null ? `<div class="step-metric">${fmtDur(durations[i])}</div>` : '';
+    parts.push(`<div class="step-node sn-${st}"><div class="step-dot">${icons[st] || (i + 1)}</div><div class="step-label">${escHtml(s.label)}</div>${dur}</div>`);
     if (i < steps.length - 1) {
       let connCls = '';
-      if (states[i] === 'done') {
-        connCls = states[i + 1] === 'running' ? 'sc-partial' : 'sc-done';
-      }
+      if (states[i] === 'done') connCls = states[i + 1] === 'running' ? 'sc-partial' : 'sc-done';
       parts.push(`<div class="step-conn ${connCls}"></div>`);
     }
   });
+  return `<div class="step-graph">${parts.join('')}</div>`;
+}
+
+function renderPipelineStepGraph(logs, finalStatus) {
+  const entries = logs || [];
+  const stepMap = new Map(); // 0-based idx → {type, n, startTs, endTs}
+  for (const e of entries) {
+    const mS = (e.msg || '').match(/\[Step (\d+)\/(\d+)\] Starting (.+?)\.\.\./);
+    if (mS) {
+      const idx = parseInt(mS[1]) - 1;
+      if (!stepMap.has(idx)) stepMap.set(idx, { type: mS[3], n: parseInt(mS[2]), startTs: parseLogTs(e.ts), endTs: null });
+    }
+    const mE = (e.msg || '').match(/\[Step (\d+)\/(\d+)\] Completed .+/);
+    if (mE) {
+      const idx = parseInt(mE[1]) - 1;
+      const info = stepMap.get(idx);
+      if (info && info.endTs === null) info.endTs = parseLogTs(e.ts);
+    }
+  }
+  const totalSteps = stepMap.size > 0 ? (stepMap.values().next().value?.n || stepMap.size) : 1;
+  const icons = { done: '✓', running: '…', failed: '✕', pending: '' };
+  const parts = [];
+  for (let i = 0; i < totalSteps; i++) {
+    const info = stepMap.get(i);
+    let state = info ? (info.endTs !== null ? 'done' : 'running') : 'pending';
+    if (i === totalSteps - 1 && state !== 'done') {
+      if (finalStatus === 'failed') state = 'failed';
+      else if (finalStatus === 'success') state = 'done';
+    }
+    const label = info ? info.type.replace(/_/g, ' ') : `step ${i + 1}`;
+    let dur = null;
+    if (info?.startTs !== null && info?.startTs !== undefined) {
+      const endT = info.endTs ?? ((finalStatus === 'success' || finalStatus === 'failed')
+        ? parseLogTs(entries[entries.length - 1]?.ts) : null);
+      if (endT !== null && endT !== undefined) dur = fmtDur(Math.max(0, endT - info.startTs));
+    }
+    const durHtml = dur ? `<div class="step-metric">${dur}</div>` : '';
+    parts.push(`<div class="step-node sn-${state}"><div class="step-dot">${icons[state] || (i + 1)}</div><div class="step-label">${escHtml(label)}</div>${durHtml}</div>`);
+    if (i < totalSteps - 1) {
+      const connCls = info?.endTs !== null ? 'sc-done' : (info ? 'sc-partial' : '');
+      parts.push(`<div class="step-conn ${connCls}"></div>`);
+    }
+  }
   return `<div class="step-graph">${parts.join('')}</div>`;
 }
 
@@ -259,12 +343,146 @@ document.getElementById('type-grid').addEventListener('click', (e) => {
 });
 
 function selectJobType(type) {
+  if (type !== 'pipeline') {
+    document.getElementById('pipeline-steps-list').innerHTML = '';
+    document.querySelector('#modal .modal').classList.remove('modal-wide');
+  }
   document.querySelectorAll('.type-card')
     .forEach(c => c.classList.toggle('active', c.dataset.type === type));
   document.getElementById('job-type').value = type;
   ALL_TYPES.forEach(t =>
     document.getElementById(`fields-${t}`).classList.toggle('hidden', t !== type));
+  if (type === 'pipeline') {
+    document.querySelector('#modal .modal').classList.add('modal-wide');
+    const list = document.getElementById('pipeline-steps-list');
+    if (!list.querySelector('.pipeline-step-card')) {
+      addPipelineStep('x_scraper');
+      addPipelineStep('email_sender');
+    }
+  }
 }
+
+// ── Pipeline builder ──────────────────────────────────────────────────────────
+
+const PIPELINE_TYPE_OPTIONS = [
+  { value: 'google_form_fill',   label: 'Form Fill' },
+  { value: 'web_scraper',        label: 'Web Scraper' },
+  { value: 'hacker_news_digest', label: 'HN Digest' },
+  { value: 'x_scraper',         label: 'X Scraper' },
+  { value: 'email_sender',      label: 'Email Sender' },
+];
+
+function renderPipelineStepFields(stepIdx, jobType) {
+  const tipHtml = stepIdx > 0
+    ? `<div style="font-size:0.67rem;color:var(--accent);margin-bottom:0.45rem">
+         Prev output: <code style="font-family:ui-monospace,monospace">{{steps.${stepIdx - 1}.result}}</code>
+         &nbsp;·&nbsp; field: <code style="font-family:ui-monospace,monospace">{{steps.${stepIdx - 1}.result.summary}}</code>
+       </div>`
+    : '';
+  switch (jobType) {
+    case 'google_form_fill':
+      return `${tipHtml}
+        <div class="field"><label>Company Name</label><input type="text" class="ps-field" data-field="company_name" placeholder="e.g. Acme Corp" /></div>
+        <div class="field"><label>Company Size</label>
+          <select class="ps-field" data-field="company_size">
+            <option value="0-10">0 – 10</option><option value="11-100">11 – 100</option>
+            <option value="200 up">200+</option><option value="其他">其他 (Other)</option>
+          </select>
+        </div>
+        <div class="field"><label>AI Problem</label><textarea class="ps-field" data-field="ai_problem" rows="2" placeholder="Describe what you want AI to solve…"></textarea></div>`;
+    case 'web_scraper':
+      return `${tipHtml}
+        <div class="field"><label>URL</label><input type="text" class="ps-field" data-field="url" placeholder="https://example.com" /></div>`;
+    case 'hacker_news_digest':
+      return `${tipHtml}
+        <div class="field"><label>Stories (1–10)</label><input type="text" class="ps-field" data-field="limit" value="5" placeholder="5" /></div>`;
+    case 'x_scraper':
+      return `${tipHtml}
+        <div class="field"><label>X Username</label><input type="text" class="ps-field" data-field="username" placeholder="username (no @)" /></div>
+        <div class="field"><label>Post Limit</label><input type="text" class="ps-field" data-field="limit" value="5" placeholder="5" /></div>`;
+    case 'email_sender':
+      return `${tipHtml}
+        <div class="field"><label>To</label><textarea class="ps-field" data-field="to" rows="2" placeholder="recipient@example.com"></textarea></div>
+        <div class="field"><label>CC (optional)</label><input type="text" class="ps-field" data-field="cc" placeholder="cc@example.com" /></div>
+        <div class="field"><label>Subject</label><input type="text" class="ps-field" data-field="subject" placeholder="Subject line" /></div>
+        <div class="field"><label>Body</label><textarea class="ps-field" data-field="body" rows="3" placeholder="Email body or {{steps.${Math.max(0, stepIdx - 1)}.result.summary}}"></textarea></div>`;
+    default: return '';
+  }
+}
+
+function addPipelineStep(jobType = 'x_scraper') {
+  const list = document.getElementById('pipeline-steps-list');
+  const idx  = list.querySelectorAll('.pipeline-step-card').length;
+
+  // Arrow connector between steps
+  if (idx > 0) {
+    const arrow = document.createElement('div');
+    arrow.className = 'pipeline-arrow';
+    arrow.setAttribute('data-arrow', '');
+    arrow.textContent = '↓';
+    list.appendChild(arrow);
+  }
+
+  const card = document.createElement('div');
+  card.className = 'pipeline-step-card';
+  card.dataset.stepType = jobType;
+
+  const typeOpts = PIPELINE_TYPE_OPTIONS
+    .map(o => `<option value="${o.value}"${o.value === jobType ? ' selected' : ''}>${escHtml(o.label)}</option>`)
+    .join('');
+
+  card.innerHTML = `
+    <div class="pipeline-step-header">
+      <span class="pipeline-step-num">Step ${idx + 1}</span>
+      <select class="pipeline-step-type-sel">${typeOpts}</select>
+      <button type="button" class="pipeline-remove-step" title="Remove step">&times;</button>
+    </div>
+    <div class="pipeline-step-fields">${renderPipelineStepFields(idx, jobType)}</div>
+    <div class="pipeline-step-hint">Output: <code>{{steps.${idx}.result}}</code></div>`;
+
+  card.querySelector('.pipeline-step-type-sel').addEventListener('change', (e) => {
+    card.dataset.stepType = e.target.value;
+    const curIdx = [...list.querySelectorAll('.pipeline-step-card')].indexOf(card);
+    card.querySelector('.pipeline-step-fields').innerHTML = renderPipelineStepFields(curIdx, e.target.value);
+  });
+
+  card.querySelector('.pipeline-remove-step').addEventListener('click', () => {
+    // Remove preceding arrow if any
+    const prev = card.previousElementSibling;
+    if (prev?.getAttribute('data-arrow') !== null) prev.remove();
+    card.remove();
+    renumberPipelineSteps();
+  });
+
+  list.appendChild(card);
+}
+
+function renumberPipelineSteps() {
+  const cards = document.querySelectorAll('.pipeline-step-card');
+  cards.forEach((card, i) => {
+    card.querySelector('.pipeline-step-num').textContent = `Step ${i + 1}`;
+    const hint = card.querySelector('.pipeline-step-hint code');
+    if (hint) hint.textContent = `{{steps.${i}.result}}`;
+  });
+}
+
+function collectPipelineSteps() {
+  return [...document.querySelectorAll('.pipeline-step-card')].map(card => {
+    const jobType = card.dataset.stepType;
+    const payload = {};
+    card.querySelectorAll('.ps-field').forEach(el => {
+      const field = el.dataset.field;
+      if (!field) return;
+      const raw = el.tagName === 'SELECT' ? el.value : el.value.trim();
+      if (!raw) return;
+      const n = Number(raw);
+      payload[field] = (el.type !== 'number' && isNaN(n)) ? raw : (!isNaN(n) && raw === String(n) ? n : raw);
+    });
+    return { job_type: jobType, payload };
+  });
+}
+
+document.getElementById('pipeline-add-step').addEventListener('click', () => addPipelineStep('email_sender'));
 
 // ── Form submit ───────────────────────────────────────────────────────────────
 
@@ -308,6 +526,24 @@ runForm.addEventListener('submit', async (e) => {
     payload = { to, subject, body, ...(cc ? { cc } : {}) };
     const recipientCount = to.split(',').filter(e => e.trim()).length;
     jobName = `Email: ${subject} → ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}`;
+
+  } else if (jobType === 'pipeline') {
+    const steps = collectPipelineSteps();
+    if (!steps.length) { showToast('Add at least one step', 'error'); return; }
+    for (let i = 0; i < steps.length; i++) {
+      const { job_type: jt, payload: sp } = steps[i];
+      const missing = f => !String(sp[f] ?? '').trim();
+      if (jt === 'email_sender') {
+        if (missing('to'))      { showToast(`Step ${i + 1}: Recipients are required`, 'error'); return; }
+        if (missing('subject')) { showToast(`Step ${i + 1}: Subject is required`, 'error'); return; }
+        if (missing('body'))    { showToast(`Step ${i + 1}: Body is required`, 'error'); return; }
+      } else if (jt === 'web_scraper'      && missing('url'))          { showToast(`Step ${i + 1}: URL is required`, 'error'); return; }
+      else if   (jt === 'x_scraper'        && missing('username'))      { showToast(`Step ${i + 1}: X Username is required`, 'error'); return; }
+      else if   (jt === 'google_form_fill' && missing('company_name')) { showToast(`Step ${i + 1}: Company name is required`, 'error'); return; }
+    }
+    const typeNames = steps.map(s => (AUTO_CATALOG[s.job_type]?.name || s.job_type));
+    payload  = { steps };
+    jobName  = `Pipeline: ${typeNames.join(' → ')}`;
   }
 
   // Attach LLM config to payload
@@ -670,7 +906,7 @@ function renderHistory(runs, hasMore = false) {
     let logJson = null;
     if (run.log) { try { logJson = JSON.parse(run.log); } catch (_) {} }
 
-    const hasFlow = !!FLOW_STEPS[run.job_type];
+    const hasFlow = !!(FLOW_STEPS[run.job_type] || run.job_type === 'pipeline');
     const flowTab = hasFlow
       ? `<button class="detail-tab" data-action="tab" data-tab="flow" data-run-id="${run.id}">Flow</button>`
       : '';
@@ -1460,6 +1696,10 @@ function _hlYaml(code) {
 
 function extractResultText(r) {
   if (!r) return '';
+  if (r.steps && Array.isArray(r.steps)) {
+    const types = r.steps.map(s => (AUTO_CATALOG[s.job_type]?.name || s.job_type)).join(' → ');
+    return `${r.steps.length}-step pipeline: ${types}`;
+  }
   return r.answer
     || r.story_of_the_day?.title
     || r.summary

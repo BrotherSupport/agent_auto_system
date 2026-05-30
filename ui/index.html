@@ -487,6 +487,51 @@
     .srate-high { background: rgba(34,197,94,0.15); color: var(--green); }
     .srate-mid  { background: rgba(234,179,8,0.15);  color: var(--yellow); }
     .srate-low  { background: rgba(239,68,68,0.15);  color: var(--red); }
+
+    /* ── Pipeline builder ── */
+    .chip-pipeline { background: rgba(99,102,241,0.15); color: var(--accent); }
+    .modal-wide { max-width: 600px !important; }
+    #fields-pipeline { max-height: 52vh; overflow-y: auto; padding-right: 0.15rem; }
+    .pipeline-step-card {
+      border: 1px solid var(--border); border-radius: var(--radius);
+      margin-bottom: 0.5rem; background: var(--bg); overflow: hidden;
+    }
+    .pipeline-step-header {
+      display: flex; align-items: center; gap: 0.5rem;
+      padding: 0.45rem 0.65rem; background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .pipeline-step-num { font-size: 0.7rem; font-weight: 700; color: var(--accent); min-width: 38px; flex-shrink: 0; }
+    .pipeline-step-type-sel {
+      flex: 1; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--text); padding: 0.28rem 0.5rem;
+      font-size: 0.82rem; font-family: inherit; outline: none;
+    }
+    .pipeline-step-type-sel:focus { border-color: var(--accent); }
+    .pipeline-remove-step {
+      background: none; border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text-muted); padding: 0.14rem 0.42rem; font-size: 1rem;
+      cursor: pointer; line-height: 1; flex-shrink: 0;
+    }
+    .pipeline-remove-step:hover { border-color: var(--red); color: var(--red); }
+    .pipeline-step-fields { padding: 0.55rem 0.65rem 0; }
+    .pipeline-step-fields .field { margin-bottom: 0.5rem; }
+    .pipeline-step-fields .field label { font-size: 0.73rem; margin-bottom: 0.3rem; }
+    .pipeline-step-hint {
+      padding: 0.3rem 0.65rem 0.4rem; font-size: 0.67rem; color: var(--text-muted);
+      border-top: 1px dashed rgba(51,65,85,0.5); margin-top: 0.3rem;
+    }
+    .pipeline-step-hint code { color: var(--accent); font-family: ui-monospace, monospace; font-size: 0.67rem; }
+    .pipeline-arrow { display: flex; align-items: center; justify-content: center; font-size: 0.9rem; color: var(--accent); opacity: 0.5; margin: -0.1rem 0; }
+
+    /* ── Per-step metrics (flow tab) ── */
+    .step-metric {
+      font-size: 0.57rem; font-family: ui-monospace, monospace;
+      text-align: center; margin-top: 0.1rem; color: var(--text-muted); line-height: 1.2;
+    }
+    .step-node.sn-done    .step-metric { color: rgba(34,197,94,0.75); }
+    .step-node.sn-running .step-metric { color: rgba(59,130,246,0.75); }
+    .step-node.sn-failed  .step-metric { color: rgba(239,68,68,0.6); }
   </style>
 </head>
 <body>
@@ -632,6 +677,10 @@
           <div class="type-card-header"><span class="type-card-icon">✉️</span><span class="type-card-name">Email Sender</span></div>
           <div class="type-card-desc">Send email to multiple recipients</div>
         </div>
+        <div class="type-card" data-type="pipeline">
+          <div class="type-card-header"><span class="type-card-icon">🔗</span><span class="type-card-name">Pipeline</span></div>
+          <div class="type-card-desc">Chain automations in sequence</div>
+        </div>
       </div>
       <input type="hidden" id="job-type" value="google_form_fill" />
 
@@ -677,6 +726,11 @@
         <div style="font-size:0.75rem;color:var(--text-muted);background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
           Requires <code style="font-family:ui-monospace,monospace">GMAIL_ADDRESS</code> and <code style="font-family:ui-monospace,monospace">GMAIL_APP_PASSWORD</code> in <code style="font-family:ui-monospace,monospace">.env</code>
         </div>
+      </div>
+
+      <div id="fields-pipeline" class="hidden">
+        <div id="pipeline-steps-list"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="pipeline-add-step" style="width:100%;margin-top:0.25rem">+ Add Step</button>
       </div>
 
       <hr class="llm-config-sep" />

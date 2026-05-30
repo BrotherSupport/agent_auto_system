@@ -12,6 +12,7 @@ _MIN_CHARS = 20
 _CHECKS: dict = {
     "google_form_fill":   lambda r: (r.get("submitted") is True, "form not submitted"),
     "email_sender":       lambda r: (r.get("sent") is True, "email not sent"),
+    "pipeline":           lambda r: (bool(r.get("steps")), "pipeline completed no steps"),
     "web_scraper":        lambda r: (
         bool(r.get("content") or r.get("title") or r.get("summary") or r.get("data")),
         "no content scraped",

@@ -359,6 +359,28 @@ _CATALOG: dict = {
             ],
             "source_file": "src/automation/flows/x_scraper_flow.py",
         },
+        {
+            "id": "pipeline",
+            "name": "Pipeline",
+            "job_type": "pipeline",
+            "crew": "(Orchestrates multiple sub-flows)",
+            "state_fields": [
+                {"name": "steps", "type": "list[{job_type, payload}]", "default": []},
+            ],
+            "steps": [
+                {
+                    "name": "interpolate_and_dispatch",
+                    "decorator": "@step (sequential loop)",
+                    "description": (
+                        "For each step: substitute {{steps.N.result}} and "
+                        "{{steps.N.result.field}} templates in payload, dispatch to the "
+                        "appropriate sub-flow, collect result. The final pipeline result "
+                        "contains all step results and the last step's result."
+                    ),
+                },
+            ],
+            "source_file": "src/automation/pipeline.py",
+        },
     ],
 }
 

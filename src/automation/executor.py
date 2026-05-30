@@ -8,6 +8,7 @@ from sqlmodel import Session
 from src.automation.harness.costs import estimate_cost
 from src.automation.harness.provider import normalize as normalize_llm
 from src.automation.harness.validator import validate
+from src.automation.pipeline import execute_pipeline
 from src.automation.progress import append_log
 from src.database import get_engine
 from src.models import Run
@@ -91,7 +92,11 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
             current_payload["previous_error"] = vr.reason
 
         try:
-            result, usage = await _run_flow(run_id, job_type, current_payload, effective_provider, effective_model)
+            if job_type == "pipeline":
+                pipeline_steps = current_payload.get("steps", [])
+                result, usage = await execute_pipeline(run_id, pipeline_steps, effective_provider, effective_model)
+            else:
+                result, usage = await _run_flow(run_id, job_type, current_payload, effective_provider, effective_model)
 
             tokens_in  += usage.get("prompt_tokens", 0)
             tokens_out += usage.get("completion_tokens", 0)
