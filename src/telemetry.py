@@ -23,12 +23,12 @@ def setup(app) -> None:
     if not _ENABLED:
         return
     from opentelemetry import metrics as _m
-    from opentelemetry.exporter.prometheus import PrometheusMetricExporter
+    from opentelemetry.exporter.prometheus import PrometheusMetricReader
     from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
     from opentelemetry.sdk.metrics import MeterProvider
     from prometheus_client import make_asgi_app
 
-    provider = MeterProvider(metric_readers=[PrometheusMetricExporter()])
+    provider = MeterProvider(metric_readers=[PrometheusMetricReader()])
     _m.set_meter_provider(provider)
     meter = _m.get_meter("agent-auto-system")
 
