@@ -2,6 +2,13 @@
 
 A CrewAI-powered automation platform with **harness engineering** built in. Define jobs, trigger them via API or UI, and let AI agents execute them with multi-LLM support, automatic result validation, retry with error context, run cancellation, and full resource tracking.
 
+
+
+<p align="center"><img src ="./doc/pic/demo_1.png" ></p>
+<p align="center"><img src ="./doc/pic/demo_2.png" ></p>
+<p align="center"><img src ="./doc/pic/demo_3.png" ></p>
+<p align="center"><img src ="./doc/pic/demo_4.png" ></p>
+
 ---
 
 ## What Changed (Recent Engineering Audit)
