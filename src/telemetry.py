@@ -10,6 +10,7 @@ Business metrics emitted per run:
   automation_cost_usd_total       {provider}
 """
 from __future__ import annotations
+
 import os
 
 _ENABLED: bool = os.getenv("OTEL_ENABLED", "true").lower() != "false"

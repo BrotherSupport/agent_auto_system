@@ -8,9 +8,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
+from src import telemetry as _tel
 from src.database import get_engine, init_db, reconcile_stale_runs
 from src.routers import jobs, runs, system
-from src import telemetry as _tel
 
 logger = logging.getLogger(__name__)
 

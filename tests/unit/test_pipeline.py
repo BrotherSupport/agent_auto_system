@@ -5,7 +5,6 @@ import pytest
 
 from src.automation.pipeline import _interpolate
 
-
 # ── _interpolate ──────────────────────────────────────────────────────────────
 
 def test_interpolate_passthrough_no_templates():
