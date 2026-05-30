@@ -65,6 +65,18 @@ _CATALOG: dict = {
             "source_file": "src/automation/crews/hn_digest_crew/config/agents.yaml",
         },
         {
+            "id": "google_sheet_agent",
+            "name": "Google Sheet Agent",
+            "role": "Data Analyst",
+            "goal": "Fetch and analyze Google Sheet data to produce clear, structured insights about the content, column structure, key statistics, and notable patterns.",
+            "backstory": "Skilled data analyst specialising in spreadsheet analysis. Uses google_sheet_reader to retrieve CSV data, then surfaces meaningful patterns and statistics. Always returns clean JSON.",
+            "tools": ["google_sheet_reader"],
+            "crew": "GoogleSheetCrew",
+            "task": "sheet_read_task",
+            "job_type": "google_sheet_reader",
+            "source_file": "src/automation/crews/google_sheet_crew/config/agents.yaml",
+        },
+        {
             "id": "x_analyst",
             "name": "X Analyst",
             "role": "Social Media Intelligence Analyst",
@@ -136,6 +148,18 @@ _CATALOG: dict = {
             ],
             "used_by": ["HNDigestCrew"],
             "source_file": "src/automation/tools/hn_tool.py",
+        },
+        {
+            "id": "google_sheet_reader",
+            "name": "Google Sheet Reader",
+            "class": "GoogleSheetTool",
+            "description": "Fetch a Google Sheet as CSV and return structured data: column names, row count, all data rows (up to limit), and a 5-row preview. Accepts a standard Google Sheets URL or a direct CSV export URL — auto-converts to the export format.",
+            "inputs": [
+                {"name": "url",   "type": "str",          "description": "Google Sheets URL or CSV export URL"},
+                {"name": "limit", "type": "int (1–500)",  "description": "Maximum rows to return (default 200)"},
+            ],
+            "used_by": ["GoogleSheetCrew"],
+            "source_file": "src/automation/tools/google_sheet_tool.py",
         },
         {
             "id": "x_post_scraper",
@@ -218,6 +242,23 @@ _CATALOG: dict = {
                 }
             ],
             "source_file": "src/automation/crews/hn_digest_crew/crew.py",
+        },
+        {
+            "id": "google_sheet_crew",
+            "name": "GoogleSheetCrew",
+            "process": "sequential",
+            "agents": ["google_sheet_agent"],
+            "job_type": "google_sheet_reader",
+            "flow": "GoogleSheetFlow",
+            "tasks": [
+                {
+                    "name": "sheet_read_task",
+                    "description": "Fetch the Google Sheet with the reader tool, then analyze columns, statistics, and patterns.",
+                    "expected_output": '{"url": "...", "columns": [...], "row_count": N, "summary": "...", "insights": [...], "data": [...], "preview": [...]}',
+                    "config_file": "src/automation/crews/google_sheet_crew/config/tasks.yaml",
+                }
+            ],
+            "source_file": "src/automation/crews/google_sheet_crew/crew.py",
         },
         {
             "id": "x_scraper_crew",
@@ -358,6 +399,30 @@ _CATALOG: dict = {
                 },
             ],
             "source_file": "src/automation/flows/x_scraper_flow.py",
+        },
+        {
+            "id": "google_sheet_flow",
+            "name": "GoogleSheetFlow",
+            "job_type": "google_sheet_reader",
+            "crew": "GoogleSheetCrew",
+            "state_fields": [
+                {"name": "url",   "type": "str", "default": ""},
+                {"name": "limit", "type": "int", "default": 200},
+                {"name": "run_id","type": "int", "default": 0},
+            ],
+            "steps": [
+                {
+                    "name": "validate_payload",
+                    "decorator": "@start()",
+                    "description": "Validates that url is present. Raises ValueError if missing.",
+                },
+                {
+                    "name": "execute_crew",
+                    "decorator": "@listen(validate_payload)",
+                    "description": "Kicks off GoogleSheetCrew with the URL and limit. The agent fetches the CSV with the google_sheet_reader tool, analyzes it, and returns structured JSON.",
+                },
+            ],
+            "source_file": "src/automation/flows/google_sheet_flow.py",
         },
         {
             "id": "pipeline",

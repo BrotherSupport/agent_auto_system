@@ -126,7 +126,8 @@
     .chip-web     { background: rgba(59,130,246,0.15);  color: var(--blue); }
     .chip-hn      { background: rgba(251,146,60,0.2);   color: var(--orange); }
     .chip-x       { background: rgba(148,163,184,0.15); color: var(--text-muted); }
-    .chip-email   { background: rgba(34,197,94,0.13);  color: var(--green); }
+    .chip-email   { background: rgba(34,197,94,0.13);   color: var(--green); }
+    .chip-sheet   { background: rgba(234,179,8,0.14);   color: var(--yellow); }
     .chip-unknown { background: rgba(100,116,139,0.15); color: var(--gray); }
 
     /* ── Status badge ── */
@@ -677,6 +678,10 @@
           <div class="type-card-header"><span class="type-card-icon">✉️</span><span class="type-card-name">Email Sender</span></div>
           <div class="type-card-desc">Send email to multiple recipients</div>
         </div>
+        <div class="type-card" data-type="google_sheet_reader">
+          <div class="type-card-header"><span class="type-card-icon">📊</span><span class="type-card-name">Sheet Reader</span></div>
+          <div class="type-card-desc">Fetch &amp; analyze Google Sheets</div>
+        </div>
         <div class="type-card" data-type="pipeline">
           <div class="type-card-header"><span class="type-card-icon">🔗</span><span class="type-card-name">Pipeline</span></div>
           <div class="type-card-desc">Chain automations in sequence</div>
@@ -725,6 +730,18 @@
         </div>
         <div style="font-size:0.75rem;color:var(--text-muted);background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.2);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
           Requires <code style="font-family:ui-monospace,monospace">GMAIL_ADDRESS</code> and <code style="font-family:ui-monospace,monospace">GMAIL_APP_PASSWORD</code> in <code style="font-family:ui-monospace,monospace">.env</code>
+        </div>
+      </div>
+
+      <div id="fields-google_sheet_reader" class="hidden">
+        <div class="field">
+          <label>Google Sheet URL</label>
+          <input type="text" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/…" />
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.3rem">Paste any Google Sheets URL — the share link, edit link, or the export CSV URL</div>
+        </div>
+        <div class="field">
+          <label>Max Rows (1–500)</label>
+          <input type="number" id="sheet-limit" value="200" min="1" max="500" />
         </div>
       </div>
 

@@ -1,6 +1,6 @@
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'pipeline'];
+const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'pipeline'];
 
 const TYPE_META = {
   google_form_fill:   { chip: 'FORM',  cls: 'chip-form'     },
@@ -8,7 +8,8 @@ const TYPE_META = {
   hacker_news_digest: { chip: 'HN',    cls: 'chip-hn'       },
   x_scraper:          { chip: 'X',     cls: 'chip-x'        },
   email_sender:       { chip: 'EMAIL', cls: 'chip-email'    },
-  pipeline:           { chip: 'PIPE',  cls: 'chip-pipeline' },
+  google_sheet_reader: { chip: 'SHEET', cls: 'chip-sheet'    },
+  pipeline:            { chip: 'PIPE',  cls: 'chip-pipeline' },
 };
 
 const AUTO_CATALOG = {
@@ -62,6 +63,16 @@ const AUTO_CATALOG = {
     ],
     crew: 'EmailSenderCrew', flow: 'EmailSenderFlow',
     agent: 'Email Sender Agent', tools: ['Gmail Send'],
+  },
+  google_sheet_reader: {
+    icon: '📊', name: 'Sheet Reader',
+    desc: 'Fetch any public Google Sheet as structured data and get an AI-generated analysis: column overview, row count, key statistics, and notable patterns. Works with any sharing-enabled sheet.',
+    inputs: [
+      { name: 'url',   type: 'str',         desc: 'Google Sheets URL (any format — share link, edit link, or export URL)' },
+      { name: 'limit', type: 'int (1–500)', desc: 'Maximum rows to fetch (default 200)' },
+    ],
+    crew: 'GoogleSheetCrew', flow: 'GoogleSheetFlow',
+    agent: 'Google Sheet Agent', tools: ['Google Sheet Reader'],
   },
   pipeline: {
     icon: '🔗', name: 'Pipeline',
@@ -124,6 +135,13 @@ const FLOW_STEPS = {
     { label: 'Start',    trigger: 'Starting' },
     { label: 'Validate', trigger: 'Sending to' },
     { label: 'Send',     trigger: 'Connecting to Gmail' },
+    { label: 'Done',     trigger: 'completed successfully' },
+  ],
+  google_sheet_reader: [
+    { label: 'Start',    trigger: 'Starting' },
+    { label: 'Validate', trigger: 'Validated sheet URL' },
+    { label: 'Fetch',    trigger: 'Fetching Google Sheet' },
+    { label: 'Analyze',  trigger: 'Analyzing sheet data' },
     { label: 'Done',     trigger: 'completed successfully' },
   ],
 };
@@ -365,11 +383,12 @@ function selectJobType(type) {
 // ── Pipeline builder ──────────────────────────────────────────────────────────
 
 const PIPELINE_TYPE_OPTIONS = [
-  { value: 'google_form_fill',   label: 'Form Fill' },
-  { value: 'web_scraper',        label: 'Web Scraper' },
-  { value: 'hacker_news_digest', label: 'HN Digest' },
-  { value: 'x_scraper',         label: 'X Scraper' },
-  { value: 'email_sender',      label: 'Email Sender' },
+  { value: 'google_form_fill',    label: 'Form Fill' },
+  { value: 'web_scraper',         label: 'Web Scraper' },
+  { value: 'hacker_news_digest',  label: 'HN Digest' },
+  { value: 'x_scraper',          label: 'X Scraper' },
+  { value: 'email_sender',       label: 'Email Sender' },
+  { value: 'google_sheet_reader', label: 'Sheet Reader' },
 ];
 
 function renderPipelineStepFields(stepIdx, jobType) {
@@ -406,6 +425,10 @@ function renderPipelineStepFields(stepIdx, jobType) {
         <div class="field"><label>CC (optional)</label><input type="text" class="ps-field" data-field="cc" placeholder="cc@example.com" /></div>
         <div class="field"><label>Subject</label><input type="text" class="ps-field" data-field="subject" placeholder="Subject line" /></div>
         <div class="field"><label>Body</label><textarea class="ps-field" data-field="body" rows="3" placeholder="Email body or {{steps.${Math.max(0, stepIdx - 1)}.result.summary}}"></textarea></div>`;
+    case 'google_sheet_reader':
+      return `${tipHtml}
+        <div class="field"><label>Sheet URL</label><input type="text" class="ps-field" data-field="url" placeholder="https://docs.google.com/spreadsheets/d/…" /></div>
+        <div class="field"><label>Max Rows</label><input type="text" class="ps-field" data-field="limit" value="200" placeholder="200" /></div>`;
     default: return '';
   }
 }
@@ -526,6 +549,21 @@ runForm.addEventListener('submit', async (e) => {
     payload = { to, subject, body, ...(cc ? { cc } : {}) };
     const recipientCount = to.split(',').filter(e => e.trim()).length;
     jobName = `Email: ${subject} → ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}`;
+
+  } else if (jobType === 'google_sheet_reader') {
+    const url = document.getElementById('sheet-url').value.trim();
+    if (!url) { showToast('Sheet URL is required', 'error'); return; }
+    const limit = parseInt(document.getElementById('sheet-limit').value, 10) || 200;
+    payload = { url, limit };
+    try {
+      const urlObj = new URL(url);
+      const parts = urlObj.pathname.split('/');
+      const idIdx = parts.indexOf('d');
+      const sheetId = idIdx >= 0 ? parts[idIdx + 1] : 'sheet';
+      jobName = `Sheet: ${sheetId.slice(0, 12)}…`;
+    } catch (_) {
+      jobName = 'Google Sheet';
+    }
 
   } else if (jobType === 'pipeline') {
     const steps = collectPipelineSteps();
@@ -1699,6 +1737,9 @@ function extractResultText(r) {
   if (r.steps && Array.isArray(r.steps)) {
     const types = r.steps.map(s => (AUTO_CATALOG[s.job_type]?.name || s.job_type)).join(' → ');
     return `${r.steps.length}-step pipeline: ${types}`;
+  }
+  if (r.columns && r.row_count !== undefined) {
+    return `${r.row_count} rows · ${r.columns.length} columns${r.summary ? ' · ' + r.summary.slice(0, 80) : ''}`;
   }
   return r.answer
     || r.story_of_the_day?.title

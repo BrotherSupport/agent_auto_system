@@ -1,0 +1,23 @@
+sheet_read_task:
+  description: >
+    Use the google_sheet_reader tool to fetch the Google Sheet at "{url}"
+    (retrieve up to {limit} data rows). After fetching, analyze the returned
+    data and produce a comprehensive structured report covering:
+    - Column names and their apparent meaning
+    - Row count and data shape
+    - Key statistics or value distributions (counts, totals, ranges)
+    - Notable patterns, trends, or anomalies
+    - Any obvious data quality issues (blanks, duplicates, outliers)
+
+    If retrying, fix this issue from the previous attempt: {previous_error}
+  expected_output: >
+    A JSON object with exactly these keys:
+    - "url": the sheet export URL (string)
+    - "columns": list of column header names
+    - "row_count": number of data rows fetched (integer)
+    - "summary": a 2-3 sentence plain-English description of what this sheet contains
+    - "insights": list of 3-6 notable findings, statistics, or patterns (strings)
+    - "data": the full list of data rows as returned by the tool (list of dicts)
+    - "preview": the first 5 rows as a list of dicts
+    Return ONLY the JSON object, no markdown fences.
+  agent: google_sheet_agent
