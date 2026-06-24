@@ -58,8 +58,13 @@ Every crew has exactly one agent. For richer tasks, multi-agent patterns could i
 ### 2.6 No agent memory
 CrewAI supports short-term, long-term, and entity memory (`memory=True` on `Crew`). Long-term memory would be valuable for the HN digest crew — it could track which stories it has already covered and avoid repetition across runs.
 
-### 2.7 Gemini 3.x model names are unverified
-`provider.py` lists `gemini-3.5-flash`, `gemini-3.1-flash-lite`, `gemini-3-flash-preview`. As of 2026-05, Gemini public API only exposes 2.x models. These names should be verified against the Gemini API before advertising them in the UI. Stale/wrong model names will produce `EnvironmentError` or API 404s at runtime.
+### 2.7 Gemini model list needs periodic verification
+The Gemini model catalog in `provider.py` was verified against the live
+`ListModels` API on 2026-06-24 (`gemini-2.5-flash`/`-flash-lite`/`-pro` and
+`gemini-3.5-flash`/`gemini-3.1-flash-lite` all generate content; the deprecated
+`gemini-2.0-*` line was removed). Google deprecates older models periodically —
+revisit this list when runs start returning API 404s, and keep removed models in
+`costs.py` only for historical run pricing.
 
 ### 2.8 No fallback provider
 If the configured provider's API key is missing or the API returns an error, the run fails immediately. A provider fallback chain (try primary → try secondary) would improve resilience for production deployments.

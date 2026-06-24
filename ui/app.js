@@ -93,10 +93,9 @@ const LLM_MODELS = {
   gemini: [
     ['gemini/gemini-3.5-flash',       'Gemini 3.5 Flash'],
     ['gemini/gemini-3.1-flash-lite',   'Gemini 3.1 Flash-Lite'],
-    ['gemini/gemini-3-flash-preview',  'Gemini 3 Flash (preview)'],
+    ['gemini/gemini-2.5-pro',          'Gemini 2.5 Pro (smart)'],
     ['gemini/gemini-2.5-flash',        'Gemini 2.5 Flash'],
-    ['gemini/gemini-2.0-flash',        'Gemini 2.0 Flash'],
-    ['gemini/gemini-2.0-flash-lite',   'Gemini 2.0 Flash-Lite'],
+    ['gemini/gemini-2.5-flash-lite',   'Gemini 2.5 Flash-Lite (fast)'],
   ],
 };
 
