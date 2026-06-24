@@ -128,6 +128,7 @@
     .chip-x       { background: rgba(148,163,184,0.15); color: var(--text-muted); }
     .chip-email   { background: rgba(34,197,94,0.13);   color: var(--green); }
     .chip-sheet   { background: rgba(234,179,8,0.14);   color: var(--yellow); }
+    .chip-shopee  { background: rgba(238,77,45,0.15);   color: #ee4d2d; }
     .chip-unknown { background: rgba(100,116,139,0.15); color: var(--gray); }
 
     /* ── Status badge ── */
@@ -687,6 +688,10 @@
           <div class="type-card-header"><span class="type-card-icon">📊</span><span class="type-card-name">Sheet Reader</span></div>
           <div class="type-card-desc">Fetch &amp; analyze Google Sheets</div>
         </div>
+        <div class="type-card" data-type="shopee_seller_scraper">
+          <div class="type-card-header"><span class="type-card-icon">🛒</span><span class="type-card-name">Shopee Sellers</span></div>
+          <div class="type-card-desc">Collect sellers from top products</div>
+        </div>
         <div class="type-card" data-type="pipeline">
           <div class="type-card-header"><span class="type-card-icon">🔗</span><span class="type-card-name">Pipeline</span></div>
           <div class="type-card-desc">Chain automations in sequence</div>
@@ -747,6 +752,14 @@
         <div class="field">
           <label>Max Rows (1–500)</label>
           <input type="number" id="sheet-limit" value="200" min="1" max="500" />
+        </div>
+      </div>
+
+      <div id="fields-shopee_seller_scraper" class="hidden">
+        <div class="field"><label>Search Keyword</label><input type="text" id="shopee-keyword" placeholder="e.g. 無線耳機 / wireless earbuds" /></div>
+        <div class="field"><label>Number of Products (1–20)</label><input type="number" id="shopee-limit" value="5" min="1" max="20" /></div>
+        <div style="font-size:0.75rem;color:var(--text-muted);background:rgba(238,77,45,0.08);border:1px solid rgba(238,77,45,0.2);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
+          Requires a saved Shopee login session. Run <code style="font-family:ui-monospace,monospace">uv run python scripts/shopee_login.py</code> once, then set <code style="font-family:ui-monospace,monospace">SHOPEE_STORAGE_STATE</code> in <code style="font-family:ui-monospace,monospace">.env</code>.
         </div>
       </div>
 

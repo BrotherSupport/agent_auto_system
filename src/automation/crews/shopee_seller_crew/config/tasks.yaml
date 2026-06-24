@@ -1,0 +1,25 @@
+shopee_seller_task:
+  description: >
+    Use the shopee_seller_scraper tool to search shopee.tw for the keyword
+    "{keyword}" and collect the sellers behind the top {limit} products.
+    The tool returns a "sellers" list — each entry has "shop_name", "shop_url",
+    "location", "joined", "rating_star", "rating_count", "follower_count",
+    "item_count", "response_rate", "product_title", and "product_url".
+
+    IMPORTANT: If the "sellers" list in the tool result is non-empty, use it as
+    your data even if some numeric fields are 0 or some text fields are empty.
+    Do NOT claim you cannot retrieve sellers if the tool returned at least one.
+    If the tool result has an "error" and an empty "sellers" list, report that
+    error in the "summary" and return an empty "sellers" list.
+
+    From the fetched sellers: write a one-paragraph summary describing the kinds
+    of shops selling "{keyword}" (locations, ratings, how established they are).
+    If retrying, fix this issue from the previous attempt: {previous_error}
+  expected_output: >
+    A JSON object with exactly these keys:
+    - "keyword": the search keyword (string)
+    - "seller_count": number of sellers in the "sellers" list (integer, must match)
+    - "sellers": the complete list of seller objects from the tool result
+    - "summary": one paragraph summarizing the sellers found
+    Return ONLY the JSON object, no markdown fences.
+  agent: shopee_seller_analyst
