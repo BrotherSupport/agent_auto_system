@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import UTC, datetime
 
@@ -32,6 +33,32 @@ def _update_run(run_id: int, status: str, result: dict | None = None, **metrics)
         s.commit()
 
 
+_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*\n?(.*?)\n?\s*```\s*$", re.DOTALL | re.IGNORECASE)
+
+
+def _parse_result(result_str: str) -> dict:
+    """Parse a flow's raw string output into a dict.
+
+    LLMs (notably Gemini) often wrap JSON in markdown code fences (```json ... ```),
+    which makes a naive json.loads fail. Strip the fence and retry before falling
+    back to wrapping the raw text in a {"message": ...} envelope.
+    """
+    try:
+        return json.loads(result_str)
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    if isinstance(result_str, str):
+        m = _FENCE_RE.match(result_str)
+        if m:
+            try:
+                return json.loads(m.group(1))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    return {"message": result_str}
+
+
 _FLOW_MAP = {
     "google_form_fill":    ("src.automation.flows.form_fill_flow",      "FormFillFlow",      "Launching form fill agent..."),
     "web_scraper":         ("src.automation.flows.web_scraper_flow",     "WebScraperFlow",    "Launching web scraper agent..."),
@@ -61,10 +88,7 @@ async def _run_flow(run_id: int, job_type: str, payload: dict, effective_provide
     raw = await asyncio.to_thread(flow.kickoff, inputs=inputs)
 
     result_str = raw.raw if hasattr(raw, "raw") else str(raw)
-    try:
-        result = json.loads(result_str)
-    except (json.JSONDecodeError, TypeError):
-        result = {"message": result_str}
+    result = _parse_result(result_str)
 
     usage = getattr(flow.state, "usage", {})
     return result, usage

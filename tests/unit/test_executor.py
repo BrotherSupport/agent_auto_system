@@ -207,3 +207,25 @@ async def test_execute_run_pipeline_unknown_type_falls_through(test_engine, seed
 
     run = _get_run(test_engine, seeded_run)
     assert run.status == "failed"
+
+
+def test_parse_result_plain_json():
+    from src.automation.executor import _parse_result
+    assert _parse_result('{"title": "x", "summary": "y"}') == {"title": "x", "summary": "y"}
+
+
+def test_parse_result_strips_json_fence():
+    from src.automation.executor import _parse_result
+    fenced = '```json\n{"title": "x", "summary": "y"}\n```'
+    assert _parse_result(fenced) == {"title": "x", "summary": "y"}
+
+
+def test_parse_result_strips_bare_fence():
+    from src.automation.executor import _parse_result
+    fenced = '```\n{"title": "x"}\n```'
+    assert _parse_result(fenced) == {"title": "x"}
+
+
+def test_parse_result_non_json_falls_back_to_message():
+    from src.automation.executor import _parse_result
+    assert _parse_result("hello world") == {"message": "hello world"}
