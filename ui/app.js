@@ -93,21 +93,27 @@ const LLM_MODELS = {
   gemini: [
     ['gemini/gemini-3.5-flash',       'Gemini 3.5 Flash'],
     ['gemini/gemini-3.1-flash-lite',   'Gemini 3.1 Flash-Lite'],
-    ['gemini/gemini-3-flash-preview',  'Gemini 3 Flash (preview)'],
+    ['gemini/gemini-2.5-pro',          'Gemini 2.5 Pro (smart)'],
     ['gemini/gemini-2.5-flash',        'Gemini 2.5 Flash'],
-    ['gemini/gemini-2.0-flash',        'Gemini 2.0 Flash'],
-    ['gemini/gemini-2.0-flash-lite',   'Gemini 2.0 Flash-Lite'],
+    ['gemini/gemini-2.5-flash-lite',   'Gemini 2.5 Flash-Lite (fast)'],
   ],
 };
 
 // ── Flow step definitions (label + log trigger substring) ─────────────────────
 
+// The Verify (result validation) and Evaluate (LLM-as-judge score) nodes run
+// centrally in the executor after every job, so they're appended to each flow.
+const _QA_STEPS = [
+  { label: 'Verify',   trigger: 'Validating result' },
+  { label: 'Evaluate', trigger: 'Evaluation complete' },
+];
 const FLOW_STEPS = {
   google_form_fill: [
     { label: 'Start',        trigger: 'Starting' },
     { label: 'Validate',     trigger: 'Payload validated' },
     { label: 'Inspect Form', trigger: 'Inspecting Google Form' },
     { label: 'Submit',       trigger: 'Form submission attempted' },
+    ..._QA_STEPS,
     { label: 'Done',         trigger: 'completed successfully' },
   ],
   web_scraper: [
@@ -115,6 +121,7 @@ const FLOW_STEPS = {
     { label: 'Validate', trigger: 'Payload validated' },
     { label: 'Scrape',   trigger: 'scraper agent reading' },
     { label: 'Analyze',  trigger: 'generated summary' },
+    ..._QA_STEPS,
     { label: 'Done',     trigger: 'completed successfully' },
   ],
   hacker_news_digest: [
@@ -122,6 +129,7 @@ const FLOW_STEPS = {
     { label: 'Validate',  trigger: 'Fetching top' },
     { label: 'Fetch',     trigger: 'analyst agent reading' },
     { label: 'Digest',    trigger: 'Digest generated' },
+    ..._QA_STEPS,
     { label: 'Done',      trigger: 'completed successfully' },
   ],
   x_scraper: [
@@ -129,12 +137,14 @@ const FLOW_STEPS = {
     { label: 'Validate',  trigger: 'Validated payload' },
     { label: 'Fetch',     trigger: 'Fetching posts' },
     { label: 'Analyze',   trigger: 'Analysis complete' },
+    ..._QA_STEPS,
     { label: 'Done',      trigger: 'completed successfully' },
   ],
   email_sender: [
     { label: 'Start',    trigger: 'Starting' },
     { label: 'Validate', trigger: 'Sending to' },
     { label: 'Send',     trigger: 'Connecting to Gmail' },
+    ..._QA_STEPS,
     { label: 'Done',     trigger: 'completed successfully' },
   ],
   google_sheet_reader: [
@@ -142,6 +152,7 @@ const FLOW_STEPS = {
     { label: 'Validate', trigger: 'Validated sheet URL' },
     { label: 'Fetch',    trigger: 'Fetching Google Sheet' },
     { label: 'Analyze',  trigger: 'Analyzing sheet data' },
+    ..._QA_STEPS,
     { label: 'Done',     trigger: 'completed successfully' },
   ],
 };
@@ -940,6 +951,12 @@ function renderHistory(runs, hasMore = false) {
       : '';
     const costBadge = costStr ? `<span class="cost-badge">${costStr}</span>` : '';
     const retryBadge = run.retry_count > 0 ? `<span class="retry-badge">${run.retry_count}↺</span>` : '';
+    const hasEval = run.eval_score !== null && run.eval_score !== undefined;
+    const evalCls = !hasEval ? '' : run.eval_score >= 80 ? 'eval-high' : run.eval_score >= 50 ? 'eval-mid' : 'eval-low';
+    const evalBadge = hasEval
+      ? `<span class="eval-badge ${evalCls}" title="Quality score ${run.eval_score}/100 · confidence ${run.eval_confidence ?? '—'} · ${run.eval_method || ''}${run.eval_notes ? ' — ' + escHtml(run.eval_notes) : ''}">★ ${Math.round(run.eval_score)}</span>`
+      : '';
+    const hasUsage = totalTok > 0 || hasEval;
 
     let logJson = null;
     if (run.log) { try { logJson = JSON.parse(run.log); } catch (_) {} }
@@ -951,7 +968,7 @@ function renderHistory(runs, hasMore = false) {
     const logTab = logJson
       ? `<button class="detail-tab" data-action="tab" data-tab="log" data-run-id="${run.id}">Log (${logJson.length})</button>`
       : '';
-    const usageTab = totalTok > 0
+    const usageTab = hasUsage
       ? `<button class="detail-tab" data-action="tab" data-tab="usage" data-run-id="${run.id}">Usage</button>`
       : '';
     const logPane = logJson
@@ -961,7 +978,13 @@ function renderHistory(runs, hasMore = false) {
            ).join('')}</ul>
          </div>`
       : '';
-    const usagePane = totalTok > 0
+    const evalRows = hasEval
+      ? `<li><span class="log-ts">eval score</span><span class="${evalCls}">${run.eval_score}/100</span></li>
+         <li><span class="log-ts">eval confidence</span>${run.eval_confidence ?? '—'}</li>
+         <li><span class="log-ts">eval method</span>${escHtml(run.eval_method || '—')}</li>
+         <li style="grid-column:1/-1"><span class="log-ts">eval notes</span>${escHtml(run.eval_notes || '—')}</li>`
+      : '';
+    const usagePane = hasUsage
       ? `<div class="detail-pane" id="pane-usage-${run.id}" data-pane="usage">
            <ul class="log-list" style="column-gap:2rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
              <li><span class="log-ts">provider</span>${escHtml(run.llm_provider || '—')}</li>
@@ -971,6 +994,7 @@ function renderHistory(runs, hasMore = false) {
              <li><span class="log-ts">total tokens</span>${totalTok.toLocaleString()}</li>
              <li><span class="log-ts">cost</span>${costStr || '$0.000000'}</li>
              <li><span class="log-ts">retries</span>${run.retry_count || 0}</li>
+             ${evalRows}
            </ul>
          </div>`
       : '';
@@ -1000,7 +1024,7 @@ function renderHistory(runs, hasMore = false) {
             <span class="job-name-text">${escHtml(run.job_name)}</span>
             <div style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">
               <span class="type-chip ${meta.cls}">${meta.chip}</span>
-              ${llmBadge}${retryBadge}
+              ${llmBadge}${retryBadge}${evalBadge}
             </div>
           </div>
         </td>
@@ -1448,10 +1472,14 @@ function renderPerformancePage(s) {
       const costStr = m.cost_usd > 0 ? (m.cost_usd < 0.0001 ? '<$0.0001' : '$' + m.cost_usd.toFixed(4)) : '$0';
       const modelShort = m.model.split('/').pop();
       const durStr = m.avg_duration > 0 ? m.avg_duration + 's' : '—';
+      const score = m.avg_eval_score;
+      const scoreCls = score == null ? 'srate-mid' : score >= 80 ? 'srate-high' : score >= 50 ? 'srate-mid' : 'srate-low';
+      const scoreStr = score == null ? '—' : Math.round(score);
       return `<tr>
         <td><span class="model-name-mono">${escHtml(modelShort)}</span></td>
         <td style="text-align:right">${m.runs}</td>
         <td><span class="srate-pill ${srCls}">${sr}%</span></td>
+        <td><span class="srate-pill ${scoreCls}">${scoreStr}</span></td>
         <td>
           <div class="tok-bar-wrap" style="width:${barW}px" title="${m.tokens_in.toLocaleString()} in · ${m.tokens_out.toLocaleString()} out">
             <div class="tok-bar-in"  style="width:${inW}%"></div>
@@ -1486,7 +1514,7 @@ function renderPerformancePage(s) {
       </div>
       ${modelRows ? `<table class="llm-model-table">
         <thead><tr>
-          <th>Model</th><th style="text-align:right">Runs</th><th>Success</th>
+          <th>Model</th><th style="text-align:right">Runs</th><th>Success</th><th>Score</th>
           <th>Tokens <span style="opacity:0.5;font-weight:400">■ in ■ out</span></th>
           <th>Cost</th><th>Avg Dur</th>
         </tr></thead>
@@ -1516,6 +1544,11 @@ function renderPerformancePage(s) {
         <div class="stat-label">Avg Duration</div>
         <div class="stat-value">${s.avg_duration_secs > 0 ? s.avg_duration_secs + 's' : '—'}</div>
         <div class="stat-sub">completed runs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Avg Quality</div>
+        <div class="stat-value ${s.avg_eval_score == null ? '' : s.avg_eval_score >= 80 ? 'green' : s.avg_eval_score >= 50 ? '' : 'red'}">${s.avg_eval_score == null ? '—' : s.avg_eval_score + '/100'}</div>
+        <div class="stat-sub">${s.avg_eval_confidence == null ? 'eval score' : 'confidence ' + s.avg_eval_confidence}</div>
       </div>
       <div class="stat-card">
         <div class="stat-label">Total Tokens</div>

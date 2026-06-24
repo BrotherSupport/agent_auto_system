@@ -88,6 +88,10 @@ def list_runs(
             "tokens_out": run.tokens_out or 0,
             "cost_usd": run.cost_usd or 0.0,
             "retry_count": run.retry_count or 0,
+            "eval_score": run.eval_score,
+            "eval_confidence": run.eval_confidence,
+            "eval_notes": run.eval_notes,
+            "eval_method": run.eval_method,
         })
     return result
 
@@ -149,6 +153,11 @@ async def stream_run(run_id: int):
                             event["result"] = json.loads(run.result)
                         except json.JSONDecodeError:
                             event["result"] = run.result
+                    if run.eval_score is not None:
+                        event["eval_score"] = run.eval_score
+                        event["eval_confidence"] = run.eval_confidence
+                        event["eval_notes"] = run.eval_notes
+                        event["eval_method"] = run.eval_method
                     yield f"data: {json.dumps(event)}\n\n"
 
                 if run.status in ("success", "failed"):
@@ -211,7 +220,9 @@ def get_stats():
                 SUM(COALESCE(tokens_out, 0)),
                 SUM(COALESCE(cost_usd,   0.0)),
                 AVG(CASE WHEN finished_at IS NOT NULL AND status IN ('success','failed')
-                    THEN (julianday(finished_at) - julianday(started_at)) * 86400 END)
+                    THEN (julianday(finished_at) - julianday(started_at)) * 86400 END),
+                AVG(eval_score),
+                AVG(eval_confidence)
             FROM run
         """)).fetchone()
 
@@ -220,6 +231,8 @@ def get_stats():
         total_tokens_out = row[4] or 0
         total_cost       = row[5] or 0.0
         avg_dur          = round(row[6], 1) if row[6] is not None else 0
+        avg_eval_score   = round(row[7], 1) if row[7] is not None else None
+        avg_eval_conf    = round(row[8], 2) if row[8] is not None else None
 
         # By type: counts + weighted average duration per job_type
         type_rows = conn.execute(text("""
@@ -291,7 +304,8 @@ def get_stats():
                 SUM(COALESCE(tokens_out, 0)) AS tot,
                 SUM(COALESCE(cost_usd, 0.0)) AS cost,
                 AVG(CASE WHEN finished_at IS NOT NULL AND status IN ('success','failed')
-                    THEN (julianday(finished_at) - julianday(started_at)) * 86400 END) AS avg_dur
+                    THEN (julianday(finished_at) - julianday(started_at)) * 86400 END) AS avg_dur,
+                AVG(eval_score) AS avg_score
             FROM run
             WHERE llm_model IS NOT NULL
             GROUP BY provider, model
@@ -299,7 +313,7 @@ def get_stats():
         """)).fetchall()
 
         by_model: dict = {}
-        for prov, model, runs, n_success, ti, tot, cost, avg_dur in model_detail_rows:
+        for prov, model, runs, n_success, ti, tot, cost, avg_dur, avg_score in model_detail_rows:
             by_model.setdefault(prov, []).append({
                 "model": model,
                 "runs": runs,
@@ -308,6 +322,7 @@ def get_stats():
                 "tokens_out": tot or 0,
                 "cost_usd": round(cost or 0.0, 6),
                 "avg_duration": round(avg_dur, 1) if avg_dur else 0,
+                "avg_eval_score": round(avg_score, 1) if avg_score is not None else None,
             })
 
         # 7-day trend (only days with runs; fill gaps below)
@@ -342,6 +357,8 @@ def get_stats():
         "active": n_active,
         "success_rate": round(n_success / n_completed * 100, 1) if n_completed else 0,
         "avg_duration_secs": avg_dur,
+        "avg_eval_score": avg_eval_score,
+        "avg_eval_confidence": avg_eval_conf,
         "by_type": by_type,
         "trend": trend,
         "total_tokens_in": total_tokens_in,
@@ -362,7 +379,9 @@ def _empty_stats():
     ]
     return {
         "total_runs": 0, "success": 0, "failed": 0, "active": 0,
-        "success_rate": 0, "avg_duration_secs": 0, "by_type": {}, "trend": trend,
+        "success_rate": 0, "avg_duration_secs": 0,
+        "avg_eval_score": None, "avg_eval_confidence": None,
+        "by_type": {}, "trend": trend,
         "total_tokens_in": 0, "total_tokens_out": 0, "total_tokens": 0,
         "total_cost_usd": 0.0, "by_provider": {}, "by_model": {},
     }

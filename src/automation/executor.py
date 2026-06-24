@@ -1,12 +1,14 @@
 import asyncio
 import json
 import logging
+import re
 import time
 from datetime import UTC, datetime
 
 from sqlmodel import Session
 
 from src.automation.harness.costs import estimate_cost
+from src.automation.harness.evaluator import evaluate
 from src.automation.harness.provider import normalize as normalize_llm
 from src.automation.harness.validator import validate
 from src.automation.pipeline import execute_pipeline
@@ -30,6 +32,32 @@ def _update_run(run_id: int, status: str, result: dict | None = None, **metrics)
             setattr(run, k, v)
         s.add(run)
         s.commit()
+
+
+_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*\n?(.*?)\n?\s*```\s*$", re.DOTALL | re.IGNORECASE)
+
+
+def _parse_result(result_str: str) -> dict:
+    """Parse a flow's raw string output into a dict.
+
+    LLMs (notably Gemini) often wrap JSON in markdown code fences (```json ... ```),
+    which makes a naive json.loads fail. Strip the fence and retry before falling
+    back to wrapping the raw text in a {"message": ...} envelope.
+    """
+    try:
+        return json.loads(result_str)
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    if isinstance(result_str, str):
+        m = _FENCE_RE.match(result_str)
+        if m:
+            try:
+                return json.loads(m.group(1))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    return {"message": result_str}
 
 
 _FLOW_MAP = {
@@ -61,10 +89,7 @@ async def _run_flow(run_id: int, job_type: str, payload: dict, effective_provide
     raw = await asyncio.to_thread(flow.kickoff, inputs=inputs)
 
     result_str = raw.raw if hasattr(raw, "raw") else str(raw)
-    try:
-        result = json.loads(result_str)
-    except (json.JSONDecodeError, TypeError):
-        result = {"message": result_str}
+    result = _parse_result(result_str)
 
     usage = getattr(flow.state, "usage", {})
     return result, usage
@@ -105,15 +130,23 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
             tokens_in  += usage.get("prompt_tokens", 0)
             tokens_out += usage.get("completion_tokens", 0)
 
+            append_log(run_id, "Validating result...")
             vr = validate(job_type, result)
             if not vr.valid and attempt < max_retries:
                 append_log(run_id, f"Validation failed ({vr.reason}), retrying...")
                 continue
+            append_log(run_id, f"Validation {'passed' if vr.valid else 'failed'}: {vr.reason or 'ok'}")
+
+            append_log(run_id, "Evaluating result quality...")
+            ev = await asyncio.to_thread(evaluate, job_type, result, effective_provider, effective_model)
+            append_log(run_id, f"Evaluation complete — score {ev.score}/100, confidence {ev.confidence} ({ev.method})")
 
             cost    = estimate_cost(effective_model, tokens_in, tokens_out)
             metrics = dict(llm_provider=effective_provider, llm_model=effective_model,
                            tokens_in=tokens_in, tokens_out=tokens_out,
-                           cost_usd=cost, retry_count=attempt)
+                           cost_usd=cost, retry_count=attempt,
+                           eval_score=ev.score, eval_confidence=ev.confidence,
+                           eval_notes=ev.notes, eval_method=ev.method)
 
             if not vr.valid:
                 append_log(run_id, f"Automation reported failure: {result.get('error', vr.reason)}")
@@ -135,9 +168,12 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
                 logger.warning("run_id=%d attempt=%d raised %s, retrying", run_id, attempt, exc)
                 continue
             cost    = estimate_cost(effective_model, tokens_in, tokens_out)
+            ev      = evaluate(job_type, {"error": str(exc)})  # heuristic; no LLM call for errors
             metrics = dict(llm_provider=effective_provider, llm_model=effective_model,
                            tokens_in=tokens_in, tokens_out=tokens_out,
-                           cost_usd=cost, retry_count=attempt)
+                           cost_usd=cost, retry_count=attempt,
+                           eval_score=ev.score, eval_confidence=ev.confidence,
+                           eval_notes=ev.notes, eval_method=ev.method)
             logger.error("run_id=%d failed after %d attempt(s): %s", run_id, attempt + 1, exc)
             append_log(run_id, f"Error: {str(exc)[:200]}")
             _record_run(job_type=job_type, status="failed", duration_secs=time.monotonic() - _t0,

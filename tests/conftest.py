@@ -13,6 +13,20 @@ from sqlmodel import Session, SQLModel, create_engine
 from src.models import Job  # ensure both tables are in metadata
 
 
+@pytest.fixture(autouse=True)
+def _stub_evaluate(mocker):
+    """Keep the executor's evaluate node hermetic by default (no real LLM judge call).
+
+    Tests that exercise the evaluator itself patch src.automation.harness.evaluator
+    internals directly instead.
+    """
+    from src.automation.harness.evaluator import EvalResult
+    mocker.patch(
+        "src.automation.executor.evaluate",
+        return_value=EvalResult(score=90.0, confidence=0.9, notes="stub", method="heuristic"),
+    )
+
+
 @pytest.fixture(scope="function")
 def test_engine():
     # StaticPool: all connections share the same in-memory SQLite database.

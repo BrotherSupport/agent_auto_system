@@ -9,11 +9,13 @@ _PRICING: dict[str, tuple[float, float]] = {
     # Gemini
     "gemini-3.5-flash":          (0.075,  0.30),
     "gemini-3.1-flash-lite":     (0.04,   0.15),
-    "gemini-3-flash-preview":    (0.075,  0.30),
+    "gemini-2.5-pro":            (1.25,  10.00),
     "gemini-2.5-flash":          (0.075,  0.30),
+    "gemini-2.5-flash-lite":     (0.04,   0.15),
+    # Legacy (kept for existing run history)
+    "gemini-3-flash-preview":    (0.075,  0.30),
     "gemini-2.0-flash":          (0.10,   0.40),
     "gemini-2.0-flash-lite":     (0.04,   0.15),
-    # Legacy (kept for existing run history)
     "gemini-1.5-flash":          (0.075,  0.30),
     "gemini-1.5-pro":            (1.25,   5.00),
 }

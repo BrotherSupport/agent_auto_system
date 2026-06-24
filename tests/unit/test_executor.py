@@ -207,3 +207,47 @@ async def test_execute_run_pipeline_unknown_type_falls_through(test_engine, seed
 
     run = _get_run(test_engine, seeded_run)
     assert run.status == "failed"
+
+
+def test_parse_result_plain_json():
+    from src.automation.executor import _parse_result
+    assert _parse_result('{"title": "x", "summary": "y"}') == {"title": "x", "summary": "y"}
+
+
+def test_parse_result_strips_json_fence():
+    from src.automation.executor import _parse_result
+    fenced = '```json\n{"title": "x", "summary": "y"}\n```'
+    assert _parse_result(fenced) == {"title": "x", "summary": "y"}
+
+
+def test_parse_result_strips_bare_fence():
+    from src.automation.executor import _parse_result
+    fenced = '```\n{"title": "x"}\n```'
+    assert _parse_result(fenced) == {"title": "x"}
+
+
+def test_parse_result_non_json_falls_back_to_message():
+    from src.automation.executor import _parse_result
+    assert _parse_result("hello world") == {"message": "hello world"}
+
+
+async def test_execute_run_persists_eval_fields(test_engine, seeded_run, mocker):
+    mocker.patch("src.automation.executor.get_engine", return_value=test_engine)
+    mocker.patch("src.automation.progress.append_log")
+    mocker.patch(
+        "src.automation.executor._run_flow",
+        new=AsyncMock(return_value=(
+            {"digest": "Top HN stories today", "stories": [1, 2]},
+            {"prompt_tokens": 10, "completion_tokens": 5},
+        )),
+    )
+
+    from src.automation.executor import execute_run
+    await execute_run(seeded_run, "hacker_news_digest", {"limit": 3})
+
+    run = _get_run(test_engine, seeded_run)
+    assert run.status == "success"
+    # eval node runs after validation and is stubbed by the autouse fixture
+    assert run.eval_score == 90.0
+    assert run.eval_confidence == 0.9
+    assert run.eval_method == "heuristic"

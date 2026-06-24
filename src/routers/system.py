@@ -203,7 +203,7 @@ _CATALOG: dict = {
                 {
                     "name": "scrape_task",
                     "description": "Fetch the URL and extract a comprehensive structured summary of all page content.",
-                    "expected_output": '{"url": "...", "title": "...", "summary": "...", "key_points": [...], "headings": [...], "word_count": N, "links": [...]}',
+                    "expected_output": '{"url": "...", "title": "...", "summary": "...", "key_points": [...], "headings": [...], "word_count": N, "links": [...], "content": "..."}',
                     "config_file": "src/automation/crews/web_scraper_crew/config/tasks.yaml",
                 }
             ],

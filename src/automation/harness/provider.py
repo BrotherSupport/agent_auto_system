@@ -18,10 +18,9 @@ _CATALOG: dict = {
         "models": [
             "gemini/gemini-3.5-flash",
             "gemini/gemini-3.1-flash-lite",
-            "gemini/gemini-3-flash-preview",
+            "gemini/gemini-2.5-pro",
             "gemini/gemini-2.5-flash",
-            "gemini/gemini-2.0-flash",
-            "gemini/gemini-2.0-flash-lite",
+            "gemini/gemini-2.5-flash-lite",
         ],
         "default": "gemini/gemini-2.5-flash",
         "env": "GEMINI_API_KEY",

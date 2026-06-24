@@ -111,7 +111,7 @@ The executor calls `normalize()` for logging/metrics; each flow calls `resolve()
 |---|---|---|---|
 | `openai` | `gpt-4o-mini` | `gpt-4o` | `OPENAI_API_KEY` |
 | `anthropic` | `claude-haiku-4-5-20251001` | `claude-sonnet-4-6` | `ANTHROPIC_API_KEY` |
-| `gemini` | `gemini/gemini-2.0-flash-lite` | `gemini/gemini-2.5-flash` | `GEMINI_API_KEY` |
+| `gemini` | `gemini/gemini-2.5-flash-lite` | `gemini/gemini-2.5-pro` | `GEMINI_API_KEY` |
 
 ### 2 — Automatic Result Validation + Retry with Error Context
 
