@@ -166,9 +166,7 @@ def _scrape(keyword: str, limit: int, state_path: str) -> dict:
                 if shopid in seen:
                     continue
                 seen.add(shopid)
-                seller = _shop_detail_api(page, shopid, errors)
-                if seller is None:
-                    seller = {"shop_name": "", "shop_url": f"{_BASE}/shop/{shopid}"}
+                seller = _shop_detail_api(page, shopid, errors) or _blank_seller(shopid)
                 seller["product_title"] = prod.get("name", "")
                 seller["product_url"] = prod.get("url", "")
                 sellers.append(seller)
@@ -220,9 +218,12 @@ def _search_api(page, keyword: str, limit: int, errors: list[str]) -> list[dict]
         f"&scenario=PAGE_GLOBAL_SEARCH&version=2"
     )
     data = _api_get(page, path, errors)
-    if not data:
+    if not isinstance(data, dict):
         return []
-    items = data.get("items") or []
+    items = data.get("items")
+    if not isinstance(items, list):
+        errors.append("api search: no items in payload")
+        return []
     products: list[dict] = []
     for entry in items:
         basic = entry.get("item_basic") or entry.get("basic") or entry
@@ -242,12 +243,13 @@ def _search_api(page, keyword: str, limit: int, errors: list[str]) -> list[dict]
 
 def _shop_detail_api(page, shopid: int, errors: list[str]) -> dict | None:
     data = _api_get(page, f"/api/v4/shop/get_shop_detail?shopid={shopid}", errors)
-    if not data:
+    if not isinstance(data, dict):
         return None
-    d = data.get("data") or {}
-    if not d:
+    d = data.get("data")
+    if not isinstance(d, dict):
         return None
-    username = (d.get("account") or {}).get("username", "")
+    account = d.get("account")
+    username = account.get("username", "") if isinstance(account, dict) else ""
     return {
         "shop_name": d.get("name", "") or username,
         "shop_url": f"{_BASE}/{username}" if username else f"{_BASE}/shop/{shopid}",
@@ -258,6 +260,22 @@ def _shop_detail_api(page, shopid: int, errors: list[str]) -> dict | None:
         "follower_count": d.get("follower_count", 0),
         "item_count": d.get("item_count", 0),
         "response_rate": d.get("response_rate", 0),
+    }
+
+
+def _blank_seller(shopid: int) -> dict:
+    """Full-schema placeholder used when shop detail can't be fetched, so every
+    seller object has a consistent set of keys for the agent and downstream code."""
+    return {
+        "shop_name": "",
+        "shop_url": f"{_BASE}/shop/{shopid}",
+        "location": "",
+        "joined": "",
+        "rating_star": 0.0,
+        "rating_count": 0,
+        "follower_count": 0,
+        "item_count": 0,
+        "response_rate": 0,
     }
 
 
@@ -287,21 +305,24 @@ def _search_dom(page, keyword: str, limit: int, errors: list[str]) -> list[dict]
     products: list[dict] = []
     seen: set[tuple[int, int]] = set()
     for a in page.locator('a[href*="-i."]').all():
-        href = a.get_attribute("href") or ""
-        m = _IID_RE.search(href)
-        if not m:
+        try:
+            href = a.get_attribute("href") or ""
+            m = _IID_RE.search(href)
+            if not m:
+                continue
+            shopid, itemid = int(m.group(1)), int(m.group(2))
+            if (shopid, itemid) in seen:
+                continue
+            seen.add((shopid, itemid))
+            name = (a.get_attribute("aria-label") or a.inner_text() or "").strip()[:200]
+            products.append({
+                "shopid": shopid,
+                "itemid": itemid,
+                "name": name,
+                "url": urllib.parse.urljoin(_BASE, href),
+            })
+        except Exception:  # noqa: BLE001 — skip elements that detach mid-scrape
             continue
-        shopid, itemid = int(m.group(1)), int(m.group(2))
-        if (shopid, itemid) in seen:
-            continue
-        seen.add((shopid, itemid))
-        name = (a.get_attribute("aria-label") or a.inner_text() or "").strip()[:200]
-        products.append({
-            "shopid": shopid,
-            "itemid": itemid,
-            "name": name,
-            "url": urllib.parse.urljoin(_BASE, href),
-        })
         if len(products) >= limit:
             break
     if not products:

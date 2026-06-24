@@ -58,11 +58,18 @@ def main() -> int:
         print("=" * 70)
         input("\nPress Enter once you are logged in... ")
 
-        ctx.storage_state(path=str(out))
-        browser.close()
-
-    print(f"\n✓ Session saved to {out.resolve()}")
-    print(f"  Make sure .env has: SHOPEE_STORAGE_STATE={STATE_PATH}")
+        try:
+            ctx.storage_state(path=str(out))
+            print(f"\n✓ Session saved to {out.resolve()}")
+            print(f"  Make sure .env has: SHOPEE_STORAGE_STATE={STATE_PATH}")
+        except Exception as exc:  # noqa: BLE001 — browser may have been closed manually
+            print(f"\n✗ Could not save session (was the browser closed?): {exc}")
+            return 1
+        finally:
+            try:
+                browser.close()
+            except Exception:
+                pass
     return 0
 
 
