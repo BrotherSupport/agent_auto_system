@@ -67,6 +67,7 @@ _FLOW_MAP = {
     "hacker_news_digest":  ("src.automation.flows.hn_digest_flow",       "HNDigestFlow",      "Contacting Hacker News API..."),
     "x_scraper":           ("src.automation.flows.x_scraper_flow",       "XScraperFlow",      "Connecting to X profile scraper..."),
     "google_sheet_reader": ("src.automation.flows.google_sheet_flow",    "GoogleSheetFlow",   "Connecting to Google Sheets..."),
+    "shopee_seller_scraper": ("src.automation.flows.shopee_seller_flow",  "ShopeeSellerFlow",  "Loading Shopee session..."),
 }
 
 

@@ -1,6 +1,6 @@
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'pipeline'];
+const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'shopee_seller_scraper', 'pipeline'];
 
 const TYPE_META = {
   google_form_fill:   { chip: 'FORM',  cls: 'chip-form'     },
@@ -9,6 +9,7 @@ const TYPE_META = {
   x_scraper:          { chip: 'X',     cls: 'chip-x'        },
   email_sender:       { chip: 'EMAIL', cls: 'chip-email'    },
   google_sheet_reader: { chip: 'SHEET', cls: 'chip-sheet'    },
+  shopee_seller_scraper: { chip: 'SHOPEE', cls: 'chip-shopee' },
   pipeline:            { chip: 'PIPE',  cls: 'chip-pipeline' },
 };
 
@@ -73,6 +74,16 @@ const AUTO_CATALOG = {
     ],
     crew: 'GoogleSheetCrew', flow: 'GoogleSheetFlow',
     agent: 'Google Sheet Agent', tools: ['Google Sheet Reader'],
+  },
+  shopee_seller_scraper: {
+    icon: '🛒', name: 'Shopee Sellers',
+    desc: 'Search shopee.tw for a keyword and collect the sellers behind the top N products — shop name, URL, location, join date, rating, followers, and item count. Reuses a saved login session.',
+    inputs: [
+      { name: 'keyword', type: 'str', desc: 'Product search keyword (e.g. 無線耳機)' },
+      { name: 'limit',   type: 'int (1–20)', desc: 'Number of top products / sellers to collect' },
+    ],
+    crew: 'ShopeeSellerCrew', flow: 'ShopeeSellerFlow',
+    agent: 'Shopee Seller Analyst', tools: ['Shopee Seller Scraper'],
   },
   pipeline: {
     icon: '🔗', name: 'Pipeline',
@@ -152,6 +163,14 @@ const FLOW_STEPS = {
     { label: 'Validate', trigger: 'Validated sheet URL' },
     { label: 'Fetch',    trigger: 'Fetching Google Sheet' },
     { label: 'Analyze',  trigger: 'Analyzing sheet data' },
+    ..._QA_STEPS,
+    { label: 'Done',     trigger: 'completed successfully' },
+  ],
+  shopee_seller_scraper: [
+    { label: 'Start',    trigger: 'Starting' },
+    { label: 'Validate', trigger: 'Validated payload for keyword' },
+    { label: 'Search',   trigger: 'Loading Shopee session' },
+    { label: 'Collect',  trigger: 'Seller collection complete' },
     ..._QA_STEPS,
     { label: 'Done',     trigger: 'completed successfully' },
   ],
@@ -400,6 +419,7 @@ const PIPELINE_TYPE_OPTIONS = [
   { value: 'x_scraper',          label: 'X Scraper' },
   { value: 'email_sender',       label: 'Email Sender' },
   { value: 'google_sheet_reader', label: 'Sheet Reader' },
+  { value: 'shopee_seller_scraper', label: 'Shopee Sellers' },
 ];
 
 function renderPipelineStepFields(stepIdx, jobType) {
@@ -440,6 +460,10 @@ function renderPipelineStepFields(stepIdx, jobType) {
       return `${tipHtml}
         <div class="field"><label>Sheet URL</label><input type="text" class="ps-field" data-field="url" placeholder="https://docs.google.com/spreadsheets/d/…" /></div>
         <div class="field"><label>Max Rows</label><input type="text" class="ps-field" data-field="limit" value="200" placeholder="200" /></div>`;
+    case 'shopee_seller_scraper':
+      return `${tipHtml}
+        <div class="field"><label>Search Keyword</label><input type="text" class="ps-field" data-field="keyword" placeholder="e.g. 無線耳機" /></div>
+        <div class="field"><label>Products (1–20)</label><input type="text" class="ps-field" data-field="limit" value="5" placeholder="5" /></div>`;
     default: return '';
   }
 }
@@ -576,6 +600,13 @@ runForm.addEventListener('submit', async (e) => {
       jobName = 'Google Sheet';
     }
 
+  } else if (jobType === 'shopee_seller_scraper') {
+    const keyword = document.getElementById('shopee-keyword').value.trim();
+    if (!keyword) { showToast('Search keyword is required', 'error'); return; }
+    const limit = parseInt(document.getElementById('shopee-limit').value, 10) || 5;
+    payload = { keyword, limit };
+    jobName = `Shopee: ${keyword}`;
+
   } else if (jobType === 'pipeline') {
     const steps = collectPipelineSteps();
     if (!steps.length) { showToast('Add at least one step', 'error'); return; }
@@ -589,6 +620,7 @@ runForm.addEventListener('submit', async (e) => {
       } else if (jt === 'web_scraper'      && missing('url'))          { showToast(`Step ${i + 1}: URL is required`, 'error'); return; }
       else if   (jt === 'x_scraper'        && missing('username'))      { showToast(`Step ${i + 1}: X Username is required`, 'error'); return; }
       else if   (jt === 'google_form_fill' && missing('company_name')) { showToast(`Step ${i + 1}: Company name is required`, 'error'); return; }
+      else if   (jt === 'shopee_seller_scraper' && missing('keyword'))  { showToast(`Step ${i + 1}: Search keyword is required`, 'error'); return; }
     }
     const typeNames = steps.map(s => (AUTO_CATALOG[s.job_type]?.name || s.job_type));
     payload  = { steps };

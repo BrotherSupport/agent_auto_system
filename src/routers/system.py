@@ -88,6 +88,18 @@ _CATALOG: dict = {
             "job_type": "x_scraper",
             "source_file": "src/automation/crews/x_scraper_crew/config/agents.yaml",
         },
+        {
+            "id": "shopee_seller_analyst",
+            "name": "Shopee Seller Analyst",
+            "role": "E-commerce Seller Intelligence Analyst",
+            "goal": "Search Shopee for a keyword, collect the sellers behind the top products, and return a clean structured profile of each shop.",
+            "backstory": "Sharp marketplace analyst who profiles Shopee sellers. Bases output strictly on what the shopee_seller_scraper tool returns — shop name, URL, location, join date, rating, followers, item count — and never fabricates shops or stats. Produces clean JSON.",
+            "tools": ["shopee_seller_scraper"],
+            "crew": "ShopeeSellerCrew",
+            "task": "shopee_seller_task",
+            "job_type": "shopee_seller_scraper",
+            "source_file": "src/automation/crews/shopee_seller_crew/config/agents.yaml",
+        },
     ],
     "tools": [
         {
@@ -172,6 +184,18 @@ _CATALOG: dict = {
             ],
             "used_by": ["XScraperCrew"],
             "source_file": "src/automation/tools/x_scraper_tool.py",
+        },
+        {
+            "id": "shopee_seller_scraper",
+            "name": "Shopee Seller Scraper",
+            "class": "ShopeeSellerScraperTool",
+            "description": "Search shopee.tw for a keyword, open the top N products, and collect the seller behind each: shop name, URL, location, join date, rating, rating count, follower count, item count, response rate. Reuses a persisted login session (SHOPEE_STORAGE_STATE) — prefers Shopee's internal JSON API, falls back to DOM scraping.",
+            "inputs": [
+                {"name": "keyword", "type": "str", "description": "Product search keyword"},
+                {"name": "limit",   "type": "int", "description": "Number of top products / sellers to collect"},
+            ],
+            "used_by": ["ShopeeSellerCrew"],
+            "source_file": "src/automation/tools/shopee_scraper_tool.py",
         },
     ],
     "crews": [
@@ -276,6 +300,23 @@ _CATALOG: dict = {
                 }
             ],
             "source_file": "src/automation/crews/x_scraper_crew/crew.py",
+        },
+        {
+            "id": "shopee_seller_crew",
+            "name": "ShopeeSellerCrew",
+            "process": "sequential",
+            "agents": ["shopee_seller_analyst"],
+            "job_type": "shopee_seller_scraper",
+            "flow": "ShopeeSellerFlow",
+            "tasks": [
+                {
+                    "name": "shopee_seller_task",
+                    "description": "Search Shopee for the keyword, collect sellers behind the top N products, and summarize.",
+                    "expected_output": '{"keyword": "...", "seller_count": N, "sellers": [...], "summary": "..."}',
+                    "config_file": "src/automation/crews/shopee_seller_crew/config/tasks.yaml",
+                }
+            ],
+            "source_file": "src/automation/crews/shopee_seller_crew/crew.py",
         },
     ],
     "workflows": [
@@ -399,6 +440,30 @@ _CATALOG: dict = {
                 },
             ],
             "source_file": "src/automation/flows/x_scraper_flow.py",
+        },
+        {
+            "id": "shopee_seller_flow",
+            "name": "ShopeeSellerFlow",
+            "job_type": "shopee_seller_scraper",
+            "crew": "ShopeeSellerCrew",
+            "state_fields": [
+                {"name": "keyword", "type": "str", "default": ""},
+                {"name": "limit",   "type": "int", "default": 5},
+                {"name": "run_id",  "type": "int", "default": 0},
+            ],
+            "steps": [
+                {
+                    "name": "validate_payload",
+                    "decorator": "@start()",
+                    "description": "Validates that keyword is present. Raises ValueError if missing.",
+                },
+                {
+                    "name": "execute_crew",
+                    "decorator": "@listen(validate_payload)",
+                    "description": "Loads the persisted Shopee session, kicks off ShopeeSellerCrew with keyword and limit, returns the seller analysis JSON.",
+                },
+            ],
+            "source_file": "src/automation/flows/shopee_seller_flow.py",
         },
         {
             "id": "google_sheet_flow",
