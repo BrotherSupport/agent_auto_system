@@ -27,3 +27,8 @@ class Run(SQLModel, table=True):
     tokens_out: int = 0
     cost_usd: float = 0.0
     retry_count: int = 0
+    # Evaluation fields (LLM-as-judge quality score; informational only)
+    eval_score: float | None = None        # 0-100 quality score
+    eval_confidence: float | None = None    # 0-1 confidence in the score
+    eval_notes: str | None = None           # short rationale
+    eval_method: str | None = None          # "llm" | "heuristic"
