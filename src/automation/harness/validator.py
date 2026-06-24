@@ -30,7 +30,7 @@ _CHECKS: dict = {
         "no profile data found",
     ),
     "shopee_seller_scraper": lambda r: (
-        bool(r.get("sellers") or r.get("summary")),
+        bool(r.get("sellers")),
         "no sellers found",
     ),
 }

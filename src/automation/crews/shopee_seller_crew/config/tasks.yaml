@@ -9,8 +9,9 @@ shopee_seller_task:
     IMPORTANT: If the "sellers" list in the tool result is non-empty, use it as
     your data even if some numeric fields are 0 or some text fields are empty.
     Do NOT claim you cannot retrieve sellers if the tool returned at least one.
-    If the tool result has an "error" and an empty "sellers" list, report that
-    error in the "summary" and return an empty "sellers" list.
+    If the tool result has an "error" and an empty "sellers" list, the job
+    FAILED: copy that error message verbatim into BOTH a top-level "error" key
+    and the "summary", and return an empty "sellers" list. Do not invent sellers.
 
     From the fetched sellers: write a one-paragraph summary describing the kinds
     of shops selling "{keyword}" (locations, ratings, how established they are).
@@ -21,5 +22,6 @@ shopee_seller_task:
     - "seller_count": number of sellers in the "sellers" list (integer, must match)
     - "sellers": the complete list of seller objects from the tool result
     - "summary": one paragraph summarizing the sellers found
+    - "error": (only if the tool failed) the verbatim error message; omit on success
     Return ONLY the JSON object, no markdown fences.
   agent: shopee_seller_analyst

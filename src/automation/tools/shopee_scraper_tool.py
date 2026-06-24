@@ -114,9 +114,21 @@ def _login_with_credentials(state_path: str, username: str, password: str) -> No
         try:
             page.goto(f"{_BASE}/buyer/login", wait_until="domcontentloaded", timeout=30_000)
             page.locator('input[name="loginKey"]').first.fill(username, timeout=10_000)
-            page.locator('input[name="password"]').first.fill(password, timeout=10_000)
-            page.locator('button:has-text("登入"), button:has-text("Log In")').first.click(timeout=10_000)
+            pw_field = page.locator('input[name="password"]').first
+            pw_field.fill(password, timeout=10_000)
+            # Submit with Enter: a login-page modal/overlay (e.g. app-download or
+            # consent popup) often sits on top of the submit button and intercepts
+            # the click, so pressing Enter in the field is more reliable.
+            pw_field.press("Enter")
             page.wait_for_timeout(5000)
+            # Fallback: if still on the login page, force-click the button past any overlay.
+            if "/buyer/login" in page.url:
+                try:
+                    page.locator('button:has-text("登入"), button:has-text("Log In")') \
+                        .first.click(timeout=8_000, force=True)
+                    page.wait_for_timeout(5000)
+                except Exception:  # noqa: BLE001 — overlay/captcha; handled by caller
+                    pass
 
             # Only persist if we actually left the login page (no captcha/OTP wall).
             if "/buyer/login" not in page.url:
