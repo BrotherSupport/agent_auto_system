@@ -2,7 +2,8 @@ scrape_task:
   description: >
     Fetch the URL "{url}" using the web_scraper tool and return a comprehensive
     structured summary of all content found on the page.
-    Include the page title, a paragraph summary, key points, headings, word count, and notable links.
+    Include the page title, a paragraph summary, key points, headings, word count,
+    notable links, and the actual main text content of the page.
     If retrying, fix this issue from the previous attempt: {previous_error}
   expected_output: >
     A JSON object with exactly these keys:
@@ -13,5 +14,7 @@ scrape_task:
     - "headings": list of h1-h3 headings found on the page
     - "word_count": approximate word count of the page body (integer)
     - "links": list of up to 8 notable outbound URLs found on the page
+    - "content": the actual main text content of the page, taken verbatim from
+      the web_scraper tool's "text" field (do NOT summarise or paraphrase it)
     Return ONLY the JSON object, no markdown fences.
   agent: web_scraper_agent
