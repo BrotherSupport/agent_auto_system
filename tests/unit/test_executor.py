@@ -209,6 +209,89 @@ async def test_execute_run_pipeline_unknown_type_falls_through(test_engine, seed
     assert run.status == "failed"
 
 
+class _FakeRaw:
+    def __init__(self, raw):
+        self.raw = raw
+
+
+def _register_fake_flow(mocker, kickoff):
+    """Wire a fake flow class so _run_flow('__test__', ...) drives `kickoff`."""
+    import sys
+    import types
+
+    state = types.SimpleNamespace(usage={"prompt_tokens": 1, "completion_tokens": 2})
+
+    class FakeFlow:
+        def __init__(self):
+            self.state = state
+
+        def kickoff(self, inputs=None):
+            return kickoff(inputs)
+
+    mod = types.ModuleType("fake_flow_mod")
+    mod.FakeFlow = FakeFlow
+    sys.modules["fake_flow_mod"] = mod
+
+    from src.automation import executor
+    mocker.patch.dict(executor._FLOW_MAP, {"__test__": ("fake_flow_mod", "FakeFlow", "log")})
+    mocker.patch("src.automation.executor.asyncio.sleep", new=AsyncMock())
+
+
+async def test_run_flow_retries_then_falls_back_on_unavailable(mocker):
+    mocker.patch("src.automation.progress.append_log")
+    seen: list[str] = []
+
+    def kickoff(inputs):
+        seen.append(inputs["llm_model"])
+        if len(seen) < 3:
+            raise RuntimeError("503 UNAVAILABLE: model experiencing high demand, try again")
+        return _FakeRaw('{"sellers": [{"shop_name": "x"}], "summary": "ok"}')
+
+    _register_fake_flow(mocker, kickoff)
+
+    from src.automation.executor import _run_flow
+    result, usage = await _run_flow(0, "__test__", {}, "gemini", "gemini/gemini-2.5-flash")
+
+    assert result["sellers"]
+    assert len(seen) == 3
+    # primary tried twice, then a same-provider fallback
+    assert seen[0] == seen[1] == "gemini/gemini-2.5-flash"
+    assert seen[2] != "gemini/gemini-2.5-flash"
+
+
+async def test_run_flow_non_retriable_error_raises_immediately(mocker):
+    mocker.patch("src.automation.progress.append_log")
+    calls = {"n": 0}
+
+    def kickoff(inputs):
+        calls["n"] += 1
+        raise RuntimeError("401 invalid api key")
+
+    _register_fake_flow(mocker, kickoff)
+
+    from src.automation.executor import _run_flow
+    with pytest.raises(RuntimeError, match="invalid api key"):
+        await _run_flow(0, "__test__", {}, "gemini", "gemini/gemini-2.5-flash")
+    assert calls["n"] == 1  # no retries for a hard error
+
+
+async def test_run_flow_raises_after_exhausting_attempts(mocker):
+    mocker.patch("src.automation.progress.append_log")
+    from src.automation.harness.provider import MAX_LLM_ATTEMPTS
+    calls = {"n": 0}
+
+    def kickoff(inputs):
+        calls["n"] += 1
+        raise RuntimeError("503 model unavailable, high demand")
+
+    _register_fake_flow(mocker, kickoff)
+
+    from src.automation.executor import _run_flow
+    with pytest.raises(RuntimeError, match="unavailable"):
+        await _run_flow(0, "__test__", {}, "gemini", "gemini/gemini-2.5-flash")
+    assert calls["n"] == MAX_LLM_ATTEMPTS
+
+
 def test_parse_result_plain_json():
     from src.automation.executor import _parse_result
     assert _parse_result('{"title": "x", "summary": "y"}') == {"title": "x", "summary": "y"}
