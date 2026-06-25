@@ -193,8 +193,10 @@ def compute_profit_from_upload(upload_id: str) -> ProfitCalcResult:
     base = UPLOAD_ROOT / upload_id
 
     def _rd(name: str) -> str:
+        # utf-8-sig strips a UTF-8 BOM if present (common in Shopee/Excel exports);
+        # critical so the ads file's leading "## ..." comment line is recognized.
         p = base / name
-        return p.read_text(encoding="utf-8", errors="replace") if p.is_file() else ""
+        return p.read_text(encoding="utf-8-sig", errors="replace") if p.is_file() else ""
 
     return compute_profit(_rd("sales.csv"), _rd("cost.csv"), _rd("ads.csv"), _rd("returns.csv"))
 

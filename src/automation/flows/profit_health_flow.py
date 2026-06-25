@@ -23,11 +23,28 @@ class ProfitHealthState(BaseModel):
     previous_error: str = ""
 
 
+# The validator/corrector agents only need a sample to check schema and columns;
+# the profit_calc tool reads the full files from disk for the actual numbers. Cap
+# the prompt-embedded copy so a large upload can't blow the LLM context window.
+_MAX_PROMPT_LINES = 100
+
+
 def _read_csv(upload_id: str, filename: str) -> str:
     path = UPLOAD_ROOT / upload_id / filename
     if not path.is_file():
         return ""
-    return path.read_text(encoding="utf-8", errors="replace")
+    # utf-8-sig strips a UTF-8 BOM if present (common in Shopee/Excel CSV exports);
+    # behaves like utf-8 when absent.
+    return path.read_text(encoding="utf-8-sig", errors="replace")
+
+
+def _truncate_csv(content: str, max_lines: int = _MAX_PROMPT_LINES) -> str:
+    if not content:
+        return ""
+    lines = content.splitlines()
+    if len(lines) <= max_lines:
+        return content
+    return "\n".join(lines[:max_lines]) + f"\n... [truncated, {len(lines) - max_lines} more lines] ..."
 
 
 class ProfitHealthFlow(FlowMixin, Flow[ProfitHealthState]):
@@ -49,6 +66,12 @@ class ProfitHealthFlow(FlowMixin, Flow[ProfitHealthState]):
                                   ("cost.csv", self.state.cost_csv)) if not v.strip()]
         if missing:
             raise ValueError(f"Missing required file(s) in upload: {missing}")
+
+        # Cap the prompt-embedded copies; profit_calc still reads full files from disk.
+        self.state.sales_csv = _truncate_csv(self.state.sales_csv)
+        self.state.cost_csv = _truncate_csv(self.state.cost_csv)
+        self.state.ads_csv = _truncate_csv(self.state.ads_csv)
+        self.state.returns_csv = _truncate_csv(self.state.returns_csv)
 
         append_log(self.state.run_id, f"Loaded CSVs from upload {self.state.upload_id}")
         return self.state.model_dump()

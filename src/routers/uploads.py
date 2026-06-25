@@ -17,6 +17,7 @@ _SLOTS = {
     "ads":     "ads.csv",
     "returns": "returns.csv",
 }
+_REQUIRED = {"sales", "cost"}
 
 
 async def _read_capped(file: UploadFile, slot: str) -> bytes:
@@ -46,11 +47,20 @@ async def create_upload(
     provided = {"sales": sales, "cost": cost, "ads": ads, "returns": returns}
 
     # Validate + read everything before writing anything (no partial dirs on error).
+    # Some clients submit empty optional file fields (no filename) — skip those, but
+    # a missing required field is still a 400. Close every handle on the way out.
     contents: dict[str, bytes] = {}
-    for slot, file in provided.items():
-        if file is None:
-            continue
-        contents[slot] = await _read_capped(file, slot)
+    try:
+        for slot, file in provided.items():
+            if file is None or not file.filename:
+                if slot in _REQUIRED:
+                    raise HTTPException(status_code=400, detail=f"{slot}: required .csv file is missing")
+                continue
+            contents[slot] = await _read_capped(file, slot)
+    finally:
+        for file in provided.values():
+            if file is not None:
+                await file.close()
 
     upload_id = uuid.uuid4().hex
     dest = UPLOAD_ROOT / upload_id

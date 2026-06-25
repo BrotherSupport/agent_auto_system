@@ -131,6 +131,33 @@ def test_optional_files_absent():
     assert m.net_profit == 2952 - 1530  # no ads, no refunds
 
 
+def test_tool_handles_utf8_bom(tmp_path, monkeypatch):
+    """Shopee/Excel exports often carry a UTF-8 BOM; the tool must still parse —
+    including recognizing the ads file's leading '## ...' comment line."""
+    import src.routers.uploads as uploads_mod
+
+    monkeypatch.setattr(uploads_mod, "UPLOAD_ROOT", tmp_path)
+    dest = tmp_path / "bom1"
+    dest.mkdir()
+    for src_name, dst_name in (
+        ("shopee_sales_report.csv", "sales.csv"),
+        ("product_cost.csv", "cost.csv"),
+        ("ads_discount.csv", "ads.csv"),
+        ("order_return_refund.csv", "returns.csv"),
+    ):
+        text = (_SD / src_name).read_text(encoding="utf-8")
+        (dest / dst_name).write_bytes(b"\xef\xbb\xbf" + text.encode("utf-8"))  # prepend BOM
+
+    from src.automation.tools.profit_calc_tool import compute_profit_from_upload
+    res = compute_profit_from_upload("bom1")
+    by_sku = {m.sku: m for m in res.skus}
+    # If the BOM weren't stripped, the SKU key would be "﻿商品SKU" and this would fail.
+    assert "CASE-IP15-BLK" in by_sku
+    # If the ads BOM broke comment detection, ad_spend would be wrong/zero.
+    assert by_sku["CASE-IP15-BLK"].ad_spend == 1260
+    assert by_sku["CHG-WL-15W"].net_profit == 2160
+
+
 def test_tool_run_reads_upload(tmp_path, monkeypatch):
     # The tool reads the 4 CSVs from uploads/<upload_id>/ given an upload_id.
     import src.routers.uploads as uploads_mod
