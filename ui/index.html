@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Agent Auto System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -22,18 +25,41 @@
       --orange: #fb923c;
       --yellow: #eab308;
       --gray: #64748b;
+      --text-dim: #64748b;
       --radius: 8px;
+
+      /* ── Typography ── */
+      --font-sans: "Inter", "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "SF Mono", monospace;
     }
 
-    body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    body {
+      font-family: var(--font-sans); background: var(--bg); color: var(--text);
+      min-height: 100vh; font-size: 14px; line-height: 1.5;
+      -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+    }
+    /* Tabular numerals everywhere money / counts / metrics appear */
+    .stat-value, .meta-value.mono, .cost-badge, table td, .perf-table td,
+    .llm-pcard-stat-val, .trend-count, td, th { font-variant-numeric: tabular-nums; }
+    code, pre, .model-name-mono, .meta-value.mono { font-family: var(--font-mono); }
 
     /* ── Header ── */
     header {
-      border-bottom: 1px solid var(--border); padding: 0 1.5rem; height: 56px;
-      display: flex; align-items: center; gap: 1.5rem;
-      position: sticky; top: 0; background: var(--bg); z-index: 10;
+      border-bottom: 1px solid var(--border); padding: 0 1.75rem; height: 60px;
+      display: flex; align-items: center; gap: 1.75rem;
+      position: sticky; top: 0; background: rgba(15,23,42,0.85); backdrop-filter: blur(10px); z-index: 10;
     }
-    .logo { font-weight: 700; font-size: 1rem; letter-spacing: -0.02em; flex-shrink: 0; text-decoration: none; color: var(--text); cursor: pointer; }
+    .logo {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-weight: 800; font-size: 1.05rem; letter-spacing: -0.03em;
+      flex-shrink: 0; text-decoration: none; color: var(--text); cursor: pointer;
+    }
+    .logo-mark {
+      width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), #818cf8);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.9rem; box-shadow: 0 2px 8px rgba(99,102,241,0.4);
+    }
     .logo span { color: var(--accent); }
 
     /* ── Nav tabs ── */
@@ -66,35 +92,12 @@
     .btn-danger:hover { background: rgba(239,68,68,0.2); }
     .btn-sm { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
 
-    /* ── Hero ── */
-    .hero {
-      position: relative; padding: 2.5rem 2rem 2rem;
-      text-align: center; max-width: 640px; margin: 0 auto;
-    }
-    .hero h1 { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; }
-    .hero h1 em { color: var(--accent); font-style: normal; }
-    .hero p { margin-top: 0.75rem; color: var(--text-muted); font-size: 1rem; line-height: 1.6; }
-    .hero-actions { margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: center; }
-    #hero-dismiss {
-      position: absolute; top: 0.9rem; right: 0.5rem;
-      background: none; border: none; color: var(--text-muted);
-      font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 0.25rem 0.4rem;
-      border-radius: 4px;
-    }
-    #hero-dismiss:hover { color: var(--text); background: rgba(255,255,255,0.06); }
-
     /* ── Sections ── */
     .section { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem 4rem; }
     .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
     .section-header h2 { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
     .section-header-left { display: flex; align-items: center; gap: 1rem; }
     .section-header-right { display: flex; align-items: center; gap: 0.5rem; }
-
-    .hero-restore-btn {
-      background: none; border: none; color: var(--text-muted); font-size: 0.78rem;
-      cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 2px;
-    }
-    .hero-restore-btn:hover { color: var(--text); }
 
     /* ── Table ── */
     .table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
@@ -246,8 +249,9 @@
 
     /* ── Page header ── */
     .page-header { padding: 1.75rem 1.5rem 1rem; max-width: 1100px; margin: 0 auto; }
-    .page-header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
-    .page-header p { margin-top: 0.3rem; color: var(--text-muted); font-size: 0.9rem; }
+    .page-header h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.025em; }
+    .page-header p { margin-top: 0.35rem; color: var(--text-muted); font-size: 0.92rem; line-height: 1.55; }
+    .page-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 
     /* ── Category tabs ── */
     .cat-tabs { display: flex; gap: 0.25rem; padding: 0 1.5rem; max-width: 1100px; margin: 0 auto 1.25rem; border-bottom: 1px solid var(--border); }
@@ -539,38 +543,279 @@
     .step-node.sn-done    .step-metric { color: rgba(34,197,94,0.75); }
     .step-node.sn-running .step-metric { color: rgba(59,130,246,0.75); }
     .step-node.sn-failed  .step-metric { color: rgba(239,68,68,0.6); }
+
+    /* ════════════════════════════ LANDING PAGE ════════════════════════════ */
+    .landing { max-width: 1100px; margin: 0 auto; padding: 0 1.75rem; }
+
+    /* Hero */
+    .lp-hero {
+      position: relative; text-align: center;
+      padding: 5rem 1rem 4rem; overflow: hidden;
+    }
+    .lp-hero::before {
+      content: ""; position: absolute; top: -30%; left: 50%; transform: translateX(-50%);
+      width: 760px; height: 560px; pointer-events: none; z-index: -1;
+      background: radial-gradient(closest-side, rgba(99,102,241,0.22), rgba(99,102,241,0) 70%);
+    }
+    .lp-eyebrow {
+      display: inline-flex; align-items: center; gap: 0.45rem; margin-bottom: 1.4rem;
+      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em;
+      padding: 0.32rem 0.8rem; border-radius: 99px; color: var(--text);
+      background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.28);
+    }
+    .lp-eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .lp-hero h1 {
+      font-size: clamp(2.4rem, 5.4vw, 3.5rem); font-weight: 800;
+      letter-spacing: -0.035em; line-height: 1.05; margin: 0 auto; max-width: 16ch;
+    }
+    .lp-hero h1 em {
+      font-style: normal;
+      background: linear-gradient(120deg, var(--accent), #818cf8 50%, #38bdf8);
+      -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .lp-hero p.sub {
+      margin: 1.4rem auto 0; max-width: 56ch;
+      font-size: clamp(1rem, 1.6vw, 1.18rem); line-height: 1.6; color: var(--text-muted);
+    }
+    .lp-hero-actions { margin-top: 2.25rem; display: flex; gap: 0.85rem; justify-content: center; flex-wrap: wrap; }
+    .btn-lg { padding: 0.7rem 1.5rem; font-size: 0.95rem; border-radius: 10px; }
+    .lp-hero-note { margin-top: 1.1rem; font-size: 0.78rem; color: var(--text-dim, #9ca3af); }
+    .lp-hero-note code { font-family: var(--font-mono); color: var(--text-muted); font-size: 0.75rem; }
+
+    /* Trust / metric strip */
+    .lp-metrics {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+      background: var(--border); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden; margin-top: 1rem;
+    }
+    .lp-metric { background: var(--surface2); padding: 1.4rem 1rem; text-align: center; }
+    .lp-metric-val { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+    .lp-metric-val.accent { color: var(--accent); }
+    .lp-metric-val.green  { color: var(--green); }
+    .lp-metric-lab { margin-top: 0.45rem; font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+    /* Section scaffolding */
+    .lp-section { padding: 4rem 0 0; }
+    .lp-section-head { text-align: center; max-width: 60ch; margin: 0 auto 2.5rem; }
+    .lp-kicker { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); }
+    .lp-section-head h2 { font-size: clamp(1.6rem, 3vw, 2.1rem); font-weight: 800; letter-spacing: -0.03em; margin-top: 0.6rem; }
+    .lp-section-head p { margin-top: 0.8rem; font-size: 1rem; line-height: 1.6; color: var(--text-muted); }
+
+    /* Feature cards */
+    .lp-features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .lp-feature {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 1.5rem; transition: border-color 0.18s, transform 0.18s;
+    }
+    .lp-feature:hover { border-color: rgba(99,102,241,0.45); transform: translateY(-2px); }
+    .lp-feature-icon {
+      width: 42px; height: 42px; border-radius: 10px; display: flex; align-items: center;
+      justify-content: center; font-size: 1.25rem; margin-bottom: 1rem;
+      background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.22);
+    }
+    .lp-feature h3 { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+    .lp-feature p { margin-top: 0.5rem; font-size: 0.88rem; line-height: 1.6; color: var(--text-muted); }
+
+    /* Automation showcase */
+    .lp-autos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.85rem; }
+    .lp-auto {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 1.15rem; cursor: pointer; text-align: left;
+      transition: border-color 0.18s, transform 0.18s, background 0.18s;
+    }
+    .lp-auto:hover { border-color: rgba(99,102,241,0.45); transform: translateY(-2px); background: rgba(99,102,241,0.04); }
+    .lp-auto-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.7rem; }
+    .lp-auto-icon { font-size: 1.5rem; line-height: 1; }
+    .lp-auto h4 { font-size: 0.95rem; font-weight: 700; }
+    .lp-auto p { margin-top: 0.35rem; font-size: 0.8rem; line-height: 1.5; color: var(--text-muted);
+                 display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+    /* How it works */
+    .lp-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .lp-step {
+      position: relative; background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 14px; padding: 1.5rem;
+    }
+    .lp-step-num {
+      font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600; color: var(--accent);
+      width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.25); margin-bottom: 1rem;
+    }
+    .lp-step h3 { font-size: 1rem; font-weight: 700; }
+    .lp-step p { margin-top: 0.45rem; font-size: 0.86rem; line-height: 1.6; color: var(--text-muted); }
+    .lp-step code { font-family: var(--font-mono); font-size: 0.78rem; color: var(--accent); }
+
+    /* CTA band */
+    .lp-cta {
+      margin: 4.5rem 0 0; text-align: center; padding: 3.25rem 2rem;
+      border-radius: 18px; border: 1px solid rgba(99,102,241,0.3);
+      background: linear-gradient(135deg, rgba(99,102,241,0.14), rgba(56,189,248,0.06));
+    }
+    .lp-cta h2 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; letter-spacing: -0.03em; }
+    .lp-cta p { margin-top: 0.7rem; font-size: 1rem; color: var(--text-muted); }
+    .lp-cta .lp-hero-actions { margin-top: 1.75rem; }
+
+    /* Footer */
+    .lp-footer {
+      margin-top: 4rem; padding: 2rem 0 3rem; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+      font-size: 0.82rem; color: var(--text-muted);
+    }
+    .lp-footer .logo { font-size: 0.95rem; }
+    .lp-footer-links { display: flex; gap: 1.25rem; }
+    .lp-footer-links a { color: var(--text-muted); text-decoration: none; transition: color 0.15s; }
+    .lp-footer-links a:hover { color: var(--text); }
+
+    @media (max-width: 900px) {
+      .lp-features, .lp-autos, .lp-steps, .lp-metrics { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 560px) {
+      .lp-features, .lp-autos, .lp-steps { grid-template-columns: 1fr; }
+      .lp-metrics { grid-template-columns: repeat(2, 1fr); }
+      .lp-hero { padding: 3rem 0.5rem 2.5rem; }
+    }
   </style>
 </head>
 <body>
 
 <header>
-  <a href="/" class="logo">agent<span>auto</span></a>
+  <a class="logo" data-page="landing"><span class="logo-mark">⚡</span>agent<span>auto</span></a>
   <nav class="nav-tabs" id="nav-tabs">
-    <button class="nav-tab active" data-page="dashboard">Dashboard</button>
+    <button class="nav-tab" data-page="landing">Home</button>
+    <button class="nav-tab" data-page="run">Run</button>
+    <button class="nav-tab" data-page="activity">Activity</button>
     <button class="nav-tab" data-page="system">System</button>
-    <button class="nav-tab" data-page="automations">Automations</button>
-    <button class="nav-tab" data-page="performance">Performance</button>
+    <button class="nav-tab" data-page="analytics">Analytics</button>
   </nav>
   <button class="btn btn-primary" id="new-run-btn">+ New Run</button>
 </header>
 
-<!-- ══════════════════════════════════════ DASHBOARD ══════════════════════════════════ -->
-<div class="page active" id="page-dashboard">
-  <section class="hero" id="hero-section">
-    <button id="hero-dismiss" title="Hide intro">×</button>
-    <h1>Automate anything<br/>with <em>AI agents</em></h1>
-    <p>Define jobs, trigger them with one click, and let CrewAI agents execute them in the background.</p>
-    <div class="hero-actions">
-      <button class="btn btn-primary" id="hero-run-btn">Run automation</button>
-      <a href="/docs" class="btn btn-ghost" target="_blank">API docs</a>
+<!-- ══════════════════════════════════════ LANDING ════════════════════════════════════ -->
+<div class="page active" id="page-landing">
+  <div class="landing">
+    <section class="lp-hero">
+      <span class="lp-eyebrow"><span class="dot"></span> Powered by CrewAI agents</span>
+      <h1>Automate anything with <em>AI agents</em></h1>
+      <p class="sub">Define a job, trigger it with one click, and let autonomous agents execute it in the background — web scraping, form filling, digests, email, and multi-step pipelines.</p>
+      <div class="lp-hero-actions">
+        <button class="btn btn-primary btn-lg" id="lp-launch">Launch app →</button>
+        <button class="btn btn-ghost btn-lg" id="lp-run">Run an automation</button>
+      </div>
+      <p class="lp-hero-note">Bring your own model — <code>OpenAI</code>, <code>Anthropic</code>, or <code>Gemini</code></p>
+    </section>
+
+    <div class="lp-metrics">
+      <div class="lp-metric"><div class="lp-metric-val accent">8</div><div class="lp-metric-lab">Automation types</div></div>
+      <div class="lp-metric"><div class="lp-metric-val">3</div><div class="lp-metric-lab">LLM providers</div></div>
+      <div class="lp-metric"><div class="lp-metric-val green">∞</div><div class="lp-metric-lab">Background runs</div></div>
+      <div class="lp-metric"><div class="lp-metric-val accent">1‑click</div><div class="lp-metric-lab">To trigger</div></div>
     </div>
-  </section>
+
+    <section class="lp-section">
+      <div class="lp-section-head">
+        <div class="lp-kicker">Why agentauto</div>
+        <h2>A control plane for autonomous work</h2>
+        <p>Everything you need to define, run, and observe agent-driven automations — in one lightweight dashboard.</p>
+      </div>
+      <div class="lp-features">
+        <div class="lp-feature">
+          <div class="lp-feature-icon">🤖</div>
+          <h3>Agent crews</h3>
+          <p>Each job runs a purpose-built CrewAI crew — agents inspect, reason, and act with tools wired for the task.</p>
+        </div>
+        <div class="lp-feature">
+          <div class="lp-feature-icon">⚡</div>
+          <h3>One-click background runs</h3>
+          <p>Trigger a run and walk away. Work executes asynchronously while you watch live progress stream in.</p>
+        </div>
+        <div class="lp-feature">
+          <div class="lp-feature-icon">🔀</div>
+          <h3>Bring your own model</h3>
+          <p>Switch between OpenAI, Anthropic, and Gemini per run. Costs and token usage are tracked automatically.</p>
+        </div>
+        <div class="lp-feature">
+          <div class="lp-feature-icon">🔗</div>
+          <h3>Composable pipelines</h3>
+          <p>Chain automations end-to-end — scrape a page, summarize it, then email the result, all in one flow.</p>
+        </div>
+        <div class="lp-feature">
+          <div class="lp-feature-icon">📊</div>
+          <h3>Full observability</h3>
+          <p>Per-step graphs, quality evals, retries, and provider stats give you a clear view of every run.</p>
+        </div>
+        <div class="lp-feature">
+          <div class="lp-feature-icon">🧩</div>
+          <h3>Inspectable internals</h3>
+          <p>Browse every agent, tool, crew, and flow — with source and config — right from the System catalog.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="lp-section">
+      <div class="lp-section-head">
+        <div class="lp-kicker">Automations</div>
+        <h2>Eight ways to put agents to work</h2>
+        <p>Pick a template, fill a few fields, and run. Click any card to start.</p>
+      </div>
+      <div class="lp-autos" id="lp-autos"></div>
+    </section>
+
+    <section class="lp-section">
+      <div class="lp-section-head">
+        <div class="lp-kicker">How it works</div>
+        <h2>From idea to execution in three steps</h2>
+      </div>
+      <div class="lp-steps">
+        <div class="lp-step">
+          <div class="lp-step-num">01</div>
+          <h3>Define a job</h3>
+          <p>Choose an automation type and supply its inputs — a URL, a keyword, recipients, or a pipeline of steps.</p>
+        </div>
+        <div class="lp-step">
+          <div class="lp-step-num">02</div>
+          <h3>Trigger a run</h3>
+          <p>Hit run. The job is queued and an agent crew kicks off in the background via <code>POST /api/jobs/{id}/run</code>.</p>
+        </div>
+        <div class="lp-step">
+          <div class="lp-step-num">03</div>
+          <h3>Watch &amp; collect</h3>
+          <p>Progress streams live over SSE. When it finishes, review the result, logs, costs, and quality score.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="lp-cta">
+      <h2>Ready to automate?</h2>
+      <p>Spin up your first agent run in seconds.</p>
+      <div class="lp-hero-actions">
+        <button class="btn btn-primary btn-lg" id="lp-cta-run">+ New Run</button>
+        <button class="btn btn-ghost btn-lg" id="lp-cta-dash">View activity</button>
+      </div>
+    </section>
+
+    <footer class="lp-footer">
+      <a class="logo" data-page="landing"><span class="logo-mark">⚡</span>agent<span>auto</span></a>
+      <div class="lp-footer-links">
+        <a data-page="run">Run</a>
+        <a data-page="activity">Activity</a>
+        <a data-page="system">System</a>
+        <a href="/docs" target="_blank">API docs</a>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ DASHBOARD ══════════════════════════════════ -->
+<div class="page" id="page-activity">
+  <div class="page-header">
+    <h1>Activity</h1>
+    <p>Run history and live execution progress. Trigger a new run from the <strong>Run</strong> tab or the <strong>+ New Run</strong> button.</p>
+  </div>
 
   <div class="section">
     <div class="section-header">
       <div class="section-header-left">
         <h2>Run History</h2>
-        <button id="hero-restore" class="hero-restore-btn hidden">show intro</button>
       </div>
       <div class="section-header-right" id="bulk-actions">
         <button class="btn btn-ghost btn-sm hidden" id="delete-selected-btn">Delete Selected</button>
@@ -631,11 +876,16 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════ AUTOMATIONS ════════════════════════════════ -->
-<div class="page" id="page-automations">
+<!-- ══════════════════════════════════════ RUN ════════════════════════════════════════ -->
+<div class="page" id="page-run">
   <div class="page-header">
-    <h1>Automations</h1>
-    <p>Available automation types — click a card to start a new run.</p>
+    <div class="page-header-row">
+      <div>
+        <h1>Run an Automation</h1>
+        <p>This is where you execute automations. Pick a type below to configure and launch a new run.</p>
+      </div>
+      <button class="btn btn-primary" id="run-new-btn">+ New Run</button>
+    </div>
   </div>
 
   <div class="section" style="padding-top:0">
@@ -643,11 +893,11 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════ PERFORMANCE ═══════════════════════════════ -->
-<div class="page" id="page-performance">
+<!-- ══════════════════════════════════════ ANALYTICS ═════════════════════════════════ -->
+<div class="page" id="page-analytics">
   <div class="page-header">
-    <h1>Performance</h1>
-    <p>Agent system health and run metrics.</p>
+    <h1>Analytics</h1>
+    <p>Agent system health, run metrics, and LLM provider stats.</p>
   </div>
 
   <div class="section" style="padding-top:0">

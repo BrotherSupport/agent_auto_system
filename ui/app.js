@@ -321,8 +321,6 @@ const progressPanel   = document.getElementById('progress-panel');
 const progressLog     = document.getElementById('progress-log');
 const progressJobName = document.getElementById('progress-job-name');
 const progressPulse   = document.getElementById('progress-pulse');
-const heroSection     = document.getElementById('hero-section');
-const heroRestoreBtn  = document.getElementById('hero-restore');
 const confirmModal    = document.getElementById('confirm-modal');
 
 // ── Page routing ──────────────────────────────────────────────────────────────
@@ -334,39 +332,49 @@ function navigate(page) {
   });
   history.replaceState(null, '', `#${page}`);
 
-  if (page === 'system')      loadSystemPage();
-  if (page === 'automations') renderAutomationsPage();
-  if (page === 'performance') loadPerformancePage();
+  if (page === 'landing')   renderLandingAutos();
+  if (page === 'system')    loadSystemPage();
+  if (page === 'run')       renderAutomationsPage();
+  if (page === 'analytics') loadPerformancePage();
+  if (page === 'landing')   window.scrollTo({ top: 0 });
 }
 
-document.getElementById('nav-tabs').addEventListener('click', (e) => {
-  const tab = e.target.closest('.nav-tab');
-  if (tab) navigate(tab.dataset.page);
+// Delegated navigation: nav tabs, logo, footer links — anything with [data-page]
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-page]');
+  if (el) { e.preventDefault(); navigate(el.dataset.page); }
 });
 
-// Navigate to the page in the hash on load, defaulting to dashboard
-const initialPage = (location.hash.slice(1) || 'dashboard');
-navigate(['dashboard','system','automations','performance'].includes(initialPage) ? initialPage : 'dashboard');
-
-// ── Hero dismiss / restore ────────────────────────────────────────────────────
-
-if (localStorage.getItem('hero-dismissed')) {
-  heroSection.classList.add('hidden');
-  heroRestoreBtn.classList.remove('hidden');
+// ── Landing page ────────────────────────────────────────────────────────────
+function renderLandingAutos() {
+  const grid = document.getElementById('lp-autos');
+  if (!grid || grid.dataset.rendered) return;
+  grid.innerHTML = ALL_TYPES.map(t => {
+    const a = AUTO_CATALOG[t]; if (!a) return '';
+    const m = TYPE_META[t] || {};
+    return `<button class="lp-auto" data-type="${t}">
+      <div class="lp-auto-top">
+        <span class="lp-auto-icon">${a.icon}</span>
+        <span class="type-chip ${m.cls || ''}">${m.chip || ''}</span>
+      </div>
+      <h4>${a.name}</h4>
+      <p>${a.desc}</p>
+    </button>`;
+  }).join('');
+  grid.dataset.rendered = '1';
+  grid.querySelectorAll('.lp-auto').forEach(card =>
+    card.addEventListener('click', () => openModal(card.dataset.type)));
 }
 
-document.getElementById('hero-dismiss').addEventListener('click', () => {
-  heroSection.classList.add('hidden');
-  heroRestoreBtn.classList.remove('hidden');
-  localStorage.setItem('hero-dismissed', '1');
-});
+document.getElementById('lp-launch').addEventListener('click', () => navigate('run'));
+document.getElementById('lp-run').addEventListener('click', () => openModal());
+document.getElementById('lp-cta-run').addEventListener('click', () => openModal());
+document.getElementById('lp-cta-dash').addEventListener('click', () => navigate('activity'));
 
-heroRestoreBtn.addEventListener('click', () => {
-  heroSection.classList.remove('hidden');
-  heroRestoreBtn.classList.add('hidden');
-  localStorage.removeItem('hero-dismissed');
-  heroSection.scrollIntoView({ behavior: 'smooth' });
-});
+// Navigate to the page in the hash on load, defaulting to the landing page
+const VALID_PAGES = ['landing','run','activity','system','analytics'];
+const initialPage = (location.hash.slice(1) || 'landing');
+navigate(VALID_PAGES.includes(initialPage) ? initialPage : 'landing');
 
 // ── Modal open/close ──────────────────────────────────────────────────────────
 
@@ -377,7 +385,7 @@ function openModal(preselect) {
 function closeModalFn() { modal.classList.add('hidden'); }
 
 document.getElementById('new-run-btn').addEventListener('click', () => openModal());
-document.getElementById('hero-run-btn').addEventListener('click', () => openModal());
+document.getElementById('run-new-btn').addEventListener('click', () => openModal());
 document.getElementById('modal-close').addEventListener('click', closeModalFn);
 document.getElementById('cancel-btn').addEventListener('click', closeModalFn);
 document.getElementById('llm-provider').addEventListener('change', updateModelOptions);
@@ -635,7 +643,7 @@ runForm.addEventListener('submit', async (e) => {
   runForm.reset();
   selectJobType('google_form_fill');
   updateModelOptions();
-  navigate('dashboard');
+  navigate('activity');
   await triggerRun(jobType, jobName, payload);
 });
 
@@ -1416,10 +1424,7 @@ function renderAutomationsPage() {
   }).join('');
 
   grid.querySelectorAll('[data-run-type]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      navigate('dashboard');
-      setTimeout(() => openModal(btn.dataset.runType), 80);
-    });
+    btn.addEventListener('click', () => openModal(btn.dataset.runType));
   });
 }
 
