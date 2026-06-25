@@ -276,29 +276,63 @@ CI runs ruff → unit tests → integration tests → Docker smoke tests on ever
 
 ## Docker Quick Start
 
+The runtime image is **lightweight (~450 MB)**: the `利潤健檢` profit-health-check
+PDF is rendered with **WeasyPrint** (pure Python) instead of a bundled headless
+Chromium. Secrets are **never baked into the image** — `.env` is both
+`.gitignore`d and `.dockerignore`d, and the API keys are injected only at
+runtime via `--env-file` / compose `env_file`.
+
 ```bash
-# Build
+# 1. Configure — copy the template and fill in at least one LLM API key
+cp .env.example .env
+
+# 2. Build the runtime image
 docker build --target runtime --tag agent-auto-system:local .
 
-# Run (choose one or more LLM providers)
+# 3. Run — inject .env at runtime; mount volumes so data survives restarts
 docker run -d \
   --name agent-auto \
   -p 8000:8000 \
-  -e OPENAI_API_KEY=sk-... \
-  -e ANTHROPIC_API_KEY=sk-ant-... \
-  -e GEMINI_API_KEY=AIza... \
+  --env-file .env \
   -v agent_data:/app/data \
+  -v agent_uploads:/app/uploads \
+  -v agent_reports:/app/reports \
   agent-auto-system:local
 
 open http://localhost:8000
 ```
 
-Or with **docker compose** (recommended):
+Or with **docker compose** (wires the volumes + an optional Prometheus sidecar for you):
 
 ```bash
-cp .env.example .env   # fill in at least one LLM API key
-docker compose up --build -d
+cp .env.example .env          # fill in at least one LLM API key
+docker compose up --build -d  # reads .env via env_file
 ```
+
+### Configuration (environment variables)
+
+All config comes from `.env` (template: `.env.example`):
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | ≥ 1 | LLM provider key(s) |
+| `DATABASE_URL` | no | Defaults to `sqlite:///./data/auto.db`; set a Postgres URL for production |
+| `GMAIL_ADDRESS` / `GMAIL_APP_PASSWORD` | for `email_sender` | Gmail SMTP credentials |
+| `SHOPEE_USERNAME` / `SHOPEE_PASSWORD` / `SHOPEE_STORAGE_STATE` | for Shopee scraper | Shopee session creds |
+| `OTEL_ENABLED` / `OTEL_SERVICE_NAME` | no | OpenTelemetry export (set by compose) |
+
+### Persisted volumes
+
+| Container path | Holds |
+|---|---|
+| `/app/data` | SQLite database |
+| `/app/uploads` | uploaded files (e.g. 利潤健檢 CSVs) |
+| `/app/reports` | generated PDF reports |
+
+> **Note** — `利潤健檢` (profit_health_check) is the only automation needed in the
+> deployed image; its full path (CSV → compute → LLM → PDF) runs without a
+> browser. The browser-based jobs (form fill / Shopee / X scraper) are not wired
+> into this slim image.
 
 See **[doc/docker.md](doc/docker.md)** for full details.
 
@@ -310,8 +344,13 @@ See **[doc/docker.md](doc/docker.md)** for full details.
 # Install dependencies (requires uv)
 uv sync
 
-# Install Playwright browser (needed for form_fill)
+# Install Playwright browser (only for the browser-based jobs, e.g. form_fill)
 uv run playwright install chromium
+
+# (Optional) Render 利潤健檢 PDFs locally — WeasyPrint needs Pango natively:
+#   macOS:  brew install pango
+#   Debian: apt-get install libpango-1.0-0 libpangoft2-1.0-0 fonts-noto-cjk
+# (the Docker image already bundles these — only needed for host-side renders)
 
 # Set up environment
 cp .env.example .env
