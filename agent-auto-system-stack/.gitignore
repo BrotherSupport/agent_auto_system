@@ -1,0 +1,12 @@
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+
+# Account-specific context lookups (e.g. AZ resolution) — resolved per
+# deploying account/region; not committed to avoid leaking account IDs.
+cdk.context.json

@@ -33,3 +33,7 @@ screenshots/
 
 # --- Docs (not needed at runtime) ---
 doc/
+
+# --- Infra (CDK app) — never needed in the runtime image, and its cdk.out
+#     would otherwise recurse into itself during CDK asset staging ---
+agent-auto-system-stack/
