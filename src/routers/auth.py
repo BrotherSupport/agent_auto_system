@@ -24,6 +24,8 @@ class PasswordChange(BaseModel):
 
 def _public(user: User) -> dict:
     """User shape safe to send to the browser (no password hash)."""
+    from src import settings_store
+
     raw = (user.allowed_automations or "").strip()
     if raw == "*":
         allowed = "*"  # wildcard: every automation
@@ -38,6 +40,7 @@ def _public(user: User) -> dict:
         "is_admin": user.is_admin,
         "is_active": user.is_active,
         "allowed_automations": allowed,  # "*" or list of job_type
+        "enabled_automations": settings_store.get_enabled_automations(),  # global
     }
 
 

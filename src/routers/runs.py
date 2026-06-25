@@ -8,21 +8,27 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import text
 from sqlmodel import Session, select
 
+from src.auth import assert_can_run, require_user
 from src.automation.registry import cancel as cancel_task
 from src.automation.registry import register, unregister
 from src.automation.report_render import REPORTS_ROOT
 from src.database import get_engine, get_session
-from src.models import Job, Run
+from src.models import Job, Run, User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.post("/jobs/{job_id}/run", status_code=202)
-async def trigger_run(job_id: int, session: Session = Depends(get_session)):
+async def trigger_run(
+    job_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_user),
+):
     job = session.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    assert_can_run(user, job.job_type)
 
     run = Run(job_id=job_id, status="pending")
     session.add(run)

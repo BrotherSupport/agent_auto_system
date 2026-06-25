@@ -112,6 +112,45 @@
       border-radius: 6px; padding: 0.5rem 0.6rem;
     }
 
+    /* ── Admin ── */
+    .admin-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+    .admin-table th { text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); }
+    .admin-table td { padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(51,65,85,0.5); vertical-align: middle; }
+    .admin-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .badge-admin { background: rgba(99,102,241,0.18); color: #a5b4fc; }
+    .badge-on { background: rgba(34,197,94,0.16); color: #4ade80; }
+    .badge-off { background: rgba(100,116,139,0.18); color: var(--text-muted); }
+    .badge-src { background: rgba(59,130,246,0.16); color: #93c5fd; }
+    .admin-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .btn-sm { font-size: 0.76rem; padding: 0.3rem 0.6rem; border-radius: 6px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-muted); }
+    .btn-sm:hover { color: var(--text); border-color: var(--accent); }
+    .btn-sm.danger:hover { color: var(--red); border-color: var(--red); }
+    .admin-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap; }
+    .admin-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1rem 1.1rem; margin-bottom: 0.8rem; }
+    .admin-card-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .key-input { display: flex; gap: 0.5rem; align-items: center; flex: 1; min-width: 220px; }
+    .key-input input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 0.5rem 0.65rem; font-family: var(--font-mono); font-size: 0.82rem; }
+    .key-input input:focus { outline: none; border-color: var(--accent); }
+    .muted { color: var(--text-muted); font-weight: 400; }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid rgba(51,65,85,0.5); }
+    .toggle-row:last-child { border-bottom: none; }
+    .switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch .track { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: 0.15s; cursor: pointer; }
+    .switch .track::before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: 0.15s; }
+    .switch input:checked + .track { background: var(--accent); }
+    .switch input:checked + .track::before { transform: translateX(18px); }
+    .field { margin-bottom: 0.9rem; display: flex; flex-direction: column; gap: 0.35rem; }
+    .field > label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
+    .field input[type=text], .field input[type=password] { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 7px; padding: 0.55rem 0.65rem; font-size: 0.88rem; }
+    .field input:focus { outline: none; border-color: var(--accent); }
+    .allow-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem 0.8rem; margin-top: 0.3rem; }
+    .allow-grid label, .allow-all { font-size: 0.82rem; color: var(--text); display: flex; align-items: center; gap: 0.4rem; font-weight: 400; }
+    .allow-all { margin-top: 0.2rem; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 0.6rem; margin-top: 1.2rem; }
+    .auser-error { color: var(--red); font-size: 0.82rem; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 6px; padding: 0.5rem 0.6rem; }
+
     /* ── Page visibility ── */
     .page { display: none; }
     .page.active { display: block; }
@@ -727,6 +766,7 @@
     <button class="nav-tab" data-page="activity">Activity</button>
     <button class="nav-tab" data-page="system">System</button>
     <button class="nav-tab" data-page="analytics">Analytics</button>
+    <button class="nav-tab" data-page="admin" id="nav-admin" hidden>Admin</button>
   </nav>
   <div class="user-menu" id="user-menu" hidden>
     <span class="user-chip" id="user-chip" title="Logged in"></span>
@@ -962,6 +1002,60 @@
 
   <div class="section" style="padding-top:0">
     <div id="perf-content"><div class="loading-state">Loading…</div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ ADMIN ══════════════════════════════════════ -->
+<div class="page" id="page-admin">
+  <div class="page-header">
+    <h1>Admin</h1>
+    <p>Manage users and permissions, LLM API keys, and which automations are enabled.</p>
+  </div>
+
+  <div class="cat-tabs" id="admin-tabs">
+    <button class="cat-tab active" data-adm="users">Users</button>
+    <button class="cat-tab" data-adm="keys">LLM Keys</button>
+    <button class="cat-tab" data-adm="autos">Automations</button>
+  </div>
+
+  <div class="section" style="padding-top:0">
+    <div id="admin-users" class="admin-panel"><div class="loading-state">Loading…</div></div>
+    <div id="admin-keys" class="admin-panel" hidden><div class="loading-state">Loading…</div></div>
+    <div id="admin-autos" class="admin-panel" hidden><div class="loading-state">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Admin: create / edit user modal -->
+<div class="modal-overlay hidden" id="admin-user-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="auser-title">New User</h3>
+      <button class="modal-close" id="auser-close">&times;</button>
+    </div>
+    <form id="auser-form">
+      <input type="hidden" id="auser-id" />
+      <div class="field">
+        <label for="auser-username">Username</label>
+        <input id="auser-username" type="text" autocomplete="off" required />
+      </div>
+      <div class="field" id="auser-password-field">
+        <label for="auser-password">Password <span class="muted" id="auser-password-hint">(min 8 chars)</span></label>
+        <input id="auser-password" type="text" autocomplete="off" placeholder="Set a password" />
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="auser-admin" /> Administrator (full access)</label>
+      </div>
+      <div class="field" id="auser-allow-field">
+        <label>Allowed automations</label>
+        <label class="allow-all"><input type="checkbox" id="auser-allow-all" /> All automations (wildcard)</label>
+        <div class="allow-grid" id="auser-allow-grid"></div>
+      </div>
+      <div class="auser-error" id="auser-error" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="auser-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="auser-save">Save</button>
+      </div>
+    </form>
   </div>
 </div>
 

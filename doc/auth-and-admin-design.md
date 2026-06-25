@@ -164,13 +164,21 @@ litellm/Gemini paths read the env var directly.
 
 ## Implementation phases (each independently shippable)
 
-1. **Auth backbone** — deps; `User`/`Setting` models; `auth.py`; `SessionMiddleware`;
-   admin seed; login/logout/me endpoints; gate `/api/*`; login view.
-   *Outcome: the system is locked behind login.*
-2. **Admin: users & permissions** — admin router users CRUD + allowlist; per-run
-   enforcement; admin UI Users section.
-3. **Admin: runtime LLM keys & automation toggles** — `settings_store`;
-   `provider.resolve()` swap; keys + automations endpoints and UI.
+1. **Auth backbone** ✅ *(done)* — deps; `User`/`Setting` models; `auth.py`;
+   `SessionMiddleware`; admin seed; login/logout/me endpoints; gate `/api/*`;
+   login view. *Outcome: the system is locked behind login.*
+2. **Admin: users & permissions** ✅ *(done)* — admin router users CRUD +
+   allowlist + last-admin guards; `assert_can_run` enforcement on `create_job`
+   and `trigger_run`; admin UI Users section.
+3. **Admin: runtime LLM keys & automation toggles** ✅ *(done)* —
+   `settings_store` (Fernet-encrypted keys, enabled set); `provider.resolve()`
+   reads DB→env; keys + automations endpoints and UI; non-admin run/landing
+   filtered to enabled ∩ allowlist.
+
+> **Status:** all three phases implemented on branch `feat/auth-and-admin`.
+> 293 unit+integration tests pass; enforcement verified end-to-end on a live
+> server (non-admin 403 on admin APIs; allowed+enabled → 201; not-allowed → 403;
+> globally-disabled blocks everyone; DB key masked + used by `resolve()`).
 
 ## Tests
 

@@ -5,6 +5,8 @@ Login stores the user id in a signed, HttpOnly session cookie (Starlette
 the active user from that session and gate access.
 """
 
+import json
+
 import bcrypt
 from fastapi import Depends, HTTPException, Request
 from sqlmodel import Session
@@ -57,3 +59,36 @@ def require_admin(user: User = Depends(require_user)) -> User:
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Admin privileges required")
     return user
+
+
+def user_allowed_automations(user: User) -> str | list[str]:
+    """A user's allowlist: the "*" wildcard or a list of job types."""
+    raw = (user.allowed_automations or "").strip()
+    if raw == "*":
+        return "*"
+    try:
+        parsed = json.loads(raw)
+        return parsed if isinstance(parsed, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
+def assert_can_run(user: User, job_type: str) -> None:
+    """Raise 403 if ``user`` may not run ``job_type``.
+
+    A globally disabled automation is blocked for everyone (admins re-enable it
+    in the admin page to run it). Beyond that, admins bypass the per-user
+    allowlist; regular users must have the job type in theirs.
+    """
+    from src.settings_store import is_automation_enabled
+
+    if not is_automation_enabled(job_type):
+        raise HTTPException(status_code=403, detail=f"Automation '{job_type}' is disabled")
+    if user.is_admin:
+        return
+    allowed = user_allowed_automations(user)
+    if allowed == "*" or job_type in allowed:
+        return
+    raise HTTPException(
+        status_code=403, detail=f"You are not permitted to run '{job_type}'"
+    )

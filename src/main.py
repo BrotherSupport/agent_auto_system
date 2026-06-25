@@ -12,7 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from src import telemetry as _tel
 from src.auth import require_user
 from src.database import get_engine, init_db, reconcile_stale_runs
-from src.routers import auth, jobs, runs, system, uploads
+from src.routers import admin, auth, jobs, runs, system, uploads
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +78,9 @@ app.add_middleware(SessionMiddleware, secret_key=APP_SECRET, https_only=False)
 # Auth endpoints stay open (login must be reachable without a session).
 app.include_router(auth.router, prefix="/api")
 
+# Admin router enforces require_admin internally (every route).
+app.include_router(admin.router, prefix="/api")
+
 # Everything else requires a logged-in user.
 _gated = [Depends(require_user)]
 app.include_router(jobs.router, prefix="/api", dependencies=_gated)
@@ -104,8 +107,12 @@ def health():
     except Exception:
         logger.exception("Health check: DB connectivity failed")
 
+    from src import settings_store
     from src.automation.harness.provider import _CATALOG
-    providers = {name: bool(os.getenv(cfg["env"])) for name, cfg in _CATALOG.items()}
+    providers = {
+        name: settings_store.llm_key_status(name, cfg["env"])["configured"]
+        for name, cfg in _CATALOG.items()
+    }
 
     return {
         "status": "ok" if db_ok else "degraded",

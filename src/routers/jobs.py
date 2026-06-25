@@ -4,8 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from src.auth import assert_can_run, require_user
 from src.database import get_session
-from src.models import Job
+from src.models import Job, User
 
 router = APIRouter()
 
@@ -23,7 +24,12 @@ def list_jobs(session: Session = Depends(get_session)):
 
 
 @router.post("/jobs", status_code=201)
-def create_job(data: JobCreate, session: Session = Depends(get_session)):
+def create_job(
+    data: JobCreate,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_user),
+):
+    assert_can_run(user, data.job_type)
     job = Job(name=data.name, job_type=data.job_type, payload=json.dumps(data.payload), schedule=data.schedule)
     session.add(job)
     session.commit()
