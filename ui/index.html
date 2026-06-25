@@ -1019,12 +1019,14 @@
       </div>
 
       <div id="fields-profit_health_check" class="hidden">
-        <div class="field"><label>蝦皮銷售報表 sales <span style="color:var(--red)">*</span></label><input type="file" id="ph-sales" accept=".csv" /></div>
-        <div class="field"><label>商品成本表 cost <span style="color:var(--red)">*</span></label><input type="file" id="ph-cost" accept=".csv" /></div>
-        <div class="field"><label>廣告資料 ads (選填)</label><input type="file" id="ph-ads" accept=".csv" /></div>
-        <div class="field"><label>退貨/退款資料 returns (選填)</label><input type="file" id="ph-returns" accept=".csv" /></div>
+        <div class="field">
+          <label>蝦皮 CSV 檔（一次全選）<span style="color:var(--red)">*</span></label>
+          <input type="file" id="ph-files" accept=".csv" multiple />
+        </div>
+        <div id="ph-classified" style="font-size:0.78rem;margin-bottom:0.5rem"></div>
         <div style="font-size:0.75rem;color:var(--text-muted);background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
-          上傳蝦皮 CSV 檔，AI 會驗證 → 修正 → 分析 → 建議，產出每個 SKU 的利潤健檢報告。sales 與 cost 為必填，每檔上限 2 MB。
+          一次選取所有蝦皮 CSV，系統會依檔名自動分類：含 <b>sales</b>→銷售、<b>cost</b>→成本、<b>ad</b>→廣告、<b>return/refund</b>→退貨。
+          銷售與成本為必備，每檔上限 2 MB。AI 會驗證 → 修正 → 分析 → 建議，並產出 PDF 利潤健檢報告。
         </div>
       </div>
 

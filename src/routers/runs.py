@@ -4,12 +4,13 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import text
 from sqlmodel import Session, select
 
 from src.automation.registry import cancel as cancel_task
 from src.automation.registry import register, unregister
+from src.automation.report_render import REPORTS_ROOT
 from src.database import get_engine, get_session
 from src.models import Job, Run
 
@@ -113,6 +114,15 @@ def get_run(run_id: int, session: Session = Depends(get_session)):
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     return run
+
+
+@router.get("/runs/{run_id}/report.pdf")
+def get_run_report(run_id: int):
+    """Serve the generated PDF report for a run (profit_health_check)."""
+    path = REPORTS_ROOT / f"{run_id}.pdf"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="No PDF report for this run")
+    return FileResponse(path, media_type="application/pdf", filename=f"profit-health-{run_id}.pdf")
 
 
 @router.get("/runs/{run_id}/stream")
