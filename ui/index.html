@@ -92,35 +92,12 @@
     .btn-danger:hover { background: rgba(239,68,68,0.2); }
     .btn-sm { padding: 0.3rem 0.7rem; font-size: 0.8rem; }
 
-    /* ── Hero ── */
-    .hero {
-      position: relative; padding: 2.5rem 2rem 2rem;
-      text-align: center; max-width: 640px; margin: 0 auto;
-    }
-    .hero h1 { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; }
-    .hero h1 em { color: var(--accent); font-style: normal; }
-    .hero p { margin-top: 0.75rem; color: var(--text-muted); font-size: 1rem; line-height: 1.6; }
-    .hero-actions { margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: center; }
-    #hero-dismiss {
-      position: absolute; top: 0.9rem; right: 0.5rem;
-      background: none; border: none; color: var(--text-muted);
-      font-size: 1.1rem; cursor: pointer; line-height: 1; padding: 0.25rem 0.4rem;
-      border-radius: 4px;
-    }
-    #hero-dismiss:hover { color: var(--text); background: rgba(255,255,255,0.06); }
-
     /* ── Sections ── */
     .section { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem 4rem; }
     .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
     .section-header h2 { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
     .section-header-left { display: flex; align-items: center; gap: 1rem; }
     .section-header-right { display: flex; align-items: center; gap: 0.5rem; }
-
-    .hero-restore-btn {
-      background: none; border: none; color: var(--text-muted); font-size: 0.78rem;
-      cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 2px;
-    }
-    .hero-restore-btn:hover { color: var(--text); }
 
     /* ── Table ── */
     .table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
@@ -272,8 +249,9 @@
 
     /* ── Page header ── */
     .page-header { padding: 1.75rem 1.5rem 1rem; max-width: 1100px; margin: 0 auto; }
-    .page-header h1 { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
-    .page-header p { margin-top: 0.3rem; color: var(--text-muted); font-size: 0.9rem; }
+    .page-header h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.025em; }
+    .page-header p { margin-top: 0.35rem; color: var(--text-muted); font-size: 0.92rem; line-height: 1.55; }
+    .page-header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 
     /* ── Category tabs ── */
     .cat-tabs { display: flex; gap: 0.25rem; padding: 0 1.5rem; max-width: 1100px; margin: 0 auto 1.25rem; border-bottom: 1px solid var(--border); }
@@ -704,10 +682,10 @@
   <a class="logo" data-page="landing"><span class="logo-mark">⚡</span>agent<span>auto</span></a>
   <nav class="nav-tabs" id="nav-tabs">
     <button class="nav-tab" data-page="landing">Home</button>
-    <button class="nav-tab" data-page="dashboard">Dashboard</button>
+    <button class="nav-tab" data-page="run">Run</button>
+    <button class="nav-tab" data-page="activity">Activity</button>
     <button class="nav-tab" data-page="system">System</button>
-    <button class="nav-tab" data-page="automations">Automations</button>
-    <button class="nav-tab" data-page="performance">Performance</button>
+    <button class="nav-tab" data-page="analytics">Analytics</button>
   </nav>
   <button class="btn btn-primary" id="new-run-btn">+ New Run</button>
 </header>
@@ -811,15 +789,15 @@
       <p>Spin up your first agent run in seconds.</p>
       <div class="lp-hero-actions">
         <button class="btn btn-primary btn-lg" id="lp-cta-run">+ New Run</button>
-        <button class="btn btn-ghost btn-lg" id="lp-cta-dash">View dashboard</button>
+        <button class="btn btn-ghost btn-lg" id="lp-cta-dash">View activity</button>
       </div>
     </section>
 
     <footer class="lp-footer">
       <a class="logo" data-page="landing"><span class="logo-mark">⚡</span>agent<span>auto</span></a>
       <div class="lp-footer-links">
-        <a data-page="dashboard">Dashboard</a>
-        <a data-page="automations">Automations</a>
+        <a data-page="run">Run</a>
+        <a data-page="activity">Activity</a>
         <a data-page="system">System</a>
         <a href="/docs" target="_blank">API docs</a>
       </div>
@@ -828,22 +806,16 @@
 </div>
 
 <!-- ══════════════════════════════════════ DASHBOARD ══════════════════════════════════ -->
-<div class="page" id="page-dashboard">
-  <section class="hero" id="hero-section">
-    <button id="hero-dismiss" title="Hide intro">×</button>
-    <h1>Automate anything<br/>with <em>AI agents</em></h1>
-    <p>Define jobs, trigger them with one click, and let CrewAI agents execute them in the background.</p>
-    <div class="hero-actions">
-      <button class="btn btn-primary" id="hero-run-btn">Run automation</button>
-      <a href="/docs" class="btn btn-ghost" target="_blank">API docs</a>
-    </div>
-  </section>
+<div class="page" id="page-activity">
+  <div class="page-header">
+    <h1>Activity</h1>
+    <p>Run history and live execution progress. Trigger a new run from the <strong>Run</strong> tab or the <strong>+ New Run</strong> button.</p>
+  </div>
 
   <div class="section">
     <div class="section-header">
       <div class="section-header-left">
         <h2>Run History</h2>
-        <button id="hero-restore" class="hero-restore-btn hidden">show intro</button>
       </div>
       <div class="section-header-right" id="bulk-actions">
         <button class="btn btn-ghost btn-sm hidden" id="delete-selected-btn">Delete Selected</button>
@@ -904,11 +876,16 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════ AUTOMATIONS ════════════════════════════════ -->
-<div class="page" id="page-automations">
+<!-- ══════════════════════════════════════ RUN ════════════════════════════════════════ -->
+<div class="page" id="page-run">
   <div class="page-header">
-    <h1>Automations</h1>
-    <p>Available automation types — click a card to start a new run.</p>
+    <div class="page-header-row">
+      <div>
+        <h1>Run an Automation</h1>
+        <p>This is where you execute automations. Pick a type below to configure and launch a new run.</p>
+      </div>
+      <button class="btn btn-primary" id="run-new-btn">+ New Run</button>
+    </div>
   </div>
 
   <div class="section" style="padding-top:0">
@@ -916,11 +893,11 @@
   </div>
 </div>
 
-<!-- ══════════════════════════════════════ PERFORMANCE ═══════════════════════════════ -->
-<div class="page" id="page-performance">
+<!-- ══════════════════════════════════════ ANALYTICS ═════════════════════════════════ -->
+<div class="page" id="page-analytics">
   <div class="page-header">
-    <h1>Performance</h1>
-    <p>Agent system health and run metrics.</p>
+    <h1>Analytics</h1>
+    <p>Agent system health, run metrics, and LLM provider stats.</p>
   </div>
 
   <div class="section" style="padding-top:0">
