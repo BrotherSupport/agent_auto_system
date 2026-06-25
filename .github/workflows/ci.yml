@@ -106,6 +106,9 @@ jobs:
             --publish 8000:8000 \
             --env OPENAI_API_KEY=sk-placeholder-not-used-in-smoke-tests \
             --env DATABASE_URL=sqlite:///./data/auto.db \
+            --env APP_SECRET=ci-smoke-secret \
+            --env ADMIN_USERNAME=admin \
+            --env ADMIN_PASSWORD=admin \
             agent-auto-system:ci
 
       # ── Wait for the app to be healthy ────────────────────────────────────────
@@ -123,6 +126,19 @@ jobs:
           echo "✗ App did not become healthy within 2 min" >&2
           docker logs ags-ci
           exit 1
+
+      # ── Authenticate (the API is gated behind login) ─────────────────────────
+      - name: "POST /api/auth/login → cookie jar"
+        run: |
+          curl -s -c /tmp/ci_cookies.txt -X POST http://localhost:8000/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"username":"admin","password":"admin"}' \
+            | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          assert d.get('is_admin') is True, f'login failed: {d}'
+          print('✓ logged in as admin')
+          "
 
       # ── Smoke tests ───────────────────────────────────────────────────────────
       - name: "GET /health → {status: ok}"
@@ -143,7 +159,7 @@ jobs:
 
       - name: "GET /api/system → catalog completeness"
         run: |
-          curl -sf http://localhost:8000/api/system \
+          curl -sf -b /tmp/ci_cookies.txt http://localhost:8000/api/system \
             | python3 -c "
           import sys, json
           d = json.load(sys.stdin)
@@ -164,7 +180,7 @@ jobs:
 
       - name: "POST /api/jobs → create hacker_news_digest job"
         run: |
-          JOB=$(curl -sf -X POST http://localhost:8000/api/jobs \
+          JOB=$(curl -sf -b /tmp/ci_cookies.txt -X POST http://localhost:8000/api/jobs \
             -H "Content-Type: application/json" \
             -d '{"name":"CI smoke test","job_type":"hacker_news_digest","payload":{"limit":3}}')
           echo "$JOB" | python3 -c "
@@ -178,7 +194,7 @@ jobs:
 
       - name: "GET /api/jobs → non-empty list"
         run: |
-          curl -sf http://localhost:8000/api/jobs \
+          curl -sf -b /tmp/ci_cookies.txt http://localhost:8000/api/jobs \
             | python3 -c "
           import sys, json
           jobs = json.load(sys.stdin)
@@ -188,7 +204,7 @@ jobs:
 
       - name: "GET /api/stats → shape & 7-day trend"
         run: |
-          curl -sf http://localhost:8000/api/stats \
+          curl -sf -b /tmp/ci_cookies.txt http://localhost:8000/api/stats \
             | python3 -c "
           import sys, json
           d = json.load(sys.stdin)
@@ -201,7 +217,7 @@ jobs:
 
       - name: "DELETE /api/runs?delete_all=true → zero deleted (no runs yet)"
         run: |
-          curl -sf -X DELETE "http://localhost:8000/api/runs?delete_all=true" \
+          curl -sf -b /tmp/ci_cookies.txt -X DELETE "http://localhost:8000/api/runs?delete_all=true" \
             | python3 -c "
           import sys, json
           d = json.load(sys.stdin)
