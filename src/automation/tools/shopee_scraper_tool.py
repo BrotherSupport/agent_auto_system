@@ -394,7 +394,10 @@ def _open_search_page(page, kw: str, pg: int, errors: list[str]) -> bool:
     for attempt in range(2):
         try:
             page.goto(url, wait_until="domcontentloaded", timeout=30_000)
-            page.wait_for_selector('a[href*="-i."]', timeout=15_000)
+            # A loadable grid renders within ~1-2s of domcontentloaded; a blocked
+            # page never renders, so a short wait trims the doomed case while the
+            # one-shot retry below still covers a slow grid under throttling.
+            page.wait_for_selector('a[href*="-i."]', timeout=8_000)
             return True
         except Exception as exc:  # noqa: BLE001
             if attempt == 0:
@@ -410,25 +413,36 @@ def _harvest_dom_links(page, products: list[dict], seen: set[tuple[int, int]],
 
     Returns the running total product count so the caller can detect when a
     scroll pass stopped adding cards.
+
+    Pulls every link's data in a single `page.evaluate` round-trip rather than
+    per-element locator reads: far fewer Playwright↔browser hops and immune to
+    elements detaching mid-scroll (the DOM mutates while the grid lazy-loads).
     """
-    for a in page.locator('a[href*="-i."]').all():
-        try:
-            href = a.get_attribute("href") or ""
-            m = _IID_RE.search(href)
-            if not m:
-                continue
-            shopid, itemid = int(m.group(1)), int(m.group(2))
-            if (shopid, itemid) in seen:
-                continue
-            seen.add((shopid, itemid))
-            name = (a.get_attribute("aria-label") or a.inner_text() or "").strip()[:200]
-            products.append({
-                "shopid": shopid,
-                "itemid": itemid,
-                "name": name,
-                "url": urllib.parse.urljoin(_BASE, href),
-            })
-            unique_shops.add(shopid)
-        except Exception:  # noqa: BLE001 — skip elements that detach mid-scrape
+    try:
+        links = page.evaluate(
+            """() => Array.from(document.querySelectorAll('a[href*="-i."]')).map(a => ({
+                href: a.getAttribute('href') || '',
+                aria: a.getAttribute('aria-label') || '',
+                text: a.innerText || '',
+            }))"""
+        )
+    except Exception:  # noqa: BLE001 — navigation/teardown mid-eval; harvest later
+        return len(products)
+
+    for link in links:
+        m = _IID_RE.search(link["href"])
+        if not m:
             continue
+        shopid, itemid = int(m.group(1)), int(m.group(2))
+        if (shopid, itemid) in seen:
+            continue
+        seen.add((shopid, itemid))
+        name = (link["aria"] or link["text"] or "").strip()[:200]
+        products.append({
+            "shopid": shopid,
+            "itemid": itemid,
+            "name": name,
+            "url": urllib.parse.urljoin(_BASE, link["href"]),
+        })
+        unique_shops.add(shopid)
     return len(products)
