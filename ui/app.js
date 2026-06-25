@@ -88,15 +88,12 @@ const AUTO_CATALOG = {
   },
   profit_health_check: {
     icon: '🧾', name: '利潤健檢',
-    desc: 'Upload your Shopee CSVs (sales, cost, ads, returns). A 4-agent crew validates → corrects → analyzes → advises, producing a per-SKU profit health report in Traditional Chinese — most-profitable, fake hits, ad-eats-profit, and return-anomaly SKUs plus a next-week action list.',
+    desc: 'Select all your Shopee CSVs at once — the system auto-classifies each by filename (sales, cost, ads, returns). A 4-agent crew validates → corrects → analyzes → advises, producing a per-SKU profit health report in Traditional Chinese plus a downloadable PDF — most-profitable, fake hits, ad-eats-profit, and return-anomaly SKUs with a next-week action list.',
     inputs: [
-      { name: 'sales',   type: 'file (.csv)', desc: '蝦皮銷售報表 (required)' },
-      { name: 'cost',    type: 'file (.csv)', desc: '商品成本表 (required)' },
-      { name: 'ads',     type: 'file (.csv, optional)', desc: '廣告資料' },
-      { name: 'returns', type: 'file (.csv, optional)', desc: '退貨/退款資料' },
+      { name: 'files', type: 'file[] (.csv)', desc: '一次選取所有蝦皮 CSV，依檔名自動分類；須含 sales 與 cost' },
     ],
     crew: 'ProfitHealthCrew', flow: 'ProfitHealthFlow',
-    agent: '資料驗證員 · 資料修正員 · 利潤分析師 · 行動建議員', tools: ['Profit Calc'],
+    agent: '資料驗證員 · 資料修正員 · 利潤分析師 · 行動建議員', tools: ['Profit Calc', 'Report Renderer'],
   },
   pipeline: {
     icon: '🔗', name: 'Pipeline',
@@ -194,6 +191,7 @@ const FLOW_STEPS = {
     { label: '修正',     trigger: '蝦皮資料修正員' },
     { label: '分析',     trigger: '蝦皮利潤分析師' },
     { label: '建議',     trigger: '蝦皮營運行動建議員' },
+    { label: 'PDF',      trigger: 'PDF 報告' },
     ..._QA_STEPS,
     { label: 'Done',     trigger: 'completed successfully' },
   ],
@@ -412,6 +410,7 @@ document.getElementById('run-new-btn').addEventListener('click', () => openModal
 document.getElementById('modal-close').addEventListener('click', closeModalFn);
 document.getElementById('cancel-btn').addEventListener('click', closeModalFn);
 document.getElementById('llm-provider').addEventListener('change', updateModelOptions);
+document.getElementById('ph-files').addEventListener('change', renderPhClassified);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModalFn(); });
 
 // ── Job type card selection ───────────────────────────────────────────────────
@@ -439,6 +438,39 @@ function selectJobType(type) {
       addPipelineStep('email_sender');
     }
   }
+}
+
+// ── Profit health check: filename → role classification (mirrors uploads.py) ──
+
+const _PH_ROLE_KEYWORDS = [
+  ['returns', ['return', 'refund', '退貨', '退款']],
+  ['cost',    ['cost', '成本']],
+  ['ads',     ['ad', 'advert', '廣告', 'discount', '折扣']],
+  ['sales',   ['sales', 'sale', 'order', '銷售', '訂單']],
+];
+const _PH_ROLE_LABEL = { sales: '銷售', cost: '成本', ads: '廣告', returns: '退貨' };
+
+function classifyCsv(filename) {
+  const name = (filename || '').toLowerCase();
+  for (const [role, kws] of _PH_ROLE_KEYWORDS) {
+    if (kws.some(k => name.includes(k))) return role;
+  }
+  return null;
+}
+
+function renderPhClassified() {
+  const box = document.getElementById('ph-classified');
+  if (!box) return;
+  const picked = Array.from(document.getElementById('ph-files').files || []);
+  if (!picked.length) { box.innerHTML = ''; return; }
+  const rows = picked.map(f => {
+    const role = classifyCsv(f.name);
+    const tag = role
+      ? `<span style="color:var(--green)">→ ${_PH_ROLE_LABEL[role]}</span>`
+      : `<span style="color:var(--red)">→ 無法辨識</span>`;
+    return `<div style="display:flex;justify-content:space-between;gap:1rem"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(f.name)}</span>${tag}</div>`;
+  });
+  box.innerHTML = `<div style="border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem">${rows.join('')}</div>`;
 }
 
 // ── Pipeline builder ──────────────────────────────────────────────────────────
@@ -639,21 +671,20 @@ runForm.addEventListener('submit', async (e) => {
     jobName = `Shopee: ${keyword}`;
 
   } else if (jobType === 'profit_health_check') {
-    const sales   = document.getElementById('ph-sales').files[0];
-    const cost    = document.getElementById('ph-cost').files[0];
-    const ads     = document.getElementById('ph-ads').files[0];
-    const returns = document.getElementById('ph-returns').files[0];
-    if (!sales) { showToast('請上傳銷售報表 (sales)', 'error'); return; }
-    if (!cost)  { showToast('請上傳商品成本表 (cost)', 'error'); return; }
+    const picked = Array.from(document.getElementById('ph-files').files || []);
+    if (!picked.length) { showToast('請選取蝦皮 CSV 檔（可一次全選）', 'error'); return; }
     const MAX = 2 * 1024 * 1024;
-    for (const [f, n] of [[sales, 'sales'], [cost, 'cost'], [ads, 'ads'], [returns, 'returns']]) {
-      if (f && f.size > MAX) { showToast(`${n} 檔案超過 2 MB 上限`, 'error'); return; }
+    for (const f of picked) {
+      if (f.size > MAX) { showToast(`${f.name} 超過 2 MB 上限`, 'error'); return; }
+    }
+    // Client-side preview only — the server is the source of truth for routing.
+    const roles = picked.reduce((acc, f) => { const r = classifyCsv(f.name); if (r) acc[r] = f.name; return acc; }, {});
+    if (!roles.sales || !roles.cost) {
+      showToast('檔名需可辨識出銷售 (sales) 與成本 (cost)；請確認檔名含對應關鍵字', 'error');
+      return;
     }
     const fd = new FormData();
-    fd.append('sales', sales);
-    fd.append('cost', cost);
-    if (ads)     fd.append('ads', ads);
-    if (returns) fd.append('returns', returns);
+    picked.forEach(f => fd.append('files', f));
     let uploadId;
     try {
       const up = await fetch('/api/uploads', { method: 'POST', body: fd });
@@ -668,7 +699,7 @@ runForm.addEventListener('submit', async (e) => {
       return;
     }
     payload = { upload_id: uploadId };
-    jobName = `利潤健檢：${sales.name}`;
+    jobName = `利潤健檢：${roles.sales}`;
 
   } else if (jobType === 'pipeline') {
     const steps = collectPipelineSteps();
@@ -1148,6 +1179,7 @@ function renderHistory(runs, hasMore = false) {
           <div class="detail-pane active" id="pane-result-${run.id}" data-pane="result">
             <div class="pane-toolbar">
               <button class="btn-copy" data-action="copy" data-run-id="${run.id}">Copy JSON</button>
+              ${resultJson && resultJson.pdf_url ? `<a class="btn-copy" href="/api/runs/${run.id}/report.pdf" target="_blank" rel="noopener">📄 下載 PDF 報告</a>` : ''}
             </div>
             <pre>${escHtml(resultJson ? JSON.stringify(resultJson, null, 2) : (run.result || ''))}</pre>
           </div>

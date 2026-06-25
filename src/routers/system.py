@@ -256,6 +256,18 @@ _CATALOG: dict = {
             "used_by": ["ProfitHealthCrew"],
             "source_file": "src/automation/tools/profit_calc_tool.py",
         },
+        {
+            "id": "report_renderer",
+            "name": "Report Renderer",
+            "class": "render_report_pdf",
+            "description": "Deterministically render a 利潤健檢 ProfitReport (JSON) into a styled HTML report and print it to PDF via headless Chromium (json → html → pdf). Produces summary cards, a per-SKU table with margin bars + AI 判斷 badges, and a prioritised next-week action list. Pure presentation — no LLM. Invoked by ProfitHealthFlow.render_pdf; the PDF is served at GET /api/runs/{id}/report.pdf.",
+            "inputs": [
+                {"name": "report", "type": "dict", "description": "ProfitReport-shaped JSON from the crew"},
+                {"name": "out_path", "type": "Path", "description": "Destination PDF path (reports/<run_id>.pdf)"},
+            ],
+            "used_by": ["ProfitHealthFlow"],
+            "source_file": "src/automation/report_render.py",
+        },
     ],
     "crews": [
         {
@@ -606,6 +618,11 @@ _CATALOG: dict = {
                     "name": "execute_crew",
                     "decorator": "@listen(validate_payload)",
                     "description": "Resolves the LLM and runs ProfitHealthCrew (驗證→修正→分析→建議). Returns the Traditional-Chinese profit report JSON.",
+                },
+                {
+                    "name": "render_pdf",
+                    "decorator": "@listen(execute_crew)",
+                    "description": "Renders the report JSON → HTML → PDF (reports/<run_id>.pdf) and injects pdf_url into the result. Fail-soft: rendering errors never fail the run.",
                 },
             ],
             "source_file": "src/automation/flows/profit_health_flow.py",

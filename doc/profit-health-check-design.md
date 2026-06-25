@@ -12,20 +12,33 @@ Sample data: [`shopee/sample_data/`](../shopee/sample_data).
 | # | Decision | Choice |
 |---|---|---|
 | 1 | CSV delivery | **Upload endpoint** (`POST /api/uploads`, multipart) — not inline-in-payload |
-| 2 | Report output | **JSON** (for now) |
+| 1b | File selection | **Single multi-file upload, auto-classified by filename** (v2) — seller drops all CSVs in one `files` field; the server routes each by keyword (`cost`→cost, `sales`→sales, `ad`/`廣告`→ads, `return`/`refund`→returns). No per-slot pickers. See `_classify` / `_ROLE_KEYWORDS` in `src/routers/uploads.py`. |
+| 2 | Report output | **JSON + PDF** (v2) — the crew still returns JSON; a deterministic renderer then prints it to PDF (json → html → pdf), served at `GET /api/runs/{id}/report.pdf`. `pdf_url` is injected into the result. |
 | 3 | Language | **Traditional Chinese** |
 | 4 | Schema handling | **Strict** to the 4 sample-file schemas (semantic adapter is a v2) |
 | 5 | Analysis engine | **Multi-agent LLM crew** (validator → corrector → analyzer → advisor) |
-| — | Math | **Deterministic `profit_calc` tool** for the analyzer agent — agent decides *what* to flag, Python does the *arithmetic* |
+| — | Math + rendering | **Deterministic** — `profit_calc` tool does the arithmetic; `report_render` does the layout/PDF. Agents decide *what* to flag and *what* to advise; Python does the numbers and the presentation. |
 
 ## Architecture
 
 ```
-UI: pick 4 CSVs ──multipart──▶ POST /api/uploads ──▶ saves to uploads/<uuid>/, returns {upload_id}
+UI: pick all CSVs ─multipart(files[])─▶ POST /api/uploads ─▶ classify each by filename,
+                                                              save to uploads/<uuid>/, return {upload_id, classified}
 UI: POST /api/jobs {job_type:"profit_health_check", payload:{upload_id}} ──▶ run (existing path)
-Flow: read 4 CSVs from uploads/<uuid>/ ──▶ ProfitHealthCrew.kickoff(inputs={4 csv strings})
+Flow validate_payload: read CSVs from uploads/<uuid>/ ──▶ ProfitHealthCrew.kickoff(inputs={csv strings})
 Crew (sequential): 驗證 ▶ 修正 ▶ 分析 ▶ 建議 ──▶ JSON report
+Flow render_pdf: report JSON ─▶ render_report_html ─▶ html_to_pdf (headless Chromium) ─▶ reports/<run_id>.pdf
+                  inject pdf_url into result (fail-soft: render errors never fail the run)
 ```
+
+### v2 renderer (`src/automation/report_render.py`)
+
+`render_report_html(report)` builds a self-contained HTML page mirroring the on-screen
+demo — four summary cards (本週總入帳 / 淨利 / 獲利 SKU / 虧損 SKU), a per-SKU table sorted by
+margin with bars + AI 判斷 chips, and a prioritised 下週優先行動 list (recommendations →
+priority badges). `html_to_pdf` prints it with the Playwright Chromium already vendored
+for `form_fill` (no new dependency). Kept out of the crew because rendering is pure
+presentation — same input → same bytes.
 
 Why an upload endpoint rather than inlining CSV text in the JSON payload: the seller
 data can be large, and an explicit upload step keeps the job payload small and the

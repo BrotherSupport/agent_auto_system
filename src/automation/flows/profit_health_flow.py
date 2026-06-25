@@ -1,3 +1,7 @@
+import json
+import logging
+import re
+
 from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel
 
@@ -5,7 +9,25 @@ from src.automation.crews.profit_health_crew.crew import ProfitHealthCrew
 from src.automation.flows.base import FlowMixin
 from src.automation.flows.utils import extract_usage
 from src.automation.progress import append_log
+from src.automation.report_render import REPORTS_ROOT, render_report_pdf
 from src.routers.uploads import UPLOAD_ROOT
+
+logger = logging.getLogger(__name__)
+
+_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*\n?(.*?)\n?\s*```\s*$", re.DOTALL | re.IGNORECASE)
+
+
+def _parse_report(raw: str) -> dict | None:
+    """Best-effort parse of the crew's raw output into a report dict (or None)."""
+    for candidate in (raw, (_FENCE_RE.match(raw).group(1) if isinstance(raw, str) and _FENCE_RE.match(raw) else None)):
+        if candidate is None:
+            continue
+        try:
+            obj = json.loads(candidate)
+            return obj if isinstance(obj, dict) else None
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return None
 
 
 class ProfitHealthState(BaseModel):
@@ -97,3 +119,25 @@ class ProfitHealthFlow(FlowMixin, Flow[ProfitHealthState]):
         self.state.usage = extract_usage(result)
         append_log(self.state.run_id, "健檢報告產生完成，整理結果中...")
         return result.raw if hasattr(result, "raw") else str(result)
+
+    @listen(execute_crew)
+    def render_pdf(self, raw):
+        """Turn the JSON report into a downloadable PDF (json → html → pdf).
+
+        Fail-soft: rendering is presentation only, so any error here just leaves
+        the JSON report intact without a pdf_url — it never fails the run.
+        """
+        report = _parse_report(raw)
+        if report is None:
+            return raw  # not JSON we can render; pass the crew output through unchanged
+
+        try:
+            out_path = REPORTS_ROOT / f"{self.state.run_id}.pdf"
+            render_report_pdf(report, out_path)
+            report["pdf_url"] = f"/api/runs/{self.state.run_id}/report.pdf"
+            append_log(self.state.run_id, "PDF 報告已產生，可於結果頁下載。")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("run_id=%s PDF render failed: %s", self.state.run_id, exc)
+            append_log(self.state.run_id, f"PDF 產生失敗（報告仍可用）：{str(exc)[:120]}")
+
+        return json.dumps(report, ensure_ascii=False)

@@ -10,7 +10,7 @@ UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "uploads"
 
 _MAX_BYTES = 2 * 1024 * 1024  # 2 MB per file
 
-# Logical name → saved filename. sales + cost are required; ads + returns optional.
+# Logical role → saved filename. sales + cost are required; ads + returns optional.
 _SLOTS = {
     "sales":   "sales.csv",
     "cost":    "cost.csv",
@@ -19,53 +19,90 @@ _SLOTS = {
 }
 _REQUIRED = {"sales", "cost"}
 
+# Filename keyword → role. The uploader drops ALL CSVs in one go and we route each
+# by what its name contains, so a seller never has to match a file to a slot. Order
+# matters: more specific roles are checked first so e.g. "order_return_refund.csv"
+# lands in `returns` (not snagged by a looser keyword). Matching is case-insensitive
+# and substring-based, covering both the Shopee English exports and 中文 names.
+_ROLE_KEYWORDS = [
+    ("returns", ("return", "refund", "退貨", "退款")),
+    ("cost",    ("cost", "成本")),
+    ("ads",     ("ad", "advert", "廣告", "discount", "折扣")),
+    ("sales",   ("sales", "sale", "order", "銷售", "訂單")),
+]
 
-async def _read_capped(file: UploadFile, slot: str) -> bytes:
+
+def _classify(filename: str) -> str | None:
+    """Map an uploaded filename to a logical role by keyword, or None if unknown."""
+    name = (filename or "").lower()
+    for role, keywords in _ROLE_KEYWORDS:
+        if any(kw in name for kw in keywords):
+            return role
+    return None
+
+
+async def _read_capped(file: UploadFile, label: str) -> bytes:
     if not (file.filename or "").lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail=f"{slot}: must be a .csv file")
+        raise HTTPException(status_code=400, detail=f"{label}: must be a .csv file")
     # Read one byte past the cap to detect oversize without loading huge files.
     data = await file.read(_MAX_BYTES + 1)
     if len(data) > _MAX_BYTES:
-        raise HTTPException(status_code=413, detail=f"{slot}: file exceeds 2 MB limit")
+        raise HTTPException(status_code=413, detail=f"{label}: file exceeds 2 MB limit")
     if not data.strip():
-        raise HTTPException(status_code=400, detail=f"{slot}: file is empty")
+        raise HTTPException(status_code=400, detail=f"{label}: file is empty")
     return data
 
 
 @router.post("/uploads", status_code=201)
-async def create_upload(
-    sales: UploadFile = File(...),
-    cost: UploadFile = File(...),
-    ads: UploadFile | None = File(None),
-    returns: UploadFile | None = File(None),
-):
-    """Accept the 4 Shopee CSVs, save under uploads/<uuid>/, return the upload_id.
+async def create_upload(files: list[UploadFile] = File(...)):
+    """Accept all Shopee CSVs at once and auto-route each by filename.
 
-    sales + cost are required; ads + returns are optional. Each file is validated
-    as a non-empty .csv and capped at 2 MB.
+    Drop sales / cost / ads / returns CSVs in a single multipart `files` field;
+    each file's role is inferred from keywords in its name (e.g. *cost* → cost,
+    *sales* → sales, *ad* → ads, *return*/*refund* → returns). sales + cost are
+    required. Each file is validated as a non-empty .csv and capped at 2 MB.
+
+    Returns the upload_id plus how each file was classified, so the UI can show
+    the seller what the system decided.
     """
-    provided = {"sales": sales, "cost": cost, "ads": ads, "returns": returns}
-
-    # Validate + read everything before writing anything (no partial dirs on error).
-    # Some clients submit empty optional file fields (no filename) — skip those, but
-    # a missing required field is still a 400. Close every handle on the way out.
+    # Validate + read + classify everything before writing (no partial dirs on error).
+    # Close every handle on the way out. Later file wins if two map to the same role.
     contents: dict[str, bytes] = {}
+    mapping: dict[str, str] = {}   # role → original filename used
+    unmatched: list[str] = []
     try:
-        for slot, file in provided.items():
+        for file in files:
             if file is None or not file.filename:
-                if slot in _REQUIRED:
-                    raise HTTPException(status_code=400, detail=f"{slot}: required .csv file is missing")
                 continue
-            contents[slot] = await _read_capped(file, slot)
+            role = _classify(file.filename)
+            if role is None:
+                unmatched.append(file.filename)
+                continue
+            contents[role] = await _read_capped(file, file.filename)
+            mapping[role] = file.filename
     finally:
-        for file in provided.values():
+        for file in files:
             if file is not None:
                 await file.close()
+
+    missing = sorted(_REQUIRED - contents.keys())
+    if missing:
+        hint = f"; unrecognised files: {unmatched}" if unmatched else ""
+        raise HTTPException(
+            status_code=400,
+            detail=f"could not identify required file(s) by name: {missing} "
+                   f"(expected a CSV whose name contains the role, e.g. 'sales'/'cost'){hint}",
+        )
 
     upload_id = uuid.uuid4().hex
     dest = UPLOAD_ROOT / upload_id
     dest.mkdir(parents=True, exist_ok=True)
-    for slot, data in contents.items():
-        (dest / _SLOTS[slot]).write_bytes(data)
+    for role, data in contents.items():
+        (dest / _SLOTS[role]).write_bytes(data)
 
-    return {"upload_id": upload_id, "files": sorted(contents.keys())}
+    return {
+        "upload_id": upload_id,
+        "files": sorted(contents.keys()),
+        "classified": mapping,
+        "unmatched": unmatched,
+    }
