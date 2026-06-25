@@ -337,48 +337,98 @@ def _epoch_to_date(ts) -> str:
 # ── DOM fallback ────────────────────────────────────────────────────────────────
 
 def _search_dom(page, keyword: str, limit: int, errors: list[str]) -> list[dict]:
-    """Scrape product links off the rendered search page when the API is blocked."""
-    kw = urllib.parse.quote(keyword)
-    try:
-        page.goto(f"{_BASE}/search?keyword={kw}", wait_until="domcontentloaded", timeout=30_000)
-        page.wait_for_selector('a[href*="-i."]', timeout=15_000)
-    except Exception as exc:  # noqa: BLE001
-        errors.append(f"dom search: {type(exc).__name__}")
-        return []
+    """Scrape product links off the rendered search pages when the API is blocked.
 
+    Shopee search is PAGE-paginated (``?page=N``), not infinite-scroll, so one
+    page yields at most ~40 cards no matter how far we scroll — we must walk the
+    page numbers to gather `limit` unique shops. Within a page the grid lazy-loads
+    per scroll, so we step down in small increments and re-harvest rather than
+    jumping to the bottom once (a single big jump loads only the first ~20 cards).
+
+    The anti-bot layer intermittently throttles page loads; a blocked page is
+    skipped (with one backoff retry inside `_open_search_page`) instead of ending
+    the whole scrape, and we stop only after several consecutive failures.
+    """
+    kw = urllib.parse.quote(keyword)
     products: list[dict] = []
     seen: set[tuple[int, int]] = set()
     unique_shops: set[int] = set()
-    # Scroll to trigger lazy-loading until we have `limit` unique shops or stop
-    # making progress. `limit` counts unique shops, so re-scan the full DOM each
-    # pass to pick up newly loaded cards.
-    max_scrolls = max(4, limit // 5 + 3)
-    for _ in range(max_scrolls):
-        before = len(products)
-        for a in page.locator('a[href*="-i."]').all():
-            try:
-                href = a.get_attribute("href") or ""
-                m = _IID_RE.search(href)
-                if not m:
-                    continue
-                shopid, itemid = int(m.group(1)), int(m.group(2))
-                if (shopid, itemid) in seen:
-                    continue
-                seen.add((shopid, itemid))
-                name = (a.get_attribute("aria-label") or a.inner_text() or "").strip()[:200]
-                products.append({
-                    "shopid": shopid,
-                    "itemid": itemid,
-                    "name": name,
-                    "url": urllib.parse.urljoin(_BASE, href),
-                })
-                unique_shops.add(shopid)
-            except Exception:  # noqa: BLE001 — skip elements that detach mid-scrape
-                continue
-        if len(unique_shops) >= limit or len(products) == before:
-            break  # reached target, or scrolling stopped loading new cards
-        page.mouse.wheel(0, 20_000)
-        page.wait_for_timeout(1500)
+
+    # Allow a few extra page numbers beyond the nominal budget so throttled early
+    # pages don't consume the whole allowance before we reach loadable ones.
+    max_page = _max_search_pages(limit) + 4
+    consecutive_fail = 0
+    pg = 0
+    while pg <= max_page and len(unique_shops) < limit:
+        if not _open_search_page(page, kw, pg, errors):
+            consecutive_fail += 1
+            if consecutive_fail >= 3:
+                break  # anti-bot is consistently blocking — stop hammering it
+            pg += 1
+            continue
+        consecutive_fail = 0
+        # Gradual scroll: re-harvest after each small wheel step until a pass adds
+        # no new cards (the grid is fully loaded or stopped lazy-loading).
+        prev = -1
+        for _ in range(12):
+            count = _harvest_dom_links(page, products, seen, unique_shops)
+            if count == prev:
+                break
+            prev = count
+            page.mouse.wheel(0, 3_000)
+            page.wait_for_timeout(700)
+        pg += 1
+        page.wait_for_timeout(1_200)  # pace page loads to dodge the throttle
     if not products:
         errors.append("dom search: no product links matched")
     return products
+
+
+def _open_search_page(page, kw: str, pg: int, errors: list[str]) -> bool:
+    """Navigate to search result page `pg` and wait for product cards.
+
+    Retries once after a backoff because the anti-bot layer often throttles the
+    first hit on a page. Returns False (recording the error) if it stays blocked.
+    """
+    url = f"{_BASE}/search?keyword={kw}&page={pg}"
+    for attempt in range(2):
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+            page.wait_for_selector('a[href*="-i."]', timeout=15_000)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            if attempt == 0:
+                page.wait_for_timeout(2_500)  # back off past the throttle, retry
+                continue
+            errors.append(f"dom search p{pg}: {type(exc).__name__}")
+    return False
+
+
+def _harvest_dom_links(page, products: list[dict], seen: set[tuple[int, int]],
+                       unique_shops: set[int]) -> int:
+    """Scan the current DOM for product links, appending newly seen ones.
+
+    Returns the running total product count so the caller can detect when a
+    scroll pass stopped adding cards.
+    """
+    for a in page.locator('a[href*="-i."]').all():
+        try:
+            href = a.get_attribute("href") or ""
+            m = _IID_RE.search(href)
+            if not m:
+                continue
+            shopid, itemid = int(m.group(1)), int(m.group(2))
+            if (shopid, itemid) in seen:
+                continue
+            seen.add((shopid, itemid))
+            name = (a.get_attribute("aria-label") or a.inner_text() or "").strip()[:200]
+            products.append({
+                "shopid": shopid,
+                "itemid": itemid,
+                "name": name,
+                "url": urllib.parse.urljoin(_BASE, href),
+            })
+            unique_shops.add(shopid)
+        except Exception:  # noqa: BLE001 — skip elements that detach mid-scrape
+            continue
+    return len(products)
