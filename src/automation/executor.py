@@ -9,6 +9,11 @@ from sqlmodel import Session
 
 from src.automation.harness.costs import estimate_cost
 from src.automation.harness.evaluator import evaluate
+from src.automation.harness.provider import (
+    MAX_LLM_ATTEMPTS,
+    _is_retriable,
+    fallback_sequence,
+)
 from src.automation.harness.provider import normalize as normalize_llm
 from src.automation.harness.validator import validate
 from src.automation.pipeline import execute_pipeline
@@ -80,20 +85,51 @@ async def _run_flow(run_id: int, job_type: str, payload: dict, effective_provide
 
     import importlib
     flow_cls = getattr(importlib.import_module(module_path), class_name)
-    flow = flow_cls()
-    inputs = {
-        **payload,
-        "run_id": run_id,
-        "llm_provider": effective_provider,
-        "llm_model": effective_model,
-    }
-    raw = await asyncio.to_thread(flow.kickoff, inputs=inputs)
 
-    result_str = raw.raw if hasattr(raw, "raw") else str(raw)
-    result = _parse_result(result_str)
+    # Resilience to transient provider outages (e.g. Gemini 503 "high demand"):
+    # retry the kickoff with backoff, falling back through the other models in
+    # the same provider, up to MAX_LLM_ATTEMPTS total. The requested model is
+    # tried twice before advancing, so a brief spike doesn't lose your choice.
+    candidates = fallback_sequence(effective_provider, effective_model)
+    last_exc: Exception | None = None
 
-    usage = getattr(flow.state, "usage", {})
-    return result, usage
+    last_model: str | None = None
+    for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
+        # Try the requested model twice (attempts 1-2) before advancing through
+        # the fallback list, one model per subsequent attempt.
+        idx = 0 if attempt <= 2 else min(attempt - 2, len(candidates) - 1)
+        model = candidates[idx]
+        if last_model is not None and model != last_model:
+            append_log(run_id, f"Falling back to {effective_provider} / {model}...")
+        last_model = model
+
+        flow = flow_cls()
+        inputs = {
+            **payload,
+            "run_id": run_id,
+            "llm_provider": effective_provider,
+            "llm_model": model,
+        }
+        try:
+            raw = await asyncio.to_thread(flow.kickoff, inputs=inputs)
+        except Exception as exc:  # noqa: BLE001
+            if not _is_retriable(exc):
+                raise
+            last_exc = exc
+            logger.warning("run_id=%d model=%s unavailable (attempt %d/%d): %s",
+                           run_id, model, attempt, MAX_LLM_ATTEMPTS, str(exc)[:160])
+            if attempt < MAX_LLM_ATTEMPTS:
+                append_log(run_id, f"Model unavailable ({model}), retrying (attempt {attempt}/{MAX_LLM_ATTEMPTS})...")
+                await asyncio.sleep(min(2 ** (attempt - 1), 8))
+                continue
+            raise
+
+        result_str = raw.raw if hasattr(raw, "raw") else str(raw)
+        result = _parse_result(result_str)
+        usage = getattr(flow.state, "usage", {})
+        return result, usage
+
+    raise last_exc  # exhausted retries + fallbacks (unreachable: loop raises first)
 
 
 async def execute_run(run_id: int, job_type: str, payload: dict):
