@@ -17,6 +17,10 @@ _RETRIABLE_MARKERS = (
 
 
 def _is_retriable(exc: Exception) -> bool:
+    # Bare TimeoutError/ConnectionError often stringify to "" or to messages that
+    # don't contain our markers, so check the type before the substring scan.
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
     return any(m in str(exc).lower() for m in _RETRIABLE_MARKERS)
 
 _CATALOG: dict = {
@@ -59,7 +63,11 @@ def fallback_sequence(provider: str | None, model: str | None) -> list[str]:
     """Ordered model attempt sequence for one job: the requested model first,
     then the other models in the SAME provider as fallbacks (de-duped)."""
     effective_provider, effective_model = normalize(provider, model)
-    cfg = _CATALOG.get(effective_provider, _CATALOG["openai"])
+    cfg = _CATALOG.get(effective_provider)
+    if not cfg:
+        # Unknown/custom provider: only try the requested model — never leak
+        # another provider's models into the fallback sequence.
+        return [effective_model]
     seq: list[str] = []
     for m in (effective_model, *cfg["models"]):
         if m and m not in seq:

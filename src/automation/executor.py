@@ -93,10 +93,15 @@ async def _run_flow(run_id: int, job_type: str, payload: dict, effective_provide
     candidates = fallback_sequence(effective_provider, effective_model)
     last_exc: Exception | None = None
 
+    last_model: str | None = None
     for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
-        model = candidates[min(max(0, attempt - 2), len(candidates) - 1)]
-        if model != effective_model:
+        # Try the requested model twice (attempts 1-2) before advancing through
+        # the fallback list, one model per subsequent attempt.
+        idx = 0 if attempt <= 2 else min(attempt - 2, len(candidates) - 1)
+        model = candidates[idx]
+        if last_model is not None and model != last_model:
             append_log(run_id, f"Falling back to {effective_provider} / {model}...")
+        last_model = model
 
         flow = flow_cls()
         inputs = {
