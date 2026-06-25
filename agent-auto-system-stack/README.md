@@ -17,12 +17,15 @@ It builds the image from the repo's `runtime` Dockerfile stage (forced to
 API keys are read from your shell at deploy time and passed straight to the task
 definition — **never hardcode them and never commit real values**.
 
+Requires the AWS CDK CLI **≥ 2.1128.1** (matches the `aws-cdk-lib` cloud-assembly
+schema): `npm install -g aws-cdk@latest`, then `cdk --version` to confirm.
+
 ```bash
 npm install
 npm run build && npm test          # tsc + jest
 
 # First time in a new account/region:
-npx cdk bootstrap
+cdk bootstrap
 
 # Deploy. Export only the keys you actually use; the rest default to "".
 OPENAI_API_KEY=sk-...        \
@@ -30,7 +33,7 @@ ANTHROPIC_API_KEY=sk-ant-... \
 GEMINI_API_KEY=...           \
 GMAIL_ADDRESS=...            \
 GMAIL_APP_PASSWORD=...       \
-  npx cdk deploy
+  cdk deploy
 ```
 
 The stack outputs the ALB DNS name; open `http://<that-name>/` to reach the app.
@@ -45,7 +48,7 @@ The stack outputs the ALB DNS name; open `http://<that-name>/` to reach the app.
 |---|---|
 | `npm run build` | compile TypeScript |
 | `npm test` | jest assertions against the synthesized template |
-| `npx cdk synth` | emit the CloudFormation template |
-| `npx cdk diff` | diff deployed stack vs. current code |
-| `npx cdk deploy` | build image, push to ECR, deploy |
-| `npx cdk destroy` | tear everything down |
+| `cdk synth` | emit the CloudFormation template |
+| `cdk diff` | diff deployed stack vs. current code |
+| `cdk deploy` | build image, push to ECR, deploy |
+| `cdk destroy` | tear everything down |
