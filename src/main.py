@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from src import telemetry as _tel
 from src.database import get_engine, init_db, reconcile_stale_runs
-from src.routers import jobs, runs, system
+from src.routers import jobs, runs, system, uploads
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ app = FastAPI(title="Agent Auto System", lifespan=lifespan)
 app.include_router(jobs.router, prefix="/api")
 app.include_router(runs.router, prefix="/api")
 app.include_router(system.router, prefix="/api")
+app.include_router(uploads.router, prefix="/api")
 
 if Path("ui").exists():
     app.mount("/ui", StaticFiles(directory="ui"), name="ui")

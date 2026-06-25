@@ -1,6 +1,6 @@
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'shopee_seller_scraper', 'pipeline'];
+const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'shopee_seller_scraper', 'profit_health_check', 'pipeline'];
 
 const TYPE_META = {
   google_form_fill:   { chip: 'FORM',  cls: 'chip-form'     },
@@ -10,6 +10,7 @@ const TYPE_META = {
   email_sender:       { chip: 'EMAIL', cls: 'chip-email'    },
   google_sheet_reader: { chip: 'SHEET', cls: 'chip-sheet'    },
   shopee_seller_scraper: { chip: 'SHOPEE', cls: 'chip-shopee' },
+  profit_health_check: { chip: '利潤健檢', cls: 'chip-profit' },
   pipeline:            { chip: 'PIPE',  cls: 'chip-pipeline' },
 };
 
@@ -84,6 +85,18 @@ const AUTO_CATALOG = {
     ],
     crew: 'ShopeeSellerCrew', flow: 'ShopeeSellerFlow',
     agent: 'Shopee Seller Analyst', tools: ['Shopee Seller Scraper'],
+  },
+  profit_health_check: {
+    icon: '🧾', name: '利潤健檢',
+    desc: 'Upload your Shopee CSVs (sales, cost, ads, returns). A 4-agent crew validates → corrects → analyzes → advises, producing a per-SKU profit health report in Traditional Chinese — most-profitable, fake hits, ad-eats-profit, and return-anomaly SKUs plus a next-week action list.',
+    inputs: [
+      { name: 'sales',   type: 'file (.csv)', desc: '蝦皮銷售報表 (required)' },
+      { name: 'cost',    type: 'file (.csv)', desc: '商品成本表 (required)' },
+      { name: 'ads',     type: 'file (.csv, optional)', desc: '廣告資料' },
+      { name: 'returns', type: 'file (.csv, optional)', desc: '退貨/退款資料' },
+    ],
+    crew: 'ProfitHealthCrew', flow: 'ProfitHealthFlow',
+    agent: '資料驗證員 · 資料修正員 · 利潤分析師 · 行動建議員', tools: ['Profit Calc'],
   },
   pipeline: {
     icon: '🔗', name: 'Pipeline',
@@ -171,6 +184,16 @@ const FLOW_STEPS = {
     { label: 'Validate', trigger: 'Validated payload for keyword' },
     { label: 'Search',   trigger: 'Loading Shopee session' },
     { label: 'Collect',  trigger: 'Seller collection complete' },
+    ..._QA_STEPS,
+    { label: 'Done',     trigger: 'completed successfully' },
+  ],
+  profit_health_check: [
+    { label: 'Start',    trigger: 'Starting' },
+    { label: 'Load CSV', trigger: 'Loaded CSVs' },
+    { label: '驗證',     trigger: '蝦皮資料驗證員' },
+    { label: '修正',     trigger: '蝦皮資料修正員' },
+    { label: '分析',     trigger: '蝦皮利潤分析師' },
+    { label: '建議',     trigger: '蝦皮營運行動建議員' },
     ..._QA_STEPS,
     { label: 'Done',     trigger: 'completed successfully' },
   ],
@@ -614,6 +637,38 @@ runForm.addEventListener('submit', async (e) => {
     const limit = parseInt(document.getElementById('shopee-limit').value, 10) || 5;
     payload = { keyword, limit };
     jobName = `Shopee: ${keyword}`;
+
+  } else if (jobType === 'profit_health_check') {
+    const sales   = document.getElementById('ph-sales').files[0];
+    const cost    = document.getElementById('ph-cost').files[0];
+    const ads     = document.getElementById('ph-ads').files[0];
+    const returns = document.getElementById('ph-returns').files[0];
+    if (!sales) { showToast('請上傳銷售報表 (sales)', 'error'); return; }
+    if (!cost)  { showToast('請上傳商品成本表 (cost)', 'error'); return; }
+    const MAX = 2 * 1024 * 1024;
+    for (const [f, n] of [[sales, 'sales'], [cost, 'cost'], [ads, 'ads'], [returns, 'returns']]) {
+      if (f && f.size > MAX) { showToast(`${n} 檔案超過 2 MB 上限`, 'error'); return; }
+    }
+    const fd = new FormData();
+    fd.append('sales', sales);
+    fd.append('cost', cost);
+    if (ads)     fd.append('ads', ads);
+    if (returns) fd.append('returns', returns);
+    let uploadId;
+    try {
+      const up = await fetch('/api/uploads', { method: 'POST', body: fd });
+      if (!up.ok) {
+        const e = await up.json().catch(() => ({}));
+        showToast(`上傳失敗：${e.detail || up.status}`, 'error');
+        return;
+      }
+      uploadId = (await up.json()).upload_id;
+    } catch (err) {
+      showToast(`上傳失敗：${err}`, 'error');
+      return;
+    }
+    payload = { upload_id: uploadId };
+    jobName = `利潤健檢：${sales.name}`;
 
   } else if (jobType === 'pipeline') {
     const steps = collectPipelineSteps();

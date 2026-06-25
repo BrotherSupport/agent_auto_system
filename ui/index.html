@@ -132,6 +132,7 @@
     .chip-email   { background: rgba(34,197,94,0.13);   color: var(--green); }
     .chip-sheet   { background: rgba(234,179,8,0.14);   color: var(--yellow); }
     .chip-shopee  { background: rgba(238,77,45,0.15);   color: #ee4d2d; }
+    .chip-profit  { background: rgba(16,185,129,0.15);  color: #10b981; }
     .chip-unknown { background: rgba(100,116,139,0.15); color: var(--gray); }
 
     /* ── Status badge ── */
@@ -942,6 +943,10 @@
           <div class="type-card-header"><span class="type-card-icon">🛒</span><span class="type-card-name">Shopee Sellers</span></div>
           <div class="type-card-desc">Collect sellers from top products</div>
         </div>
+        <div class="type-card" data-type="profit_health_check">
+          <div class="type-card-header"><span class="type-card-icon">🧾</span><span class="type-card-name">利潤健檢</span></div>
+          <div class="type-card-desc">Upload Shopee CSVs → profit report</div>
+        </div>
         <div class="type-card" data-type="pipeline">
           <div class="type-card-header"><span class="type-card-icon">🔗</span><span class="type-card-name">Pipeline</span></div>
           <div class="type-card-desc">Chain automations in sequence</div>
@@ -1010,6 +1015,16 @@
         <div class="field"><label>Number of Products (1–100)</label><input type="number" id="shopee-limit" value="5" min="1" max="100" /></div>
         <div style="font-size:0.75rem;color:var(--text-muted);background:rgba(238,77,45,0.08);border:1px solid rgba(238,77,45,0.2);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
           Requires a saved Shopee login session. Run <code style="font-family:ui-monospace,monospace">uv run python scripts/shopee_login.py</code> once, then set <code style="font-family:ui-monospace,monospace">SHOPEE_STORAGE_STATE</code> in <code style="font-family:ui-monospace,monospace">.env</code>.
+        </div>
+      </div>
+
+      <div id="fields-profit_health_check" class="hidden">
+        <div class="field"><label>蝦皮銷售報表 sales <span style="color:var(--red)">*</span></label><input type="file" id="ph-sales" accept=".csv" /></div>
+        <div class="field"><label>商品成本表 cost <span style="color:var(--red)">*</span></label><input type="file" id="ph-cost" accept=".csv" /></div>
+        <div class="field"><label>廣告資料 ads (選填)</label><input type="file" id="ph-ads" accept=".csv" /></div>
+        <div class="field"><label>退貨/退款資料 returns (選填)</label><input type="file" id="ph-returns" accept=".csv" /></div>
+        <div style="font-size:0.75rem;color:var(--text-muted);background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
+          上傳蝦皮 CSV 檔，AI 會驗證 → 修正 → 分析 → 建議，產出每個 SKU 的利潤健檢報告。sales 與 cost 為必填，每檔上限 2 MB。
         </div>
       </div>
 
