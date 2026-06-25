@@ -62,7 +62,7 @@ New environment variables:
 |---|---|---|
 | `APP_SECRET` | Cookie signing + Fernet key derivation | Required outside dev; rotation invalidates sessions and makes stored keys undecryptable. |
 | `ADMIN_USERNAME` | First-run admin seed | Default `admin` (warn if used). |
-| `ADMIN_PASSWORD` | First-run admin seed | Default `changeme` (warn loudly if used). |
+| `ADMIN_PASSWORD` | First-run admin seed | Default `admin` (warn loudly if used). |
 
 ## 1. Data model — `src/models.py`
 

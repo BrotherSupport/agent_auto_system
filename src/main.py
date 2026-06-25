@@ -34,7 +34,7 @@ def _seed_admin() -> None:
         if session.exec(select(User)).first():
             return
         username = os.getenv("ADMIN_USERNAME", "admin")
-        password = os.getenv("ADMIN_PASSWORD", "changeme")
+        password = os.getenv("ADMIN_PASSWORD", "admin")
         session.add(
             User(
                 username=username,
@@ -45,9 +45,9 @@ def _seed_admin() -> None:
             )
         )
         session.commit()
-        if password == "changeme":
+        if password == "admin":
             logger.warning(
-                "Seeded admin user '%s' with the DEFAULT password 'changeme'. "
+                "Seeded admin user '%s' with the DEFAULT password 'admin'. "
                 "Set ADMIN_PASSWORD (or change it in the admin page) immediately.",
                 username,
             )
