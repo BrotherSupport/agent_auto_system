@@ -156,15 +156,16 @@ error cases verified (missing→422, non-csv→400, oversize→413). Full suite 
 **Done when:** sample files upload and the dir is created; oversized/missing-required files rejected. ✅
 (Note: returns `201 Created` to match the existing `POST /jobs` convention, not `200`.)
 
-### Phase 2 — Flow skeleton (no crew yet)
+### Phase 2 — Flow skeleton (no crew yet) ✅
 *Files: `src/automation/flows/profit_health_flow.py` (new), `src/automation/executor.py` (edit)*
-- [ ] `ProfitHealthState`: `upload_id` + mandatory `run_id, usage, llm_provider, llm_model, previous_error`.
-- [ ] `@start() validate_payload`: resolve `upload_id` → read the CSVs from `uploads/<uuid>/`; raise on missing dir/required files.
-- [ ] `@listen execute_crew`: for now return a stub dict (e.g. echo column counts) so the flow runs end-to-end.
-- [ ] Add `_FLOW_MAP["profit_health_check"]` entry in `executor.py`.
+- [x] `ProfitHealthState`: `upload_id` + loaded CSV fields + mandatory `run_id, usage, llm_provider, llm_model, previous_error`.
+- [x] `@start() validate_payload`: resolve `upload_id` → read CSVs from `uploads/<uuid>/`; raise on missing dir / missing required `sales.csv`+`cost.csv`.
+- [x] `@listen execute_crew`: stub returns `{stub, summary, files:{rows,cols}}` (skips the `##` row in ads) so the flow runs end-to-end.
+- [x] Add `_FLOW_MAP["profit_health_check"]` entry in `executor.py`.
 
-**Test:** create a job with `{upload_id}` → run → run reaches `success` with the stub result.
-**Done when:** the full create-job → run → result loop works against the upload from Phase 1.
+**Test:** upload sample CSVs → create job `{upload_id}` → `execute_run` → `success`; stub counts
+correct (sales 49×18, cost 10×7, ads 18×12, returns 5×9). Bad `upload_id` → `failed` with clear error. Suite green (218).
+**Done when:** the full create-job → run → result loop works against the upload from Phase 1. ✅
 
 ### Phase 3 — Deterministic `profit_calc` tool
 *Files: `src/automation/tools/profit_calc_tool.py` (new)*
