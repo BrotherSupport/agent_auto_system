@@ -133,14 +133,15 @@ can be built and merged independently; Phase 5 wires the UI on top. The `profit_
 tool (Phase 3) is the only piece with non-trivial logic — build and unit-test it first
 within the phase.
 
-### Phase 0 — Scaffolding & contracts
+### Phase 0 — Scaffolding & contracts ✅
 *Goal: lock the data contracts so later phases don't churn.*
-- [ ] Decide the report JSON schema (the "Report JSON shape" above) and freeze field names.
-- [ ] Define the `profit_calc` tool input/output shape (per-SKU metrics dict).
-- [ ] Add `uploads/` to `.gitignore`.
-- [ ] Register the job type string `profit_health_check` everywhere it's referenced.
+- [x] Decide the report JSON schema and freeze field names → `ProfitReport` in `src/automation/profit_health_schema.py`.
+- [x] Define the `profit_calc` tool input/output shape → `ProfitCalcInput` / `ProfitCalcResult` (+ shared `SkuMetrics`, `ProfitFlags`).
+- [x] Add `uploads/` to `.gitignore`.
+- [x] Register the job type string → `JOB_TYPE = "profit_health_check"` constant; strict CSV column lists + zh flag labels also live in the schema module. Later phases import from here.
 
-**Done when:** schemas are written down; no code paths reference an undefined field.
+**Done when:** schemas are written down; no code paths reference an undefined field. ✅
+(`src/automation/profit_health_schema.py` imports and constructs cleanly.)
 
 ### Phase 1 — Upload endpoint
 *Files: `src/routers/uploads.py` (new), `src/main.py` (edit)*
