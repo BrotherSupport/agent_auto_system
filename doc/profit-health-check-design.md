@@ -143,16 +143,18 @@ within the phase.
 **Done when:** schemas are written down; no code paths reference an undefined field. ✅
 (`src/automation/profit_health_schema.py` imports and constructs cleanly.)
 
-### Phase 1 — Upload endpoint
+### Phase 1 — Upload endpoint ✅
 *Files: `src/routers/uploads.py` (new), `src/main.py` (edit)*
-- [ ] `POST /api/uploads` accepts 4 multipart `UploadFile`s: `sales`, `cost`, `ads`, `returns`.
-- [ ] Require `sales` + `cost`; `ads` + `returns` optional.
-- [ ] Validate `.csv` content-type/extension; size-cap each file (~2 MB) → `413` if over.
-- [ ] Save to `uploads/<uuid>/{sales,cost,ads,returns}.csv`; return `{"upload_id": "<uuid>"}`.
-- [ ] Register router in `main.py` (`include_router(uploads.router, prefix="/api")`).
+- [x] `POST /api/uploads` accepts 4 multipart `UploadFile`s: `sales`, `cost`, `ads`, `returns`.
+- [x] Require `sales` + `cost` (`File(...)` → `422` if missing); `ads` + `returns` optional.
+- [x] Validate `.csv` extension (`400`); reject empty (`400`); size-cap each file at 2 MB (`413`).
+- [x] Save to `uploads/<uuid>/{sales,cost,ads,returns}.csv`; return `{"upload_id", "files"}` with `201`.
+- [x] Register router in `main.py` (`include_router(uploads.router, prefix="/api")`).
 
-**Test:** `curl -F` the 4 sample CSVs → assert `200` + a new `uploads/<uuid>/` dir with the files.
-**Done when:** sample files upload and the dir is created; oversized/missing-required files rejected.
+**Test:** TestClient posts the 4 sample CSVs → `201` + a new `uploads/<uuid>/` dir with the files;
+error cases verified (missing→422, non-csv→400, oversize→413). Full suite green (218 passed).
+**Done when:** sample files upload and the dir is created; oversized/missing-required files rejected. ✅
+(Note: returns `201 Created` to match the existing `POST /jobs` convention, not `200`.)
 
 ### Phase 2 — Flow skeleton (no crew yet)
 *Files: `src/automation/flows/profit_health_flow.py` (new), `src/automation/executor.py` (edit)*
