@@ -394,8 +394,104 @@ document.getElementById('lp-cta-dash').addEventListener('click', () => navigate(
 
 // Navigate to the page in the hash on load, defaulting to the landing page
 const VALID_PAGES = ['landing','run','activity','system','analytics'];
-const initialPage = (location.hash.slice(1) || 'landing');
-navigate(VALID_PAGES.includes(initialPage) ? initialPage : 'landing');
+
+// ── Auth gate ───────────────────────────────────────────────────────────────
+// The whole app sits behind a login. We check /api/auth/me on boot; a 401 (here
+// or on any later request) drops a full-screen login overlay back over the app.
+let CURRENT_USER = null;
+
+const loginOverlay = document.getElementById('login-overlay');
+const loginForm    = document.getElementById('login-form');
+const loginError   = document.getElementById('login-error');
+const userMenu     = document.getElementById('user-menu');
+const userChip     = document.getElementById('user-chip');
+
+function showLogin() {
+  CURRENT_USER = null;
+  if (userMenu) userMenu.hidden = true;
+  loginOverlay.classList.add('show');
+  const u = document.getElementById('login-username');
+  if (u) u.focus();
+}
+
+function onAuthenticated(user) {
+  CURRENT_USER = user;
+  loginOverlay.classList.remove('show');
+  if (userMenu) userMenu.hidden = false;
+  if (userChip) userChip.textContent = user.username + (user.is_admin ? ' · admin' : '');
+  loginError.hidden = true;
+  if (loginForm) loginForm.reset();
+  loadHistory();  // populate the activity panel now that we're authenticated
+}
+
+function bootApp() {
+  const initialPage = (location.hash.slice(1) || 'landing');
+  navigate(VALID_PAGES.includes(initialPage) ? initialPage : 'landing');
+}
+
+// Any 401 from an /api/ call (e.g. session expiry) re-shows the login overlay.
+// The login request itself is exempt so a bad password shows an inline error.
+const _origFetch = window.fetch.bind(window);
+window.fetch = async (input, init) => {
+  const resp = await _origFetch(input, init);
+  const url = typeof input === 'string' ? input : (input && input.url) || '';
+  if (resp.status === 401 && url.includes('/api/') && !url.includes('/api/auth/login')) {
+    showLogin();
+  }
+  return resp;
+};
+
+if (loginForm) {
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loginError.hidden = true;
+    const submitBtn = document.getElementById('login-submit');
+    submitBtn.disabled = true;
+    try {
+      const resp = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('login-username').value,
+          password: document.getElementById('login-password').value,
+        }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        loginError.textContent = body.detail || 'Sign in failed';
+        loginError.hidden = false;
+        return;
+      }
+      onAuthenticated(await resp.json());
+      bootApp();
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+const logoutBtn = document.getElementById('logout-btn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    showLogin();
+  });
+}
+
+// Boot: only enter the app if there's a live session.
+(async () => {
+  try {
+    const resp = await _origFetch('/api/auth/me');
+    if (resp.ok) {
+      onAuthenticated(await resp.json());
+      bootApp();
+    } else {
+      showLogin();
+    }
+  } catch {
+    showLogin();
+  }
+})();
 
 // ── Modal open/close ──────────────────────────────────────────────────────────
 
@@ -1942,5 +2038,5 @@ document.getElementById('load-more-btn').addEventListener('click', async () => {
   await loadHistory(false);
 });
 
-loadHistory();
-setInterval(() => { if (!activeEventSource) loadHistory(); }, 5000);
+// History loads once authenticated (see onAuthenticated); poll only while logged in.
+setInterval(() => { if (CURRENT_USER && !activeEventSource) loadHistory(); }, 5000);

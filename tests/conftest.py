@@ -47,7 +47,8 @@ def db_session(test_engine):
 
 
 @pytest_asyncio.fixture
-async def client(test_engine, mocker):
+async def anon_client(test_engine, mocker):
+    """ASGI client with NO authenticated session (for testing the auth gate itself)."""
     import src.database as _db
     from src.main import app
 
@@ -59,6 +60,37 @@ async def client(test_engine, mocker):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
+
+
+@pytest.fixture
+def seed_admin(test_engine):
+    """An admin user with a known password, available before the client logs in."""
+    from src.auth import hash_password
+    from src.models import User
+
+    with Session(test_engine) as s:
+        user = User(
+            username="tester",
+            password_hash=hash_password("password123"),
+            is_admin=True,
+            is_active=True,
+            allowed_automations="*",
+        )
+        s.add(user)
+        s.commit()
+        s.refresh(user)
+        return user
+
+
+@pytest_asyncio.fixture
+async def client(anon_client, seed_admin):
+    """Authenticated client: most tests assume access. Logs in the seeded admin
+    so its session cookie rides along on every subsequent request."""
+    resp = await anon_client.post(
+        "/api/auth/login", json={"username": "tester", "password": "password123"}
+    )
+    assert resp.status_code == 200, resp.text
+    yield anon_client
 
 
 @pytest.fixture

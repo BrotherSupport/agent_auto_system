@@ -72,6 +72,46 @@
     .nav-tab:hover { color: var(--text); background: rgba(255,255,255,0.05); }
     .nav-tab.active { color: var(--text); background: rgba(99,102,241,0.12); font-weight: 600; }
 
+    /* ── User menu + login gate ── */
+    .user-menu { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
+    .user-chip {
+      font-size: 0.82rem; font-weight: 600; color: var(--text-muted);
+      padding: 0.3rem 0.6rem; border-radius: 6px; background: rgba(255,255,255,0.04);
+    }
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--border); color: var(--text-muted);
+      padding: 0.4rem 0.7rem; border-radius: 6px; cursor: pointer; font-size: 0.82rem;
+    }
+    .btn-ghost:hover { color: var(--text); border-color: var(--accent); }
+
+    #login-overlay {
+      position: fixed; inset: 0; z-index: 1000; display: none;
+      align-items: center; justify-content: center; padding: 1.5rem;
+      background: radial-gradient(1200px 600px at 50% -10%, rgba(99,102,241,0.18), transparent), var(--bg);
+    }
+    #login-overlay.show { display: flex; }
+    .login-card {
+      width: 100%; max-width: 360px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 2rem; display: flex; flex-direction: column; gap: 0.5rem;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+    }
+    .login-brand { font-weight: 800; font-size: 1.1rem; letter-spacing: -0.03em; display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .login-brand span:last-child { color: var(--accent); }
+    .login-card h2 { font-size: 1.25rem; }
+    .login-sub { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem; }
+    .login-card label { font-size: 0.78rem; color: var(--text-muted); font-weight: 600; margin-top: 0.4rem; }
+    .login-card input {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 7px; padding: 0.6rem 0.7rem; font-size: 0.9rem; font-family: var(--font-sans);
+    }
+    .login-card input:focus { outline: none; border-color: var(--accent); }
+    .login-card .btn-primary { margin-top: 1rem; width: 100%; justify-content: center; }
+    .login-error {
+      color: var(--red); font-size: 0.82rem; margin-top: 0.5rem;
+      background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 6px; padding: 0.5rem 0.6rem;
+    }
+
     /* ── Page visibility ── */
     .page { display: none; }
     .page.active { display: block; }
@@ -688,8 +728,27 @@
     <button class="nav-tab" data-page="system">System</button>
     <button class="nav-tab" data-page="analytics">Analytics</button>
   </nav>
+  <div class="user-menu" id="user-menu" hidden>
+    <span class="user-chip" id="user-chip" title="Logged in"></span>
+    <button class="btn btn-ghost" id="logout-btn">Logout</button>
+  </div>
   <button class="btn btn-primary" id="new-run-btn">+ New Run</button>
 </header>
+
+<!-- Login gate: covers the whole app until authenticated -->
+<div id="login-overlay">
+  <form class="login-card" id="login-form">
+    <div class="login-brand"><span class="logo-mark">⚡</span> agent<span>auto</span></div>
+    <h2>Sign in</h2>
+    <p class="login-sub">You must sign in to view or run automations.</p>
+    <label for="login-username">Username</label>
+    <input id="login-username" name="username" type="text" autocomplete="username" required autofocus />
+    <label for="login-password">Password</label>
+    <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+    <div class="login-error" id="login-error" hidden></div>
+    <button class="btn btn-primary" type="submit" id="login-submit">Sign in</button>
+  </form>
+</div>
 
 <!-- ══════════════════════════════════════ LANDING ════════════════════════════════════ -->
 <div class="page active" id="page-landing">

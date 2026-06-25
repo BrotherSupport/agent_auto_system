@@ -3,6 +3,23 @@ from datetime import UTC, datetime
 from sqlmodel import Field, SQLModel
 
 
+class User(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    username: str = Field(index=True, unique=True)
+    password_hash: str
+    is_admin: bool = False
+    is_active: bool = True
+    allowed_automations: str = "[]"  # JSON list of job_type; "*" = all
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_login_at: datetime | None = None
+
+
+class Setting(SQLModel, table=True):
+    key: str = Field(primary_key=True)  # e.g. "llm_key:openai", "enabled_automations"
+    value: str  # JSON string; API-key values are Fernet-encrypted
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class Job(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
