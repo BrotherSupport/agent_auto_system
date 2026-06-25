@@ -32,6 +32,7 @@ class Job(SQLModel, table=True):
 class Run(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     job_id: int = Field(foreign_key="job.id")
+    user_id: int | None = Field(default=None, foreign_key="user.id")  # who triggered it
     status: str = "pending"  # pending | running | success | failed
     result: str | None = None  # JSON string
     log: str | None = None  # JSON array of {ts, msg} progress entries

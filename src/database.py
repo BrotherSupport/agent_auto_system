@@ -33,11 +33,13 @@ def init_db():
             "ALTER TABLE run ADD COLUMN eval_confidence REAL",
             "ALTER TABLE run ADD COLUMN eval_notes VARCHAR",
             "ALTER TABLE run ADD COLUMN eval_method VARCHAR",
+            "ALTER TABLE run ADD COLUMN user_id INTEGER",
             "ALTER TABLE job ADD COLUMN schedule VARCHAR",
             # Indexes for common query patterns
             "CREATE INDEX IF NOT EXISTS ix_run_job_id ON run(job_id)",
             "CREATE INDEX IF NOT EXISTS ix_run_status ON run(status)",
             "CREATE INDEX IF NOT EXISTS ix_run_started_at ON run(started_at)",
+            "CREATE INDEX IF NOT EXISTS ix_run_user_id ON run(user_id)",
         ]:
             try:
                 conn.execute(text(ddl))

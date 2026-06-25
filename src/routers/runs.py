@@ -19,6 +19,12 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _assert_run_visible(run: Run, user: User) -> None:
+    """Non-admins may only touch their own runs; hide others as 404."""
+    if not user.is_admin and run.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+
 @router.post("/jobs/{job_id}/run", status_code=202)
 async def trigger_run(
     job_id: int,
@@ -30,7 +36,7 @@ async def trigger_run(
         raise HTTPException(status_code=404, detail="Job not found")
     assert_can_run(user, job.job_type)
 
-    run = Run(job_id=job_id, status="pending")
+    run = Run(job_id=job_id, status="pending", user_id=user.id)
     session.add(run)
     session.commit()
     session.refresh(run)
@@ -45,10 +51,15 @@ async def trigger_run(
 
 
 @router.post("/runs/{run_id}/cancel", status_code=200)
-async def cancel_run(run_id: int, session: Session = Depends(get_session)):
+async def cancel_run(
+    run_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_user),
+):
     run = session.get(Run, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    _assert_run_visible(run, user)
     if run.status not in ("pending", "running"):
         raise HTTPException(status_code=409, detail="Run is not active")
 
@@ -68,14 +79,22 @@ def list_runs(
     offset: int = 0,
     limit: int = 50,
     session: Session = Depends(get_session),
+    user: User = Depends(require_user),
 ):
-    runs = session.exec(
-        select(Run).order_by(Run.started_at.desc()).offset(offset).limit(limit)
-    ).all()
+    stmt = select(Run).order_by(Run.started_at.desc())
+    if not user.is_admin:
+        stmt = stmt.where(Run.user_id == user.id)  # users see only their own runs
+    runs = session.exec(stmt.offset(offset).limit(limit)).all()
     if not runs:
         return []
     job_ids = list({r.job_id for r in runs})
     jobs = {j.id: j for j in session.exec(select(Job).where(Job.id.in_(job_ids))).all()}
+    # Owner usernames (only useful to admins, who see everyone's runs).
+    owner_ids = list({r.user_id for r in runs if r.user_id is not None})
+    owners = (
+        {u.id: u.username for u in session.exec(select(User).where(User.id.in_(owner_ids))).all()}
+        if owner_ids else {}
+    )
     result = []
     for run in runs:
         job = jobs.get(run.job_id)
@@ -84,6 +103,7 @@ def list_runs(
             "job_id": run.job_id,
             "job_name": job.name if job else f"job {run.job_id}",
             "job_type": job.job_type if job else "unknown",
+            "owner": owners.get(run.user_id),
             "status": run.status,
             "result": run.result,
             "log": run.log,
@@ -104,10 +124,15 @@ def list_runs(
 
 
 @router.delete("/runs/{run_id}", status_code=204)
-def delete_run(run_id: int, session: Session = Depends(get_session)):
+def delete_run(
+    run_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_user),
+):
     run = session.get(Run, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    _assert_run_visible(run, user)
     if run.status in ("pending", "running"):
         raise HTTPException(status_code=409, detail="Cannot delete a run that is in progress")
     session.delete(run)
@@ -115,10 +140,15 @@ def delete_run(run_id: int, session: Session = Depends(get_session)):
 
 
 @router.get("/runs/{run_id}")
-def get_run(run_id: int, session: Session = Depends(get_session)):
+def get_run(
+    run_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_user),
+):
     run = session.get(Run, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    _assert_run_visible(run, user)
     return run
 
 
@@ -132,7 +162,15 @@ def get_run_report(run_id: int):
 
 
 @router.get("/runs/{run_id}/stream")
-async def stream_run(run_id: int):
+async def stream_run(
+    run_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_user),
+):
+    run = session.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    _assert_run_visible(run, user)
     _engine = get_engine()
 
     async def event_generator():
@@ -195,20 +233,22 @@ def bulk_delete_runs(
     ids: str | None = Query(None, description="Comma-separated run IDs"),
     delete_all: bool = Query(False),
     session: Session = Depends(get_session),
+    user: User = Depends(require_user),
 ):
     if delete_all:
-        runs = session.exec(
-            select(Run).where(Run.status.not_in(["pending", "running"]))
-        ).all()
+        stmt = select(Run).where(Run.status.not_in(["pending", "running"]))
     elif ids:
         id_list = [int(i) for i in ids.split(",") if i.strip().isdigit()]
         if not id_list:
             return {"deleted": 0}
-        runs = session.exec(
-            select(Run).where(Run.id.in_(id_list)).where(Run.status.not_in(["pending", "running"]))
-        ).all()
+        stmt = select(Run).where(Run.id.in_(id_list)).where(
+            Run.status.not_in(["pending", "running"])
+        )
     else:
         return {"deleted": 0}
+    if not user.is_admin:
+        stmt = stmt.where(Run.user_id == user.id)  # users only delete their own
+    runs = session.exec(stmt).all()
 
     for run in runs:
         session.delete(run)

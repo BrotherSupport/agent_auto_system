@@ -158,9 +158,20 @@ litellm/Gemini paths read the env var directly.
 | Surface | Anonymous | User (not allowed) | User (allowed) | Admin |
 |---|---|---|---|---|
 | Login / health | ✅ | ✅ | ✅ | ✅ |
-| View runs/jobs | ❌ 401 | ✅ | ✅ | ✅ |
+| View runs/jobs | ❌ 401 | ✅ (own only) | ✅ (own only) | ✅ (all) |
 | Run automation | ❌ | ❌ 403 | ✅ | ✅ |
 | Admin APIs / page | ❌ | ❌ 403 | ❌ 403 | ✅ |
+
+### Activity scoping
+
+`Run.user_id` records who triggered each execution (set in `trigger_run`).
+The Activity list (`GET /api/runs`) and every run-level action
+(`GET/DELETE /api/runs/{id}`, `…/cancel`, `…/stream`, bulk `DELETE /api/runs`)
+filter to the caller's own runs for non-admins; **admins see all** runs, each
+tagged with its `owner` username in the UI. A non-admin requesting another
+user's run by ID gets **404** (existence is not leaked). `/api/stats`
+(Analytics) stays global for now — scope it next if regular users shouldn't
+see aggregate activity.
 
 ## Implementation phases (each independently shippable)
 

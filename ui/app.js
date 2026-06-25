@@ -1528,6 +1528,9 @@ function renderHistory(runs, hasMore = false) {
     const cbChecked  = selectedRunIds.has(run.id) ? 'checked' : '';
     const cbDis      = isActive ? 'disabled' : '';
     const rowSel     = selectedRunIds.has(run.id) ? 'selected' : '';
+    // Admins see everyone's runs; tag each with its owner.
+    const ownerBadge = (CURRENT_USER && CURRENT_USER.is_admin && run.owner)
+      ? `<span class="badge badge-admin" title="Run by ${escHtml(run.owner)}">@${escHtml(run.owner)}</span>` : '';
 
     return `
       <tr class="data-row ${rowSel}" data-run-id="${run.id}">
@@ -1540,7 +1543,7 @@ function renderHistory(runs, hasMore = false) {
             <span class="job-name-text">${escHtml(run.job_name)}</span>
             <div style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">
               <span class="type-chip ${meta.cls}">${meta.chip}</span>
-              ${llmBadge}${retryBadge}${evalBadge}
+              ${ownerBadge}${llmBadge}${retryBadge}${evalBadge}
             </div>
           </div>
         </td>
