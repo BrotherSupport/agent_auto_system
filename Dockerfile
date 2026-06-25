@@ -65,3 +65,27 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=4 \
     || exit 1
 
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Stage 3 – test image  (CI only, never deployed)
+#   Inherits the runtime image — same OS libs (incl. WeasyPrint's Pango/CJK
+#   fonts) and the same venv — then layers on the dev dependency group and the
+#   test suite. Lets CI run pytest *inside* the deployed environment.
+#       docker build --target test -t agent-auto-system:test .
+#       docker run --rm agent-auto-system:test            # runs the suite
+# ────────────────────────────────────────────────────────────────────────────
+FROM runtime AS test
+
+# uv + lock files are needed to add the dev group (pytest, httpx, …) to the venv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+COPY pyproject.toml uv.lock .python-version ./
+RUN uv sync --frozen
+
+# tests/ is excluded from the runtime image (.dockerignore) — bring it in here,
+# along with the sample CSV fixtures the profit_calc tests read.
+COPY tests/ ./tests/
+COPY shopee/sample_data/ ./shopee/sample_data/
+
+# Default command: run the suite, skipping e2e (needs a real browser + API keys)
+CMD ["pytest", "tests/unit", "tests/integration", "-v", "--tb=short", "-m", "not e2e"]

@@ -38,7 +38,48 @@ jobs:
         run: uv run pytest tests/integration -v --tb=short
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Job 2 — Docker build + smoke tests against the running container
+  # Job 2 — Docker build + run the test suite INSIDE the container
+  #   Validates that the suite passes in the deployed environment (same OS libs,
+  #   same venv) — including a real WeasyPrint PDF render that needs the Pango +
+  #   Noto-CJK packages baked into the image.
+  # ────────────────────────────────────────────────────────────────────────────
+  docker-test:
+    name: Docker build & in-container tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build test image
+        run: |
+          docker build \
+            --target test \
+            --tag agent-auto-system:test \
+            --label "git.sha=${{ github.sha }}" \
+            .
+
+      - name: Run unit + integration tests inside the container
+        run: docker run --rm agent-auto-system:test
+
+      - name: Render a 利潤健檢 PDF in-container (validates WeasyPrint Pango/CJK libs)
+        run: |
+          docker run --rm agent-auto-system:test python -c "
+          from pathlib import Path
+          from src.automation.report_render import render_report_pdf
+          out = Path('/tmp/ci_report.pdf')
+          render_report_pdf({
+              'summary': 'CI smoke render',
+              'skus': [{'sku':'A','name':'測試商品','units':3,'revenue':900,
+                        'net_profit':300,'margin_pct':33.3,'flags':['最賺錢']}],
+              'recommendations': [{'sku':'A','action':'加碼','reason':'毛利率高'}],
+          }, out)
+          size = out.stat().st_size
+          assert out.exists() and size > 1000, f'PDF not generated (size={size})'
+          print(f'✓ WeasyPrint rendered PDF in-container: {size} bytes')
+          "
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Job 3 — Docker build + smoke tests against the running container
   # ────────────────────────────────────────────────────────────────────────────
   docker-smoke:
     name: Docker build & smoke tests

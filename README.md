@@ -270,7 +270,11 @@ uv run mypy src/
 uv run pre-commit install
 ```
 
-CI runs ruff → unit tests → integration tests → Docker smoke tests on every push.
+CI (`.github/workflows/ci.yml`) runs three jobs on every push / PR:
+
+1. **Unit & integration tests** — `ruff` lint → `pytest` on the host runner.
+2. **Docker build & in-container tests** — builds the `test` image stage and runs the full suite *inside* the container, plus a real WeasyPrint PDF render that exercises the image's Pango/Noto-CJK libs.
+3. **Docker build & smoke tests** — builds the `runtime` image, starts the container, and probes `/health`, `/api/system`, `/api/jobs`, `/api/stats`, etc.
 
 ---
 
@@ -290,14 +294,18 @@ cp .env.example .env
 docker build --target runtime --tag agent-auto-system:local .
 
 # 3. Run — inject .env at runtime; mount volumes so data survives restarts
+
+# map internal 8000 port to 7000
 docker run -d \
   --name agent-auto \
-  -p 8000:8000 \
+  -p 7000:8000 \
   --env-file .env \
   -v agent_data:/app/data \
   -v agent_uploads:/app/uploads \
   -v agent_reports:/app/reports \
   agent-auto-system:local
+
+
 
 open http://localhost:8000
 ```
