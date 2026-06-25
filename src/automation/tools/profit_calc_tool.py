@@ -148,10 +148,14 @@ def compute_profit(
     flags = _derive_flags(skus)
     # Mirror the grouped flags onto each SKU's own flag list.
     for m in skus:
-        if m.sku in flags.most_profitable:  m.flags.append(FLAG_MOST_PROFITABLE)
-        if m.sku in flags.fake_hits:        m.flags.append(FLAG_FAKE_HIT)
-        if m.sku in flags.ad_eats_profit:   m.flags.append(FLAG_AD_EATS_PROFIT)
-        if m.sku in flags.high_return_rate: m.flags.append(FLAG_HIGH_RETURN)
+        if m.sku in flags.most_profitable:
+            m.flags.append(FLAG_MOST_PROFITABLE)
+        if m.sku in flags.fake_hits:
+            m.flags.append(FLAG_FAKE_HIT)
+        if m.sku in flags.ad_eats_profit:
+            m.flags.append(FLAG_AD_EATS_PROFIT)
+        if m.sku in flags.high_return_rate:
+            m.flags.append(FLAG_HIGH_RETURN)
 
     return ProfitCalcResult(skus=skus, flags=flags)
 
