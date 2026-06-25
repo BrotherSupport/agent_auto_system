@@ -33,6 +33,10 @@ _CHECKS: dict = {
         bool(r.get("sellers")),
         "no sellers found",
     ),
+    "profit_health_check": lambda r: (
+        bool(r.get("skus") or r.get("action_items") or r.get("recommendations")),
+        "no profit analysis in result",
+    ),
 }
 
 

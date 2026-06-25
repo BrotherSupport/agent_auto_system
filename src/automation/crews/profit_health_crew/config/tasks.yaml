@@ -1,0 +1,66 @@
+validate_task:
+  description: >
+    驗證以下四份蝦皮 CSV 資料是否符合預期欄位與內容。
+
+    銷售報表 (sales):
+    {sales_csv}
+
+    商品成本 (cost):
+    {cost_csv}
+
+    廣告資料 (ads，注意第一行為 ## 註解，且檔案後段另有「折扣」區塊):
+    {ads_csv}
+
+    退貨/退款資料 (returns):
+    {returns_csv}
+
+    請檢查：必要欄位是否齊全；數字欄位是否可解析；銷售報表中的每個 SKU 是否在成本表中
+    都有對應；是否有缺漏或明顯異常。若這是重試，請修正上次的問題：{previous_error}
+  expected_output: >
+    一個 JSON 物件，包含鍵：
+    - "ok": 布林值，資料是否大致可用
+    - "issues": 字串陣列，逐條描述發現的資料問題（若無則為空陣列）
+    僅輸出 JSON，不要加 markdown 圍欄。
+  agent: data_validator
+
+correct_task:
+  description: >
+    根據驗證結果，提出對資料的正規化與修補方案：數字型別轉換、SKU 對應調和、
+    需剔除的列與原因。不要捏造資料，只做合理且可追溯的修正。
+  expected_output: >
+    一個 JSON 物件，包含鍵：
+    - "applied": 字串陣列，描述已套用的修正
+    - "dropped": 字串陣列，描述被剔除的資料列與原因
+    僅輸出 JSON，不要加 markdown 圍欄。
+  agent: data_corrector
+
+analyze_task:
+  description: >
+    呼叫 profit_calc 工具，參數 upload_id 為「{upload_id}」，取得每個 SKU 的精確
+    利潤數字與分組旗標。所有數字一律以工具回傳為準，不可自行計算。
+    根據工具結果，整理出每個 SKU 的指標，並歸納最賺錢、假爆品、廣告吃利潤、
+    退貨異常四類商品。
+  expected_output: >
+    一個 JSON 物件，包含鍵：
+    - "skus": 陣列，每個元素包含 sku, name, revenue, cost, ad_spend, refunds,
+      net_profit, margin_pct, units, roas, return_count, return_rate, flags
+    - "flags": 物件，包含 most_profitable, fake_hits, ad_eats_profit,
+      high_return_rate 四個 SKU 字串陣列
+    數字需與工具結果完全一致。僅輸出 JSON，不要加 markdown 圍欄。
+  agent: profit_analyzer
+
+advise_task:
+  description: >
+    綜合前面驗證、修正與利潤分析的結果，為賣家產出最終健檢報告（繁體中文）。
+    針對有問題的 SKU 給出具體行動（停賣／漲價／補貨／改圖／改組合包）與理由，
+    並整理下週優先行動清單，以及一段重點總結。
+  expected_output: >
+    一個 JSON 物件，包含鍵：
+    - "summary": 字串，本週營運健檢重點總結（繁體中文）
+    - "skus": 沿用利潤分析的 SKU 指標陣列
+    - "flags": 沿用利潤分析的分組旗標物件
+    - "recommendations": 陣列，每個元素包含 sku, action, reason
+    - "action_items": 字串陣列，下週優先行動清單
+    - "validation": 物件，包含 ok 與 issues，沿用驗證結果
+    僅輸出 JSON，不要加 markdown 圍欄。
+  agent: action_advisor

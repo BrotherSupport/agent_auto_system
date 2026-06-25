@@ -19,6 +19,7 @@ import csv
 import io
 
 from crewai.tools import BaseTool
+from pydantic import BaseModel
 
 from src.automation.profit_health_schema import (
     ADS_COMMENT_PREFIX,
@@ -26,7 +27,6 @@ from src.automation.profit_health_schema import (
     FLAG_FAKE_HIT,
     FLAG_HIGH_RETURN,
     FLAG_MOST_PROFITABLE,
-    ProfitCalcInput,
     ProfitCalcResult,
     ProfitFlags,
     SkuMetrics,
@@ -178,20 +178,38 @@ def _derive_flags(skus: list[SkuMetrics]) -> ProfitFlags:
     return flags
 
 
-class ProfitCalcInputModel(ProfitCalcInput):
-    pass
+def compute_profit_from_upload(upload_id: str) -> ProfitCalcResult:
+    """Read the 4 CSVs from uploads/<upload_id>/ and compute metrics.
+
+    Imported lazily so the pure compute_profit() core has no dependency on the
+    upload-storage location.
+    """
+    from src.routers.uploads import UPLOAD_ROOT
+
+    base = UPLOAD_ROOT / upload_id
+
+    def _rd(name: str) -> str:
+        p = base / name
+        return p.read_text(encoding="utf-8", errors="replace") if p.is_file() else ""
+
+    return compute_profit(_rd("sales.csv"), _rd("cost.csv"), _rd("ads.csv"), _rd("returns.csv"))
+
+
+class _ProfitCalcArgs(BaseModel):
+    upload_id: str
 
 
 class ProfitCalcTool(BaseTool):
     name: str = "profit_calc"
     description: str = (
-        "Compute deterministic per-SKU profit metrics from the 4 Shopee CSVs "
-        "(sales, cost, ads, returns). Returns each SKU's revenue, cost, ad_spend, "
-        "refunds, net_profit, margin_pct, units, roas, return_count/rate, plus "
-        "grouped flags (最賺錢/假爆品/廣告吃利潤/退貨異常). Use this for ALL arithmetic; "
-        "never compute numbers yourself."
+        "Compute deterministic per-SKU profit metrics for an uploaded data set. "
+        "Pass the upload_id; the tool reads the 4 Shopee CSVs (sales, cost, ads, "
+        "returns) and returns each SKU's revenue, cost, ad_spend, refunds, "
+        "net_profit, margin_pct, units, roas, return_count/rate, plus grouped flags "
+        "(最賺錢/假爆品/廣告吃利潤/退貨異常). Use this for ALL arithmetic; never compute "
+        "numbers yourself."
     )
-    args_schema: type = ProfitCalcInput
+    args_schema: type[BaseModel] = _ProfitCalcArgs
 
-    def _run(self, sales_csv: str, cost_csv: str, ads_csv: str = "", returns_csv: str = "") -> dict:
-        return compute_profit(sales_csv, cost_csv, ads_csv, returns_csv).model_dump()
+    def _run(self, upload_id: str) -> dict:
+        return compute_profit_from_upload(upload_id).model_dump()

@@ -1,12 +1,9 @@
-import csv
-import io
-import json
-
 from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel
 
+from src.automation.crews.profit_health_crew.crew import ProfitHealthCrew
 from src.automation.flows.base import FlowMixin
-from src.automation.profit_health_schema import ADS_COMMENT_PREFIX, JOB_TYPE
+from src.automation.flows.utils import extract_usage
 from src.automation.progress import append_log
 from src.routers.uploads import UPLOAD_ROOT
 
@@ -31,19 +28,6 @@ def _read_csv(upload_id: str, filename: str) -> str:
     if not path.is_file():
         return ""
     return path.read_text(encoding="utf-8", errors="replace")
-
-
-def _csv_stats(text: str, skip_comment: bool = False) -> dict:
-    """Lightweight row/column count for the Phase 2 stub."""
-    if not text.strip():
-        return {"rows": 0, "columns": 0}
-    lines = text.splitlines()
-    if skip_comment and lines and lines[0].lstrip().startswith(ADS_COMMENT_PREFIX):
-        lines = lines[1:]
-    reader = csv.reader(io.StringIO("\n".join(lines)))
-    header = next(reader, [])
-    rows = sum(1 for _ in reader)
-    return {"rows": rows, "columns": len(header)}
 
 
 class ProfitHealthFlow(FlowMixin, Flow[ProfitHealthState]):
@@ -71,18 +55,22 @@ class ProfitHealthFlow(FlowMixin, Flow[ProfitHealthState]):
 
     @listen(validate_payload)
     def execute_crew(self, _):
-        # Phase 2 stub: prove the create-job → run → result loop end-to-end.
-        # Replaced by the multi-agent crew in Phase 4.
-        files = {
-            "sales":   _csv_stats(self.state.sales_csv),
-            "cost":    _csv_stats(self.state.cost_csv),
-            "ads":     _csv_stats(self.state.ads_csv, skip_comment=True),
-            "returns": _csv_stats(self.state.returns_csv),
-        }
-        append_log(self.state.run_id, "Stub: counted CSV rows/columns (crew not wired yet)")
-        return json.dumps({
-            "stub": True,
-            "job_type": JOB_TYPE,
-            "summary": "Phase 2 skeleton — CSVs loaded and parsed; analysis crew not wired yet.",
-            "files": files,
-        }, ensure_ascii=False)
+        from src.automation.harness.provider import resolve as resolve_llm
+        llm, _, _ = resolve_llm(
+            self.state.llm_provider or None,
+            self.state.llm_model or None,
+            temperature=0.2,
+        )
+        append_log(self.state.run_id, "驗證 → 修正 → 分析 → 建議 (4-agent crew)...")
+        crew = ProfitHealthCrew(llm=llm)
+        result = crew.crew().kickoff(inputs={
+            "upload_id": self.state.upload_id,
+            "sales_csv": self.state.sales_csv,
+            "cost_csv": self.state.cost_csv,
+            "ads_csv": self.state.ads_csv,
+            "returns_csv": self.state.returns_csv,
+            "previous_error": self.state.previous_error,
+        })
+        self.state.usage = extract_usage(result)
+        append_log(self.state.run_id, "健檢報告產生完成，整理結果中...")
+        return result.raw if hasattr(result, "raw") else str(result)

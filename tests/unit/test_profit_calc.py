@@ -131,12 +131,22 @@ def test_optional_files_absent():
     assert m.net_profit == 2952 - 1530  # no ads, no refunds
 
 
-def test_tool_run_returns_dict():
-    tool = ProfitCalcTool()
-    out = tool._run(
-        (_SD / "shopee_sales_report.csv").read_text(encoding="utf-8"),
-        (_SD / "product_cost.csv").read_text(encoding="utf-8"),
-    )
+def test_tool_run_reads_upload(tmp_path, monkeypatch):
+    # The tool reads the 4 CSVs from uploads/<upload_id>/ given an upload_id.
+    import src.routers.uploads as uploads_mod
+
+    monkeypatch.setattr(uploads_mod, "UPLOAD_ROOT", tmp_path)
+    dest = tmp_path / "abc123"
+    dest.mkdir()
+    for src_name, dst_name in (
+        ("shopee_sales_report.csv", "sales.csv"),
+        ("product_cost.csv", "cost.csv"),
+        ("ads_discount.csv", "ads.csv"),
+        ("order_return_refund.csv", "returns.csv"),
+    ):
+        (dest / dst_name).write_text((_SD / src_name).read_text(encoding="utf-8"), encoding="utf-8")
+
+    out = ProfitCalcTool()._run(upload_id="abc123")
     assert isinstance(out, dict)
     assert "skus" in out and "flags" in out
     assert len(out["skus"]) == 10
