@@ -123,3 +123,91 @@ only the math is deterministic.
   "validation": {"ok": true, "issues": []}
 }
 ```
+
+---
+
+## Implementation Plan
+
+Five phases, back-end first so each layer is testable before the UI exists. Phases 1–4
+can be built and merged independently; Phase 5 wires the UI on top. The `profit_calc`
+tool (Phase 3) is the only piece with non-trivial logic — build and unit-test it first
+within the phase.
+
+### Phase 0 — Scaffolding & contracts
+*Goal: lock the data contracts so later phases don't churn.*
+- [ ] Decide the report JSON schema (the "Report JSON shape" above) and freeze field names.
+- [ ] Define the `profit_calc` tool input/output shape (per-SKU metrics dict).
+- [ ] Add `uploads/` to `.gitignore`.
+- [ ] Register the job type string `profit_health_check` everywhere it's referenced.
+
+**Done when:** schemas are written down; no code paths reference an undefined field.
+
+### Phase 1 — Upload endpoint
+*Files: `src/routers/uploads.py` (new), `src/main.py` (edit)*
+- [ ] `POST /api/uploads` accepts 4 multipart `UploadFile`s: `sales`, `cost`, `ads`, `returns`.
+- [ ] Require `sales` + `cost`; `ads` + `returns` optional.
+- [ ] Validate `.csv` content-type/extension; size-cap each file (~2 MB) → `413` if over.
+- [ ] Save to `uploads/<uuid>/{sales,cost,ads,returns}.csv`; return `{"upload_id": "<uuid>"}`.
+- [ ] Register router in `main.py` (`include_router(uploads.router, prefix="/api")`).
+
+**Test:** `curl -F` the 4 sample CSVs → assert `200` + a new `uploads/<uuid>/` dir with the files.
+**Done when:** sample files upload and the dir is created; oversized/missing-required files rejected.
+
+### Phase 2 — Flow skeleton (no crew yet)
+*Files: `src/automation/flows/profit_health_flow.py` (new), `src/automation/executor.py` (edit)*
+- [ ] `ProfitHealthState`: `upload_id` + mandatory `run_id, usage, llm_provider, llm_model, previous_error`.
+- [ ] `@start() validate_payload`: resolve `upload_id` → read the CSVs from `uploads/<uuid>/`; raise on missing dir/required files.
+- [ ] `@listen execute_crew`: for now return a stub dict (e.g. echo column counts) so the flow runs end-to-end.
+- [ ] Add `_FLOW_MAP["profit_health_check"]` entry in `executor.py`.
+
+**Test:** create a job with `{upload_id}` → run → run reaches `success` with the stub result.
+**Done when:** the full create-job → run → result loop works against the upload from Phase 1.
+
+### Phase 3 — Deterministic `profit_calc` tool
+*Files: `src/automation/tools/profit_calc_tool.py` (new)*
+- [ ] Parse the 4 CSVs strictly to the sample schemas (skip the `##` comment row in `ads_discount.csv`).
+- [ ] Join on `商品SKU`; compute per-SKU 銷售額 / 成本 (數量 × 單位總成本) / 廣告花費 / 退款 / 淨利 / 淨利率 / ROAS.
+- [ ] Derive flag candidates: 最賺錢, 假爆品 (高銷量低/負淨利), 廣告吃利潤 (廣告花費 > 淨利), 退貨異常.
+- [ ] Return a compact metrics dict matching the Phase 0 contract.
+- [ ] **Unit tests** against `shopee/sample_data/` with hand-checked expected numbers.
+
+**Test:** `pytest tests/unit/test_profit_calc.py` — numbers match a manual spreadsheet on the sample data.
+**Done when:** arithmetic is correct and deterministic for the sample data.
+
+### Phase 4 — Multi-agent crew
+*Files: `src/automation/crews/profit_health_crew/` (crew.py + config/agents.yaml + config/tasks.yaml), `src/automation/flows/profit_health_flow.py` (wire crew), `src/automation/harness/validator.py` (edit)*
+- [ ] `agents.yaml`: 資料驗證員, 資料修正員, 利潤分析師, 行動建議員 (Traditional Chinese role/goal/backstory).
+- [ ] `tasks.yaml`: 4 tasks, `Process.sequential`, chained `context`; CSVs interpolated into task 1.
+- [ ] Attach `profit_calc` tool to the 利潤分析師 agent only.
+- [ ] `crew.py`: plain class (no `@CrewBase`), build Agent/Task/Crew fresh, accept `llm=` in constructor.
+- [ ] Final task `expected_output` = the report JSON shape; flow returns it raw.
+- [ ] Replace the Phase 2 stub: `execute_crew` resolves the LLM and runs the crew.
+- [ ] Add the `profit_health_check` check in `validator.py`.
+
+**Test:** run against sample data with a real provider → JSON parses, contains `skus`/`flags`/`action_items`, numbers match Phase 3.
+**Done when:** a full run produces a valid Traditional-Chinese JSON report; validation passes.
+
+### Phase 5 — UI
+*Files: `ui/app.js` (edit), `src/routers/system.py` (edit)*
+- [ ] New job type in the run form; 4 `<input type="file" accept=".csv">` fields.
+- [ ] Submit handler: **two-step** — `await POST /api/uploads` (FormData) → then create job with `{upload_id}`.
+- [ ] Client-side guards: require sales + cost; surface size/format errors via `showToast`.
+- [ ] Add `FLOW_STEPS` + `TYPE_META` entries so the run page shows the 4 crew steps.
+- [ ] Add catalog entries (4 agents, 1 crew, 1 flow, 1 tool) in `system.py` for the System page.
+- [ ] *(optional)* nicer rendering of the report JSON in the run detail.
+
+**Test:** end-to-end in the browser — pick the 4 sample CSVs, run, see the JSON report and progress steps.
+**Done when:** a non-technical user can upload and get a report without touching the API.
+
+### Cross-cutting / acceptance
+- [ ] `uv run pytest tests/unit tests/integration -v -m "not e2e"` green.
+- [ ] Manual e2e against `shopee/sample_data/` produces a sensible report (BT-EAR-A1-WHT should surface as 退貨異常; ad-heavy SKUs as 廣告吃利潤).
+- [ ] No `@CrewBase`; LLM injected via constructor; state fields declared as Pydantic fields (project invariants).
+- [ ] Update `CLAUDE.md` "Adding a New Job Type" note if any new step is introduced (e.g. the upload endpoint).
+
+### Suggested commits / PRs
+1. `feat(uploads): add POST /api/uploads multipart endpoint` (Phase 1)
+2. `feat(profit): add profit_health_check flow skeleton + executor wiring` (Phase 2)
+3. `feat(profit): add deterministic profit_calc tool + unit tests` (Phase 3)
+4. `feat(profit): add profit_health_crew (validator→corrector→analyzer→advisor)` (Phase 4)
+5. `feat(ui): add 利潤健檢 upload form + system catalog entries` (Phase 5)
