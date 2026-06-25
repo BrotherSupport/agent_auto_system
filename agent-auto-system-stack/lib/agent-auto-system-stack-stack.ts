@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { Duration, Stack, StackProps } from 'aws-cdk-lib/core';
+import { Annotations, Duration, Stack, StackProps } from 'aws-cdk-lib/core';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecsp from 'aws-cdk-lib/aws-ecs-patterns';
@@ -57,11 +57,28 @@ export class AgentAutoSystemStackStack extends Stack {
       platform: Platform.LINUX_AMD64,
     });
 
-    // 4. API keys from the deploy environment. DATABASE_URL is intentionally
-    //    left at the Dockerfile default → SQLite on the task's local disk.
+    // 4. API keys from the deploy environment. Only inject keys that are
+    //    actually set — an empty string would override the app's own lookup and
+    //    masquerade as "configured but blank". Warn at synth about any missing
+    //    ones so a forgotten `export` is visible, not silent.
+    //    DATABASE_URL is intentionally left at the Dockerfile default → SQLite
+    //    on the task's local disk.
     const environment: Record<string, string> = {};
+    const missing: string[] = [];
     for (const name of API_KEY_ENV_VARS) {
-      environment[name] = process.env[name] ?? '';
+      const value = process.env[name];
+      if (value) {
+        environment[name] = value;
+      } else {
+        missing.push(name);
+      }
+    }
+    if (missing.length > 0) {
+      Annotations.of(this).addWarning(
+        `No value provided for ${missing.join(', ')} at synth time. ` +
+          `Export them before \`cdk deploy\` (e.g. \`OPENAI_API_KEY=sk-... cdk deploy\`) ` +
+          `if the app needs them.`,
+      );
     }
 
     // 5. Fargate service behind an ALB — exactly ONE task. minHealthyPercent=0

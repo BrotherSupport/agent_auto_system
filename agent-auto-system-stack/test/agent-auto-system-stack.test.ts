@@ -45,6 +45,29 @@ test('ALB health check targets /health', () => {
   });
 });
 
+test('injects API keys from the environment and omits unset ones', () => {
+  const prev = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = 'sk-test';
+  delete process.env.ANTHROPIC_API_KEY;
+  try {
+    const template = synth();
+    template.hasResourceProperties('AWS::ECS::TaskDefinition', {
+      ContainerDefinitions: Match.arrayWith([
+        Match.objectLike({
+          Environment: Match.arrayWith([{ Name: 'OPENAI_API_KEY', Value: 'sk-test' }]),
+        }),
+      ]),
+    });
+    // An unset key must NOT be injected as an empty string.
+    const td = template.findResources('AWS::ECS::TaskDefinition');
+    const env = Object.values(td)[0].Properties.ContainerDefinitions[0].Environment ?? [];
+    expect(env.find((e: any) => e.Name === 'ANTHROPIC_API_KEY')).toBeUndefined();
+  } finally {
+    if (prev === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = prev;
+  }
+});
+
 test('no NAT Gateway and no Secrets Manager (phase-1 simplicity)', () => {
   const template = synth();
 
