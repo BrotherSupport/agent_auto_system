@@ -1,0 +1,1434 @@
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>利潤健檢 AI — 蝦皮賣家獲利 Copilot</title>
+<style>
+  :root {
+    --ground: #ffffff;
+    --bg-alt: #f7f7fa;
+    --text: #09090f;
+    --text-muted: #5e5e6e;
+    --border: rgba(15,15,30,0.09);
+    --green: #0acf83;
+    --orange: #f24e1e;
+    --purple: #a259ff;
+    --red: #ff7262;
+    --blue: #1abcfe;
+    --max-w: 1360px;
+    --gutter: 48px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+    background: var(--ground);
+    color: var(--text);
+    font-size: 17px;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  }
+
+  a { color: inherit; text-decoration: none; }
+  button { font-family: inherit; cursor: pointer; border: none; background: none; }
+
+  /* ── NAV ── */
+  .nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    height: 72px;
+    background: rgba(255,255,255,0.9);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-inner {
+    max-width: var(--max-w); margin: 0 auto;
+    padding: 0 var(--gutter); height: 100%;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-brand {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 19px; font-weight: 800; letter-spacing: -0.4px; color: var(--text);
+  }
+  .nav-brand-badge {
+    font-size: 11px; font-weight: 700;
+    background: var(--orange); color: #fff;
+    padding: 3px 8px; border-radius: 6px; letter-spacing: 0.2px;
+  }
+  .nav-links { display: flex; align-items: center; gap: 32px; }
+  .nav-link { font-size: 15px; font-weight: 500; color: var(--text-muted); transition: color 0.15s; }
+  .nav-link:hover { color: var(--text); }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font-family: inherit; font-size: 15px; font-weight: 600;
+    padding: 11px 22px; border-radius: 10px; cursor: pointer;
+    transition: all 0.18s; white-space: nowrap; text-decoration: none;
+  }
+  .btn-primary { background: var(--orange); color: #fff; box-shadow: 0 2px 10px rgba(242,78,30,0.28); }
+  .btn-primary:hover { background: #d83d10; box-shadow: 0 5px 18px rgba(242,78,30,0.38); transform: translateY(-1px); }
+  .btn-primary:focus-visible { outline: 3px solid rgba(242,78,30,0.5); outline-offset: 2px; }
+  .btn-lg { font-size: 17px; padding: 15px 32px; border-radius: 12px; box-shadow: 0 4px 18px rgba(242,78,30,0.3); }
+  .btn-lg:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(242,78,30,0.4); }
+  .btn-ghost { background: transparent; color: var(--text-muted); border: 1.5px solid var(--border); }
+  .btn-ghost:hover { border-color: rgba(15,15,30,0.2); color: var(--text); transform: translateY(-1px); }
+  .btn-ghost:focus-visible { outline: 3px solid rgba(110,110,120,0.3); outline-offset: 2px; }
+
+  /* ── PILLS ── */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 700; padding: 5px 13px; border-radius: 999px;
+  }
+  .pill-orange { background: rgba(242,78,30,0.09); color: var(--orange); }
+  .pill-green  { background: rgba(10,207,131,0.10); color: #0aac6e; }
+  .pill-purple { background: rgba(162,89,255,0.10); color: #7b3fcc; }
+  .pill-blue   { background: rgba(27,188,254,0.10); color: #0782b5; }
+  .pill-red    { background: rgba(255,114,98,0.13); color: #c94030; }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.25; } }
+  .dot-pulse { animation: pulse 2s ease-in-out infinite; }
+
+  /* ── ENTRANCE ANIMATION ── */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(22px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .hero-copy { animation: fadeUp 0.7s cubic-bezier(0.22,1,0.36,1) both; }
+  .hero-demo { animation: fadeUp 0.7s 0.15s cubic-bezier(0.22,1,0.36,1) both; }
+
+  /* ── LAYOUT HELPERS ── */
+  .container { max-width: var(--max-w); margin: 0 auto; padding: 0 var(--gutter); }
+  .sec { padding: 120px 0; }
+  .sec-header { margin-bottom: 72px; }
+  .sec-eyebrow {
+    font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
+  }
+  .sec-title { font-size: clamp(32px,3.5vw,52px); font-weight: 800; line-height: 1.15; letter-spacing: -0.6px; margin-bottom: 16px; }
+  .sec-desc { font-size: 18px; color: var(--text-muted); line-height: 1.8; }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 160px var(--gutter) 100px;
+    max-width: var(--max-w); margin: 0 auto;
+    display: grid; grid-template-columns: 54% 1fr; gap: 72px; align-items: center;
+  }
+  .hero h1 {
+    font-size: clamp(44px,5.2vw,72px); font-weight: 800;
+    line-height: 1.1; letter-spacing: -1px; margin-bottom: 24px;
+  }
+  .hero h1 .hl { color: var(--orange); }
+  .hero-sub { font-size: 20px; color: var(--text-muted); line-height: 1.75; max-width: 500px; margin-bottom: 40px; }
+  .hero-actions { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  .hero-note { font-size: 14px; color: var(--text-muted); margin-bottom: 48px; }
+  .hero-note span { color: var(--green); margin-right: 4px; }
+  .hero-rule { border: none; border-top: 1px solid var(--border); margin-bottom: 36px; }
+  .hero-stats { display: flex; gap: 52px; }
+  .stat-val { font-size: 40px; font-weight: 800; letter-spacing: -1px; line-height: 1; margin-bottom: 6px; }
+  .stat-lbl { font-size: 13px; color: var(--text-muted); }
+
+  /* ── DASHBOARD (scan demo) ── */
+  .dashboard {
+    background: var(--ground);
+    border-radius: 20px; border: 1px solid var(--border);
+    box-shadow: 0 32px 80px rgba(15,15,20,0.1), 0 6px 20px rgba(15,15,20,0.05);
+    overflow: hidden; position: relative;
+  }
+  .db-header {
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
+    background: var(--bg-alt);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .db-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+  .db-badge { font-size: 11px; font-weight: 700; color: var(--orange); background: rgba(242,78,30,0.1); padding: 3px 9px; border-radius: 999px; }
+
+  .sku-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .sku-table thead tr { background: var(--bg-alt); }
+  .sku-table th { padding: 9px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); text-align: left; }
+  .sku-table td { padding: 11px 14px; border-bottom: 1px solid rgba(15,15,30,0.06); }
+  .sku-row { transition: background 0.35s ease; }
+  .sku-row.st-profitable { background: rgba(10,207,131,0.07); }
+  .sku-row.st-losing     { background: rgba(255,114,98,0.07); }
+  .sku-row.st-warning    { background: rgba(242,78,30,0.06); }
+  .sku-name { font-weight: 600; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+  .sku-sub  { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+  .num { font-family: "SF Mono","Cascadia Code","Consolas","Fira Mono",ui-monospace,monospace; font-size: 13px; font-weight: 600; }
+  .num-pos { color: #09a865; }
+  .num-neg { color: #d94030; }
+  .num-dim { color: var(--text-muted); }
+
+  .ai-tag {
+    display: inline-flex; align-items: center;
+    font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px;
+    opacity: 0; transform: scale(0.82);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    letter-spacing: 0.3px; white-space: nowrap;
+  }
+  .ai-tag.show { opacity: 1; transform: scale(1); }
+  .ai-tag-green  { background: rgba(10,207,131,0.15); color: #09a865; }
+  .ai-tag-red    { background: rgba(255,114,98,0.18); color: #d94030; }
+  .ai-tag-orange { background: rgba(242,78,30,0.13);  color: #c83c0e; }
+
+  .scan-beam {
+    position: absolute; left: 0; right: 0; height: 2px;
+    background: linear-gradient(to right, transparent 5%, var(--green) 35%, var(--green) 65%, transparent 95%);
+    box-shadow: 0 0 12px rgba(10,207,131,0.5), 0 0 4px rgba(10,207,131,0.8);
+    pointer-events: none; opacity: 0; top: 56px;
+    transition: top 0.48s cubic-bezier(0.4,0,0.2,1), opacity 0.28s ease;
+    z-index: 10;
+  }
+  .scan-beam.live { opacity: 1; }
+
+  .db-footer {
+    padding: 10px 14px; border-top: 1px solid var(--border);
+    background: rgba(10,207,131,0.04);
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; color: #09a865;
+    opacity: 0; transition: opacity 0.3s ease;
+  }
+  .db-footer.show { opacity: 1; }
+
+  /* ── PROBLEM ── */
+  .sec-problem { background: rgba(242,78,30,0.04); }
+  .problem-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 28px; }
+  .problem-card {
+    background: var(--ground); border-radius: 20px; padding: 36px;
+    border: 1px solid var(--border);
+    transition: transform 0.22s, box-shadow 0.22s;
+  }
+  .problem-card:hover { transform: translateY(-5px); box-shadow: 0 20px 50px rgba(15,15,20,0.09); }
+  .problem-icon { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; margin-bottom: 22px; }
+  .problem-card h3 { font-size: 21px; font-weight: 800; line-height: 1.25; margin-bottom: 12px; }
+  .problem-card p { font-size: 16px; color: var(--text-muted); line-height: 1.75; }
+  .problem-sting { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 13px; font-weight: 700; color: var(--orange); letter-spacing: 0.1px; }
+
+  /* ── HOW ── */
+  .sec-how { background: var(--ground); }
+  .steps-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 48px; }
+  .step-badge {
+    width: 64px; height: 64px; border-radius: 18px;
+    font-size: 26px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 26px;
+  }
+  .sb-1 { background: rgba(242,78,30,0.09); color: var(--orange); }
+  .sb-2 { background: rgba(162,89,255,0.09); color: var(--purple); }
+  .sb-3 { background: rgba(10,207,131,0.09); color: var(--green); }
+  .step h3 { font-size: 22px; font-weight: 800; margin-bottom: 12px; line-height: 1.25; }
+  .step p { font-size: 16px; color: var(--text-muted); line-height: 1.75; margin-bottom: 18px; }
+  .file-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+  .file-chip {
+    font-family: "SF Mono","Cascadia Code","Consolas",ui-monospace,monospace;
+    font-size: 12px; font-weight: 600; padding: 5px 11px;
+    border-radius: 7px; background: var(--bg-alt); border: 1px solid var(--border); color: var(--text-muted);
+  }
+
+  /* ── REPORT ── */
+  .sec-report { background: var(--bg-alt); }
+  .report-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; }
+  .report-card {
+    background: var(--ground); border-radius: 18px;
+    padding: 0; overflow: hidden;
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--border);
+    box-shadow: 0 2px 12px rgba(15,15,20,0.05);
+    transition: transform 0.26s cubic-bezier(0.22,1,0.36,1), box-shadow 0.26s;
+    display: flex; flex-direction: column;
+  }
+  .report-card:hover { transform: translateY(-7px); box-shadow: 0 28px 64px rgba(15,15,20,0.11); }
+  .report-head {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .report-icon {
+    width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0; margin-top: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 900; line-height: 1;
+    font-family: "SF Mono","Cascadia Code","Consolas",ui-monospace,monospace;
+  }
+  .report-eyebrow {
+    font-size: 10px; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 3px;
+  }
+  .report-card h3 { font-size: 13.5px; font-weight: 700; line-height: 1.3; }
+  .report-body { padding: 10px 22px 18px; flex: 1; }
+  .report-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0; font-size: 13px;
+    border-bottom: 1px solid rgba(15,15,30,0.06);
+  }
+  .report-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .rr-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; padding-right: 12px; }
+  .rr-val { font-family: "SF Mono","Cascadia Code","Consolas",ui-monospace,monospace; font-weight: 700; font-size: 13px; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .rr-spark { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .rr-bar-track { width: 40px; height: 3px; border-radius: 99px; background: rgba(15,15,30,0.08); overflow: hidden; flex-shrink: 0; }
+  .rr-bar-fill  { height: 100%; border-radius: 99px; }
+
+  /* ── ACTION ── */
+  .sec-action { background: var(--ground); }
+  .action-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 96px; align-items: center; }
+  .action-copy h2 { font-size: clamp(30px,3.2vw,44px); font-weight: 800; line-height: 1.15; letter-spacing: -0.6px; margin-bottom: 18px; }
+  .action-copy p { font-size: 18px; color: var(--text-muted); line-height: 1.8; margin-bottom: 28px; }
+  .action-list { list-style: none; display: flex; flex-direction: column; gap: 11px; }
+  .action-item {
+    display: flex; align-items: flex-start; gap: 16px;
+    padding: 18px 20px; border-radius: 14px;
+    border: 1px solid var(--border); background: var(--ground);
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  }
+  .action-item:hover { border-color: rgba(242,78,30,0.35); box-shadow: 0 6px 20px rgba(242,78,30,0.07); transform: translateX(5px); }
+  .action-emoji { font-size: 21px; flex-shrink: 0; margin-top: 1px; line-height: 1; }
+  .action-text strong { display: block; font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+  .action-text span { font-size: 14px; color: var(--text-muted); line-height: 1.55; }
+
+  /* ── CTA ── */
+  .sec-cta { background: rgba(27,188,254,0.04); text-align: center; }
+  .cta-inner { max-width: 680px; margin: 0 auto; }
+  .cta-inner h2 { font-size: clamp(36px,4vw,58px); font-weight: 800; line-height: 1.1; letter-spacing: -0.8px; margin-bottom: 20px; }
+  .cta-desc { font-size: 19px; color: var(--text-muted); line-height: 1.75; margin-bottom: 52px; max-width: 520px; margin-left: auto; margin-right: auto; }
+
+  /* demo hero button */
+  .cta-demo-wrap { margin-bottom: 20px; }
+  @keyframes demoGlow {
+    0%,100% { box-shadow: 0 6px 28px rgba(242,78,30,0.32); }
+    50%      { box-shadow: 0 10px 40px rgba(242,78,30,0.52), 0 0 0 5px rgba(242,78,30,0.09); }
+  }
+  .btn-demo {
+    display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    font-family: inherit; font-size: 20px; font-weight: 700;
+    padding: 20px 44px; border-radius: 16px; cursor: pointer;
+    background: var(--orange); color: #fff; border: none;
+    box-shadow: 0 6px 28px rgba(242,78,30,0.32);
+    animation: demoGlow 2.5s ease-in-out infinite;
+    transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
+    min-width: 380px;
+  }
+  .btn-demo:hover { background: #d83d10; transform: translateY(-2px); animation: none; box-shadow: 0 14px 44px rgba(242,78,30,0.45); }
+  .btn-demo:focus-visible { outline: 3px solid rgba(242,78,30,0.5); outline-offset: 3px; animation: none; }
+  .cta-demo-hint { font-size: 14px; color: var(--text-muted); margin-top: 12px; }
+
+  .cta-mid-rule { width: 48px; height: 1px; background: var(--border); margin: 36px auto; }
+  .cta-upload-link { font-size: 15px; color: var(--text-muted); margin-bottom: 14px; }
+  .cta-upload-link a { color: var(--orange); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+  .cta-upload-link a:hover { color: #d83d10; }
+  .cta-note { font-size: 14px; color: var(--text-muted); display: flex; align-items: center; justify-content: center; gap: 6px; }
+
+  /* ── FOOTER ── */
+  .footer {
+    padding: 32px var(--gutter); max-width: var(--max-w); margin: 0 auto;
+    border-top: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; color: var(--text-muted);
+  }
+  .footer-brand { font-weight: 800; font-size: 16px; color: var(--text); }
+  .footer-links { display: flex; gap: 28px; }
+  .footer-links a { color: var(--text-muted); transition: color 0.15s; }
+  .footer-links a:hover { color: var(--text); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 960px) {
+    .hero { grid-template-columns: 1fr; padding: 110px var(--gutter) 70px; gap: 56px; }
+    .problem-grid, .steps-grid, .report-grid { grid-template-columns: 1fr 1fr; }
+    .action-layout { grid-template-columns: 1fr; gap: 56px; }
+    .hero-stats { flex-wrap: wrap; gap: 28px; }
+  }
+  @media (max-width: 640px) {
+    :root { --gutter: 24px; }
+    .nav-links .nav-link { display: none; }
+    .nav-links { gap: 12px; }
+    .problem-grid, .steps-grid, .report-grid { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 36px; letter-spacing: -0.5px; }
+    .hero-sub { font-size: 17px; }
+    .sec { padding: 72px 0; }
+    .sec-header { margin-bottom: 48px; }
+    .hero-stats { gap: 20px; }
+    .stat-val { font-size: 32px; }
+    .steps-grid { gap: 36px; }
+    .footer { flex-direction: column; gap: 14px; text-align: center; }
+    .btn-demo { min-width: 0; width: 100%; font-size: 17px; padding: 18px 24px; }
+    .report-head { padding: 14px 18px 12px; }
+    .report-body { padding: 8px 18px 14px; }
+    /* dashboard table: hide '銷量' column on phones */
+    .sku-table th:nth-child(2), .sku-table td:nth-child(2) { display: none; }
+    .sku-sub { display: none; }
+    .sku-name { max-width: 108px; font-size: 12px; }
+  }
+  @media (max-width: 480px) {
+    :root { --gutter: 20px; }
+    .sec { padding: 60px 0; }
+    .sec-header { margin-bottom: 40px; }
+    .hero { padding: 94px var(--gutter) 56px; }
+    .hero h1 { font-size: 32px; }
+    .hero-actions { flex-direction: column; }
+    .hero-actions .btn { width: 100%; justify-content: center; }
+    .sec-title { font-size: 26px; }
+    .problem-card { padding: 24px; }
+    .action-layout { gap: 40px; }
+    .cta-inner h2 { font-size: 28px; }
+    .cta-desc { font-size: 16px; margin-bottom: 40px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    .scan-beam { display: none; }
+    .ai-tag { opacity: 1; transform: scale(1); }
+    .hero-copy, .hero-demo { animation: none; opacity: 1; }
+  }
+</style>
+
+<!-- ── CROSS-DEVICE ENHANCEMENTS ── -->
+<style>
+  /* Base globals */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; scroll-behavior: smooth; }
+  body { overscroll-behavior-y: none; }
+
+  /* Prevent tap flash */
+  a, button, [role="button"], [tabindex] { -webkit-tap-highlight-color: transparent; }
+
+  /* Minimum touch target: 44×44px */
+  .btn       { min-height: 44px; }
+  .nav-link  { min-height: 44px; display: inline-flex; align-items: center; }
+  .dmo-close { min-width: 44px; min-height: 44px; }
+
+  /* Touch-friendly active states (replaces hover on mobile) */
+  .btn:active          { opacity: 0.88; }
+  .btn-primary:active  { background: #c83d10; }
+  .btn-ghost:active    { background: rgba(15,15,30,0.06); }
+  .btn-demo:active     { background: #c83d10; transform: scale(0.98); animation: none; }
+  .action-item:active  { background: rgba(242,78,30,0.03); border-color: rgba(242,78,30,0.3); }
+  .problem-card:active { transform: translateY(-2px); }
+  .report-card:active  { transform: translateY(-2px); }
+
+  /* iOS notch / Dynamic Island: extend nav background into safe area */
+  .nav {
+    padding-top: env(safe-area-inset-top, 0px);
+    height: calc(72px + env(safe-area-inset-top, 0px));
+  }
+  .nav-inner { height: 72px; } /* inner stays fixed, padding pushes it down */
+
+  /* Hero pushes down to stay below the taller safe-area nav */
+  @supports (padding-top: env(safe-area-inset-top)) {
+    .hero { padding-top: calc(160px + env(safe-area-inset-top)); }
+    @media (max-width: 960px) { .hero { padding-top: calc(110px + env(safe-area-inset-top)); } }
+    @media (max-width: 480px) { .hero { padding-top: calc(94px + env(safe-area-inset-top)); } }
+  }
+
+  /* ── Demo modal: bottom sheet on mobile ── */
+  .dmo-drag-handle {
+    display: none;
+    width: 36px; height: 4px; border-radius: 2px;
+    background: rgba(15,15,30,0.15);
+    margin: 12px auto 0; flex-shrink: 0; cursor: grab;
+  }
+
+  /* Use small viewport height so iOS browser chrome doesn't clip the panel */
+  @supports (height: 1svh) {
+    #demo-panel { max-height: 88svh; }
+  }
+
+  /* Smooth momentum scroll inside modal on iOS */
+  #dmo-terminal, #dmo-report { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+
+  @media (max-width: 640px) {
+    /* Slide-up sheet instead of centered dialog */
+    #demo-modal { align-items: flex-end; padding: 0; }
+    #demo-panel {
+      border-radius: 20px 20px 0 0; width: 100%;
+      max-height: 92vh;
+    }
+    @supports (height: 1svh) { #demo-panel { max-height: 92svh; } }
+    .dmo-drag-handle { display: block; }
+    .dmo-period { display: none; } /* save space in topbar */
+
+    /* Terminal: allow horizontal scroll (preserve aligned columns) */
+    #dmo-terminal { overflow-x: auto; }
+    .term-line { font-size: 11.5px; }
+
+    /* Report summary: 2-col */
+    .rpt-summary { grid-template-columns: 1fr 1fr; }
+    /* Hide '實收入帳' column in report table */
+    .rpt-table th:nth-child(3), .rpt-table td:nth-child(3) { display: none; }
+
+    /* Safe-area padding at the bottom of modal close buttons */
+    .rpt-foot { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  }
+
+  @media (max-width: 480px) {
+    #demo-panel { max-height: 96vh; }
+    @supports (height: 1svh) { #demo-panel { max-height: 96svh; } }
+    /* Also hide '銷量' column in the report table on very small phones */
+    .rpt-table th:nth-child(2), .rpt-table td:nth-child(2) { display: none; }
+    /* Smaller action items */
+    .rpt-action-item { padding: 12px 14px; }
+    .rpt-action-item strong { font-size: 13px; }
+    .rpt-action-item p { font-size: 12px; }
+  }
+
+  /* Bottom home-indicator safe area for footer */
+  footer { padding-bottom: env(safe-area-inset-bottom, 0px); }
+</style>
+
+<!-- NAV -->
+<nav class="nav" role="navigation" aria-label="主選單">
+  <div class="nav-inner">
+    <a href="#" class="nav-brand" aria-label="利潤健檢 AI">
+      利潤健檢
+      <span class="nav-brand-badge">AI</span>
+    </a>
+    <div class="nav-links">
+      <a href="#how" class="nav-link">如何使用</a>
+      <a href="#report" class="nav-link">報告內容</a>
+      <a href="#cta" class="btn btn-primary">免費健檢</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section id="hero" aria-labelledby="hero-h1">
+  <div class="hero">
+    <!-- copy -->
+    <div class="hero-copy">
+      <div style="margin-bottom:24px;">
+        <span class="pill pill-orange">
+          <span class="dot" style="background:var(--orange);"></span>
+          蝦皮賣家 AI 獲利工具
+        </span>
+      </div>
+      <h1 id="hero-h1">你的蝦皮，<br>每週都在<span class="hl">漏錢</span>。<br>你知道漏在哪嗎？</h1>
+      <p class="hero-sub">上傳三份報表，五分鐘後 AI 告訴你哪個商品真在賺錢、哪個是<strong>假爆品</strong>、哪個廣告費打水漂——直接給你下週行動清單。</p>
+      <div class="hero-actions">
+        <a href="#cta" class="btn btn-primary btn-lg">立即上傳，免費健檢</a>
+        <a href="#report" class="btn btn-ghost btn-lg">看示範報告</a>
+      </div>
+      <p class="hero-note">
+        <span>✓</span> 不需安裝&ensp;
+        <span>✓</span> 不需串接 API&ensp;
+        <span>✓</span> 第一份報告免費
+      </p>
+      <hr class="hero-rule">
+      <div class="hero-stats">
+        <div>
+          <div class="stat-val" style="color:var(--orange);">-32%</div>
+          <div class="stat-lbl">平均廣告費浪費</div>
+        </div>
+        <div>
+          <div class="stat-val">91%</div>
+          <div class="stat-lbl">SKU 判斷準確率</div>
+        </div>
+        <div>
+          <div class="stat-val" style="color:var(--green);">5 分鐘</div>
+          <div class="stat-lbl">出完整報告</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- animated scan dashboard -->
+    <div class="hero-demo">
+    <div class="dashboard" id="dash" aria-label="AI 掃描示範" role="img">
+      <div class="scan-beam" id="beam" aria-hidden="true"></div>
+      <div class="db-header">
+        <div class="db-title">
+          <span class="dot dot-pulse" style="background:var(--green);" aria-hidden="true"></span>
+          AI 健檢 — 本週 SKU 分析
+        </div>
+        <span class="db-badge" id="db-status">掃描中…</span>
+      </div>
+      <table class="sku-table" aria-label="SKU 分析結果">
+        <thead>
+          <tr>
+            <th scope="col">商品名稱</th>
+            <th scope="col">銷量</th>
+            <th scope="col">真實毛利</th>
+            <th scope="col">AI 判斷</th>
+          </tr>
+        </thead>
+        <tbody id="sku-body">
+          <tr class="sku-row" data-st="profitable">
+            <td><span class="sku-name">韓版OL西裝褲 XS-XXL</span><span class="sku-sub">服飾・女裝</span></td>
+            <td><span class="num">234</span></td>
+            <td><span class="num num-pos">+42%</span></td>
+            <td><span class="ai-tag ai-tag-green">最賺錢</span></td>
+          </tr>
+          <tr class="sku-row" data-st="losing">
+            <td><span class="sku-name">保濕面膜 10片/盒</span><span class="sku-sub">美妝保養</span></td>
+            <td><span class="num">891</span></td>
+            <td><span class="num num-neg">-8%</span></td>
+            <td><span class="ai-tag ai-tag-red">假爆品</span></td>
+          </tr>
+          <tr class="sku-row" data-st="losing">
+            <td><span class="sku-name">無線藍芽耳機 TWS</span><span class="sku-sub">3C 配件</span></td>
+            <td><span class="num">156</span></td>
+            <td><span class="num num-neg">-12%</span></td>
+            <td><span class="ai-tag ai-tag-orange">廣告虧損</span></td>
+          </tr>
+          <tr class="sku-row" data-st="profitable">
+            <td><span class="sku-name">棉麻寬鬆上衣</span><span class="sku-sub">服飾・女裝</span></td>
+            <td><span class="num">312</span></td>
+            <td><span class="num num-pos">+31%</span></td>
+            <td><span class="ai-tag ai-tag-green">獲利穩</span></td>
+          </tr>
+          <tr class="sku-row" data-st="warning">
+            <td><span class="sku-name">矽膠手機殼 多款</span><span class="sku-sub">3C 配件</span></td>
+            <td><span class="num">445</span></td>
+            <td><span class="num num-dim">+18%</span></td>
+            <td><span class="ai-tag ai-tag-orange">退貨高</span></td>
+          </tr>
+          <tr class="sku-row" data-st="profitable" style="border-bottom:none;">
+            <td><span class="sku-name">男款運動短褲</span><span class="sku-sub">服飾・男裝</span></td>
+            <td><span class="num">178</span></td>
+            <td><span class="num num-pos">+28%</span></td>
+            <td><span class="ai-tag ai-tag-green">優先補貨</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="db-footer" id="db-footer" aria-live="polite">
+        <span aria-hidden="true">✓</span>
+        分析完成：6 項商品・3 項行動建議已生成
+      </div>
+    </div>
+    </div><!-- /hero-demo -->
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="sec sec-problem" id="problem" aria-labelledby="problem-h2">
+  <div class="container">
+    <div class="sec-header">
+      <p class="sec-eyebrow" style="color:var(--orange);">你是不是也遇到這些問題</p>
+      <h2 class="sec-title" id="problem-h2">月出千單，帳上卻沒錢</h2>
+      <p class="sec-desc" style="max-width:520px;">蝦皮後台顯示的收入，不是你真正賺到的錢。廣告費、退貨、折扣、耗材——每項都在吃利潤，但你不知道哪個最嚴重。</p>
+    </div>
+    <div class="problem-grid">
+      <div class="problem-card">
+        <div class="problem-icon" style="background:rgba(242,78,30,0.1);">📉</div>
+        <h3>銷量不等於獲利</h3>
+        <p>爆品榜第一，折扣打到毛利剩 3%。廣告費、退貨成本、耗材全算進去，才發現根本在賠錢。</p>
+        <p class="problem-sting">蝦皮後台不告訴你這件事</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon" style="background:rgba(255,114,98,0.1);">🕳️</div>
+        <h3>廣告費是黑洞</h3>
+        <p>ROAS 1.2 看起來有賺，扣完折扣率和退貨率之後是 0.7。廣告後台不會幫你算這個。</p>
+        <p class="problem-sting">每個月白燒幾萬塊</p>
+      </div>
+      <div class="problem-card">
+        <div class="problem-icon" style="background:rgba(162,89,255,0.1);">🎲</div>
+        <h3>決策全靠直覺</h3>
+        <p>停哪個 SKU？補哪個貨？哪個圖要換？沒有按真實毛利做決策，就是在猜。</p>
+        <p class="problem-sting">老闆猜，員工跟著賠</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="sec sec-how" id="how" aria-labelledby="how-h2">
+  <div class="container">
+    <div class="sec-header">
+      <p class="sec-eyebrow" style="color:var(--purple);">三步驟，五分鐘出報告</p>
+      <h2 class="sec-title" id="how-h2">上傳就好，AI 幫你算清楚</h2>
+      <p class="sec-desc">不需要學任何工具。把三份你本來就有的報表傳上來，剩下的交給 AI。</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step">
+        <div class="step-badge sb-1">01</div>
+        <h3>上傳三份報表</h3>
+        <p>蝦皮賣場中心直接匯出，不需整理格式。AI 自動讀取所有欄位。</p>
+        <div class="file-chips">
+          <span class="file-chip">銷售報表.xlsx</span>
+          <span class="file-chip">成本表.xlsx</span>
+          <span class="file-chip">廣告資料.csv</span>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-badge sb-2">02</div>
+        <h3>AI 計算每個 SKU 真實毛利</h3>
+        <p>自動比對收入、廣告費、折扣優惠、退貨成本，算出你蝦皮後台從未顯示的數字。</p>
+      </div>
+      <div class="step">
+        <div class="step-badge sb-3">03</div>
+        <h3>拿到下週行動清單</h3>
+        <p>不是圖表，不是儀表板。是五件具體的事：哪個商品停賣、哪個補貨、哪個廣告關掉。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- REPORT OUTPUT -->
+<section class="sec sec-report" id="report" aria-labelledby="report-h2">
+  <div class="container">
+    <div class="sec-header">
+      <p class="sec-eyebrow" style="color:var(--purple);">報告內容</p>
+      <h2 class="sec-title" id="report-h2">一份報告，六個你現在最需要的答案</h2>
+      <p class="sec-desc">不是數據堆積——是直接可以執行的決策依據。</p>
+    </div>
+    <div class="report-grid">
+
+      <!-- Card 1: Top profit SKU -->
+      <div class="report-card" style="border-top-color:#0acf83;">
+        <div class="report-head">
+          <div class="report-icon" style="background:rgba(10,207,131,0.12);color:#09a865;">▲</div>
+          <div>
+            <div class="report-eyebrow">獲利排行</div>
+            <h3>本週最賺錢 SKU</h3>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="report-row"><span class="rr-name">韓版OL西裝褲</span><span class="rr-spark"><span class="rr-bar-track"><span class="rr-bar-fill" style="width:100%;background:#0acf83;"></span></span><span class="rr-val" style="color:#09a865;">+42%</span></span></div>
+          <div class="report-row"><span class="rr-name">棉麻寬鬆上衣</span><span class="rr-spark"><span class="rr-bar-track"><span class="rr-bar-fill" style="width:74%;background:#0acf83;"></span></span><span class="rr-val" style="color:#09a865;">+31%</span></span></div>
+          <div class="report-row"><span class="rr-name">男款運動短褲</span><span class="rr-spark"><span class="rr-bar-track"><span class="rr-bar-fill" style="width:67%;background:#0acf83;"></span></span><span class="rr-val" style="color:#09a865;">+28%</span></span></div>
+        </div>
+      </div>
+
+      <!-- Card 2: Fake bestsellers -->
+      <div class="report-card" style="border-top-color:#ff7262;">
+        <div class="report-head">
+          <div class="report-icon" style="background:rgba(255,114,98,0.12);color:#d94030;">▼</div>
+          <div>
+            <div class="report-eyebrow">虧損警示</div>
+            <h3>本週假爆品</h3>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="report-row"><span class="rr-name">保濕面膜 10片/盒</span><span class="rr-val" style="color:#d94030;">-8%</span></div>
+          <div class="report-row"><span class="rr-name">韓版連帽衛衣</span><span class="rr-val" style="color:#d94030;">-5%</span></div>
+          <div class="report-row"><span class="rr-name" style="color:var(--text-muted);">+ 3 項未達損益平衡</span><span class="rr-val" style="color:var(--text-muted);">查看</span></div>
+        </div>
+      </div>
+
+      <!-- Card 3: Ad losses -->
+      <div class="report-card" style="border-top-color:var(--orange);">
+        <div class="report-head">
+          <div class="report-icon" style="background:rgba(242,78,30,0.10);color:var(--orange);font-size:14px;font-weight:800;">Ad</div>
+          <div>
+            <div class="report-eyebrow">廣告效益</div>
+            <h3>廣告吃掉利潤的商品</h3>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="report-row"><span class="rr-name">無線藍芽耳機 TWS</span><span class="rr-val" style="color:#c83c0e;">ROAS 0.8</span></div>
+          <div class="report-row"><span class="rr-name">氣墊粉底液 SPF50</span><span class="rr-val" style="color:#c83c0e;">ROAS 0.9</span></div>
+          <div class="report-row"><span class="rr-name" style="color:var(--text-muted);">校正退貨率後 ROAS &lt; 1</span></div>
+        </div>
+      </div>
+
+      <!-- Card 4: Return rates -->
+      <div class="report-card" style="border-top-color:#ff7262;">
+        <div class="report-head">
+          <div class="report-icon" style="background:rgba(255,114,98,0.10);color:#d94030;">↺</div>
+          <div>
+            <div class="report-eyebrow">退貨分析</div>
+            <h3>退貨率異常商品</h3>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="report-row"><span class="rr-name">矽膠手機殼 多款</span><span class="rr-spark"><span class="rr-bar-track"><span class="rr-bar-fill" style="width:100%;background:#ff7262;"></span></span><span class="rr-val" style="color:#d94030;">23%</span></span></div>
+          <div class="report-row"><span class="rr-name">仿皮短靴 女款</span><span class="rr-spark"><span class="rr-bar-track"><span class="rr-bar-fill" style="width:83%;background:#ff7262;"></span></span><span class="rr-val" style="color:#d94030;">19%</span></span></div>
+          <div class="report-row"><span class="rr-name" style="color:var(--text-muted);">行業平均退貨率</span><span class="rr-val" style="color:var(--text-muted);">8%</span></div>
+        </div>
+      </div>
+
+      <!-- Card 5: AI suggestions -->
+      <div class="report-card" style="border-top-color:var(--purple);">
+        <div class="report-head">
+          <div class="report-icon" style="background:rgba(162,89,255,0.12);color:#7b3fcc;font-size:13px;font-weight:800;letter-spacing:-0.5px;">AI</div>
+          <div>
+            <div class="report-eyebrow">AI 建議</div>
+            <h3>AI 建議清單</h3>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="report-row">
+            <span class="rr-name">停賣無線藍芽耳機</span>
+            <span><span class="pill pill-red" style="font-size:10px;padding:2px 7px;">停賣</span></span>
+          </div>
+          <div class="report-row">
+            <span class="rr-name">韓版西裝褲提價 15%</span>
+            <span><span class="pill pill-green" style="font-size:10px;padding:2px 7px;">漲價</span></span>
+          </div>
+          <div class="report-row">
+            <span class="rr-name">手機殼換主圖測試</span>
+            <span><span class="pill pill-blue" style="font-size:10px;padding:2px 7px;">改圖</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 6: Priority tasks -->
+      <div class="report-card" style="border-top-color:var(--blue);">
+        <div class="report-head">
+          <div class="report-icon" style="background:rgba(27,188,254,0.12);color:#0782b5;">≡</div>
+          <div>
+            <div class="report-eyebrow">優先任務</div>
+            <h3>下週五大優先任務</h3>
+          </div>
+        </div>
+        <div class="report-body">
+          <div class="report-row"><span class="rr-name">① 關閉 2 個 ROAS &lt; 1 廣告組</span></div>
+          <div class="report-row"><span class="rr-name">② 補貨韓版西裝褲 M / L 碼</span></div>
+          <div class="report-row"><span class="rr-name">③ 停賣保濕面膜或調整定價</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ACTION VALUE PROP -->
+<section class="sec sec-action" id="action" aria-labelledby="action-h2">
+  <div class="container">
+    <div class="action-layout">
+      <div class="action-copy">
+        <p class="sec-eyebrow" style="color:var(--blue);">不是更多數據</p>
+        <h2 id="action-h2">AI 不給你看更多圖表，<br>給你<span style="color:var(--orange);">更少決策</span></h2>
+        <p>你不缺數據，你缺的是有人把數據翻譯成「這週你該做什麼」。具體、排好順序、可以直接交辦。</p>
+        <a href="#cta" class="btn btn-primary">開始試用</a>
+      </div>
+      <ul class="action-list" aria-label="AI 可生成的行動類型">
+        <li class="action-item">
+          <span class="action-emoji" aria-hidden="true">🛑</span>
+          <div class="action-text">
+            <strong>停賣真實虧損商品</strong>
+            <span>毛利率 &lt; 0% 且廣告費無法攤薄的 SKU，AI 直接點名</span>
+          </div>
+        </li>
+        <li class="action-item">
+          <span class="action-emoji" aria-hidden="true">💰</span>
+          <div class="action-text">
+            <strong>漲價供不應求的爆品</strong>
+            <span>高轉換率但毛利偏低，代表你可以提價而不影響銷量</span>
+          </div>
+        </li>
+        <li class="action-item">
+          <span class="action-emoji" aria-hidden="true">📦</span>
+          <div class="action-text">
+            <strong>補貨前三名優質商品</strong>
+            <span>毛利高、退貨低、廣告正報酬——這些才是值得補的</span>
+          </div>
+        </li>
+        <li class="action-item">
+          <span class="action-emoji" aria-hidden="true">🖼️</span>
+          <div class="action-text">
+            <strong>改圖高曝光低轉換商品</strong>
+            <span>廣告花了但點擊沒轉換，問題八成在主圖或標題</span>
+          </div>
+        </li>
+        <li class="action-item">
+          <span class="action-emoji" aria-hidden="true">🎁</span>
+          <div class="action-text">
+            <strong>改組合包降低退貨損失</strong>
+            <span>高退貨商品搭配低退貨商品打包，攤薄退貨成本</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="sec sec-cta" id="cta" aria-labelledby="cta-h2">
+  <div class="container">
+    <div class="cta-inner">
+      <p class="sec-eyebrow" style="color:var(--blue);display:flex;align-items:center;justify-content:center;gap:8px;">
+        <span class="dot dot-pulse" style="background:var(--blue);" aria-hidden="true"></span>
+        今天就能拿到報告
+      </p>
+      <h2 id="cta-h2">你的蝦皮到底賺多少，<br>五分鐘後你就知道</h2>
+      <p class="cta-desc">不需安裝，不需串接 API。上傳三份 Excel，AI 五分鐘算出每個 SKU 的真實獲利。</p>
+
+      <div class="cta-demo-wrap">
+        <button id="demo-open-btn" class="btn-demo" aria-haspopup="dialog">
+          <span aria-hidden="true">▶</span> 跑示範報告 — 用真實資料看效果
+        </button>
+        <p class="cta-demo-hint">用蝦皮賣家樣本資料，直接示範 AI 怎麼分析</p>
+      </div>
+
+      <div class="cta-mid-rule"></div>
+      <p class="cta-upload-link">已有自己的資料？<a href="#">直接上傳真實報表 →</a></p>
+      <p class="cta-note">🔒 不需信用卡&ensp;·&ensp;資料不留存&ensp;·&ensp;報告只有你看得到</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer">
+    <span class="footer-brand">利潤健檢 AI</span>
+    <p>© 2025 AI 利潤健檢 Copilot</p>
+    <nav class="footer-links" aria-label="頁尾導覽">
+      <a href="#">隱私政策</a>
+      <a href="#">服務條款</a>
+      <a href="#">聯絡我們</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var beam = document.getElementById('beam');
+  var dash = document.getElementById('dash');
+  var status = document.getElementById('db-status');
+  var footer = document.getElementById('db-footer');
+  var rows = [].slice.call(document.querySelectorAll('.sku-row'));
+  if (!beam || !rows.length) return;
+
+  var ROW_MS = 680;
+  var END_PAUSE = 2800;
+  var timers = [];
+
+  function schedule(ms, fn) { timers.push(setTimeout(fn, ms)); }
+  function clearAll() { timers.forEach(clearTimeout); timers = []; }
+
+  function rowCenter(row) {
+    var dr = dash.getBoundingClientRect();
+    var rr = row.getBoundingClientRect();
+    return rr.top - dr.top + rr.height / 2;
+  }
+
+  function reset() {
+    rows.forEach(function (r) {
+      r.className = 'sku-row';
+      var t = r.querySelector('.ai-tag');
+      if (t) t.classList.remove('show');
+    });
+    footer.classList.remove('show');
+    status.textContent = '掃描中…';
+    beam.classList.remove('live');
+  }
+
+  function run() {
+    reset();
+    schedule(300, function () {
+      beam.style.top = (rowCenter(rows[0]) - 32) + 'px';
+      beam.classList.add('live');
+
+      rows.forEach(function (row, i) {
+        schedule(i * ROW_MS + 140, function () {
+          beam.style.top = rowCenter(row) + 'px';
+        });
+        schedule(i * ROW_MS + 480, function () {
+          row.classList.add('st-' + row.getAttribute('data-st'));
+          var t = row.querySelector('.ai-tag');
+          if (t) t.classList.add('show');
+        });
+      });
+
+      schedule(rows.length * ROW_MS + 260, function () {
+        beam.classList.remove('live');
+        status.textContent = '分析完成';
+        footer.classList.add('show');
+        schedule(END_PAUSE, function () { run(); });
+      });
+    });
+  }
+
+  // Start animation when dashboard enters viewport (important on mobile 1-col layout)
+  var started = false;
+  function startOnce() {
+    if (started) return;
+    started = true;
+    schedule(500, run);
+  }
+
+  if ('IntersectionObserver' in window) {
+    var obs = new IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) { obs.disconnect(); startOnce(); }
+    }, { threshold: 0.35 });
+    obs.observe(dash);
+  } else {
+    schedule(900, run); // fallback for very old browsers
+  }
+
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { clearAll(); schedule(120, run); }, 260);
+  });
+}());
+</script>
+
+<!-- =====================================================
+     DEMO MODAL STYLES
+===================================================== -->
+<style>
+  #demo-modal {
+    display: none; position: fixed; inset: 0; z-index: 500;
+    background: rgba(10,10,16,0.82);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  #demo-modal.open { display: flex; }
+
+  #demo-panel {
+    background: var(--ground); border-radius: 20px;
+    width: min(960px, 100%); max-height: 88vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 40px 100px rgba(0,0,0,0.35);
+    overflow: hidden;
+  }
+
+  .dmo-topbar {
+    padding: 14px 20px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border); background: var(--bg-alt);
+  }
+  .dmo-topbar-left { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 700; }
+  .dmo-tag { font-size: 11px; font-weight: 700; background: var(--orange); color: #fff; padding: 3px 7px; border-radius: 6px; }
+  .dmo-period { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .dmo-close {
+    width: 32px; height: 32px; border-radius: 8px; border: none; background: none;
+    font-size: 20px; line-height: 1; color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s; font-family: inherit;
+  }
+  .dmo-close:hover { background: var(--border); color: var(--text); }
+  .dmo-close:focus-visible { outline: 3px solid rgba(242,78,30,0.4); outline-offset: 2px; }
+
+  /* --- TERMINAL --- */
+  #dmo-terminal {
+    flex: 1; overflow-y: auto; background: #0d1117;
+    padding: 22px 24px; display: flex; flex-direction: column;
+  }
+  .term-line {
+    font-family: "SF Mono","Cascadia Code","Consolas","Fira Mono",ui-monospace,monospace;
+    font-size: 12.5px; line-height: 2; white-space: pre;
+    opacity: 0; animation: tIn 0.12s ease forwards;
+  }
+  @keyframes tIn { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:translateX(0); } }
+  .tc-dim    { color: #30363d; }
+  .tc-white  { color: #e6edf3; }
+  .tc-green  { color: #3fb950; }
+  .tc-orange { color: #d29922; }
+  .tc-red    { color: #f85149; }
+  .tc-blue   { color: #79c0ff; }
+  .tc-muted  { color: #8b949e; }
+
+  .term-progress {
+    flex-shrink: 0; margin-top: 18px;
+    height: 3px; border-radius: 3px; background: #21262d; overflow: hidden;
+  }
+  #term-bar { height: 100%; background: #3fb950; width: 0; transition: width 0.18s linear; }
+
+  #term-view-btn {
+    align-self: flex-start; margin-top: 20px; flex-shrink: 0;
+    font-family: "SF Mono","Cascadia Code","Consolas",ui-monospace,monospace;
+    font-size: 13px; font-weight: 700; padding: 10px 22px; border-radius: 8px; border: none;
+    background: #3fb950; color: #0d1117; cursor: pointer;
+    opacity: 0; transition: opacity 0.3s;
+  }
+  #term-view-btn.show { opacity: 1; }
+  #term-view-btn:hover { background: #4dd966; }
+
+  /* --- REPORT --- */
+  #dmo-report { flex: 1; overflow-y: auto; padding: 24px 26px 32px; display: none; }
+
+  .rpt-summary {
+    display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 24px;
+  }
+  .rpt-stat {
+    background: var(--bg-alt); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .rpt-stat-val { font-size: 20px; font-weight: 800; line-height: 1; margin-bottom: 4px; letter-spacing: -0.5px; }
+  .rpt-stat-lbl { font-size: 11px; color: var(--text-muted); }
+
+  .rpt-section-hd {
+    font-size: 10.5px; font-weight: 700; letter-spacing: 1.3px; text-transform: uppercase;
+    color: var(--text-muted); margin: 0 0 14px;
+    padding-left: 11px; border-left: 2.5px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .rpt-section-hd-accent { border-left-color: var(--orange); }
+
+  .rpt-table { width: 100%; border-collapse: collapse; margin-bottom: 28px; font-size: 13px; }
+  .rpt-table th {
+    padding: 9px 10px; text-align: left;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px;
+    color: var(--text-muted); border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  .rpt-table td { padding: 10px 10px; border-bottom: 1px solid rgba(229,229,234,0.5); vertical-align: middle; }
+  .rpt-table tbody tr:hover { background: rgba(15,15,30,0.025); }
+  .rpt-row-star { background: rgba(10,207,131,0.05); }
+  .rpt-row-loss { background: rgba(255,114,98,0.05); }
+  .rpt-row-fake { background: rgba(242,78,30,0.04); }
+
+  .rpt-name  { font-weight: 600; font-size: 13px; }
+  .rpt-skuid { font-family: "SF Mono","Cascadia Code","Consolas",ui-monospace,monospace; font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+  .rpt-mono  { font-family: "SF Mono","Cascadia Code","Consolas",ui-monospace,monospace; font-size: 12px; font-weight: 700; }
+
+  .rpt-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 999px; white-space: nowrap;
+  }
+  .rb-star   { background: rgba(10,207,131,0.15); color: #09a865; }
+  .rb-good   { background: rgba(10,207,131,0.1);  color: #09a865; }
+  .rb-slow   { background: rgba(162,89,255,0.12); color: #8040dd; }
+  .rb-fake   { background: rgba(242,78,30,0.12);  color: #c83c0e; }
+  .rb-crisis { background: rgba(255,114,98,0.18); color: #d94030; }
+  .rb-adloss { background: rgba(242,78,30,0.12);  color: #c83c0e; }
+  .rb-waste  { background: rgba(255,114,98,0.18); color: #d94030; }
+
+  .rpt-bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .rpt-bar-track { width: 48px; height: 4px; border-radius: 999px; background: var(--border); overflow: hidden; flex-shrink: 0; }
+  .rpt-bar-fill  { height: 100%; border-radius: 999px; }
+
+  .rpt-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+  .rpt-action-item {
+    display: flex; gap: 13px; align-items: flex-start;
+    padding: 14px 16px; border-radius: 12px;
+    border: 1px solid var(--border); border-left-width: 3px;
+  }
+  .rpt-ai-critical { border-left-color: #d94030; background: rgba(217,64,48,0.03); }
+  .rpt-ai-warning  { border-left-color: #c83c0e; background: rgba(200,60,14,0.025); }
+  .rpt-ai-positive { border-left-color: #0acf83; background: rgba(10,207,131,0.03); }
+  .rpt-action-num {
+    width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+    font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  }
+  .rpt-action-item strong { font-size: 13.5px; font-weight: 700; display: block; margin-bottom: 4px; line-height: 1.3; }
+  .rpt-action-item p { font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin: 0; }
+  .rpt-priority-tag {
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase;
+    padding: 2px 7px; border-radius: 4px; flex-shrink: 0; white-space: nowrap; margin-top: 1px;
+  }
+  .rpt-pt-critical { background: rgba(217,64,48,0.11); color: #c83030; }
+  .rpt-pt-warning  { background: rgba(200,60,14,0.10); color: #b83a0e; }
+  .rpt-pt-positive { background: rgba(10,207,131,0.13); color: #09a865; }
+
+  .rpt-foot { display: flex; justify-content: center; gap: 12px; }
+
+  @media (max-width: 640px) {
+    .rpt-summary { grid-template-columns: repeat(2,1fr); }
+    .rpt-table th:nth-child(3),
+    .rpt-table td:nth-child(3) { display: none; }
+  }
+</style>
+
+<!-- =====================================================
+     DEMO MODAL HTML
+===================================================== -->
+<div id="demo-modal" role="dialog" aria-modal="true" aria-labelledby="dmo-title">
+  <div id="demo-panel">
+    <div class="dmo-drag-handle" aria-hidden="true"></div>
+    <!-- topbar -->
+    <div class="dmo-topbar">
+      <div class="dmo-topbar-left">
+        <span id="dmo-title">AI 利潤健檢報告</span>
+        <span class="dmo-tag">示範</span>
+        <span class="dmo-period">2024-01-15 ~ 2024-01-21</span>
+      </div>
+      <button class="dmo-close" id="demo-close-btn" aria-label="關閉報告">✕</button>
+    </div>
+
+    <!-- PHASE 1: terminal -->
+    <div id="dmo-terminal">
+      <div id="term-lines"></div>
+      <div class="term-progress"><div id="term-bar"></div></div>
+      <button id="term-view-btn">查看完整報告 →</button>
+    </div>
+
+    <!-- PHASE 2: report -->
+    <div id="dmo-report">
+      <!-- summary stats -->
+      <div class="rpt-summary">
+        <div class="rpt-stat" style="border-top:2.5px solid var(--border);">
+          <div class="rpt-stat-val">NT$26,965</div>
+          <div class="rpt-stat-lbl">本週總入帳</div>
+        </div>
+        <div class="rpt-stat" style="border-top:2.5px solid #0acf83;">
+          <div class="rpt-stat-val" style="color:#09a865;">NT$8,041</div>
+          <div class="rpt-stat-lbl">扣除所有成本後淨利</div>
+        </div>
+        <div class="rpt-stat" style="border-top:2.5px solid #0acf83;">
+          <div class="rpt-stat-val" style="color:#09a865;">6</div>
+          <div class="rpt-stat-lbl">獲利 SKU（毛利 &gt;50%）</div>
+        </div>
+        <div class="rpt-stat" style="border-top:2.5px solid #d94030;">
+          <div class="rpt-stat-val" style="color:#d94030;">3</div>
+          <div class="rpt-stat-lbl">虧損 SKU（需立即處理）</div>
+        </div>
+      </div>
+
+      <!-- SKU table -->
+      <p class="rpt-section-hd">本週 SKU 獲利分析 <span style="font-weight:500;text-transform:none;letter-spacing:0;font-size:11px;opacity:0.7;">（廣告費・退貨損失・折扣補貼全部計入）</span></p>
+      <div style="overflow-x:auto;">
+        <table class="rpt-table" id="rpt-sku-table">
+          <thead>
+            <tr>
+              <th>商品名稱</th>
+              <th>銷量</th>
+              <th>實收入帳</th>
+              <th>真實淨利</th>
+              <th>毛利率</th>
+              <th>AI 判斷</th>
+            </tr>
+          </thead>
+          <tbody id="rpt-tbody"></tbody>
+        </table>
+      </div>
+
+      <!-- action list -->
+      <p class="rpt-section-hd rpt-section-hd-accent">下週五大優先行動</p>
+      <div class="rpt-actions" id="rpt-actions"></div>
+
+      <div class="rpt-foot">
+        <button class="btn btn-ghost" id="demo-close-btn2">關閉報告</button>
+        <a href="#cta" class="btn btn-primary" id="demo-cta-link">上傳我自己的資料</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =====================================================
+     DEMO SCRIPT
+===================================================== -->
+<script>
+(function () {
+  // ── Pre-computed from sample CSVs ──────────────────
+  var SKU_RESULTS = [
+    { sku:'GLASS-IP15-2P', name:'iPhone15 玻璃保護貼(2入)', units:8,  revenue:2272,  cost:408,  ad:198,  retLoss:0,    net:1666,  margin:73.3,  status:'star'   },
+    { sku:'CHG-WL-15W',    name:'15W 無線充電盤(附線)',       units:5,  revenue:3230,  cost:950,  ad:120,  retLoss:0,    net:2160,  margin:66.9,  status:'star'   },
+    { sku:'LENS-CLIP-3IN1',name:'三合一夾式鏡頭組',          units:5,  revenue:1661,  cost:440,  ad:90,   retLoss:0,    net:1131,  margin:68.1,  status:'star'   },
+    { sku:'STAND-DESK-ADJ',name:'懶人手機支架桌面(可調)',    units:7,  revenue:2793,  cost:686,  ad:315,  retLoss:0,    net:1792,  margin:64.2,  status:'good'   },
+    { sku:'POWER-MAG-10K', name:'磁吸行動電源 10000mAh',     units:3,  revenue:4245,  cost:1689, ad:180,  retLoss:0,    net:2376,  margin:56.0,  status:'good'   },
+    { sku:'CASE-IP14-CLR', name:'iPhone14 透明保護殼',       units:4,  revenue:1064,  cost:292,  ad:210,  retLoss:0,    net:562,   margin:52.8,  status:'slow'   },
+    { sku:'CASE-IP15-BLK', name:'iPhone15 保護殼(黑框)',     units:18, revenue:2952,  cost:1530, ad:1260, retLoss:0,    net:162,   margin:5.5,   status:'fake'   },
+    { sku:'BT-EAR-A1-WHT', name:'A1 藍牙耳機(白)',           units:5,  revenue:6080,  cost:2150, ad:480,  retLoss:2070, net:-840,  margin:-13.8, status:'crisis', returnRate:60 },
+    { sku:'CABLE-MAG-2M',  name:'MagSafe 磁吸充電線 2M',     units:5,  revenue:2326,  cost:865,  ad:2100, retLoss:0,    net:-639,  margin:-27.5, status:'adloss' },
+    { sku:'BAG-WATER-L',   name:'防水手機袋L號',             units:2,  revenue:342,   cost:246,  ad:95,   retLoss:330,  net:-329,  margin:-96.2, status:'waste',  roas:0 }
+  ];
+  var ACTIONS = [
+    { n:1, level:'critical', tag:'立即處理', title:'暫停 A1 藍牙耳機販售',
+      desc:'退貨率高達 60%（5 筆中 3 筆退貨），退貨原因均為品質瑕疵。本週實際虧損 NT$840，繼續販售只會持續虧損，建議先下架並處理品管問題。' },
+    { n:2, level:'critical', tag:'立即處理', title:'關閉防水手機袋廣告',
+      desc:'本週廣告費 NT$95，帶來 0 筆成交，ROAS 0.0。廣告費完全無效，建議立即暫停廣告並重新評估商品主圖與市場定位。' },
+    { n:3, level:'warning',  tag:'本週執行', title:'iPhone15 保護殼  —  取消免運・廣告預算砍半',
+      desc:'銷量最高（18 件）但毛利只剩 5.5%（NT$162）。折扣補貼 NT$3,322＋免運 NT$990＋廣告 NT$1,260 為三大成本殺手，建議先停免運觀察轉換率。' },
+    { n:4, level:'positive', tag:'擴大規模', title:'增加玻璃保護貼廣告預算',
+      desc:'ROAS 9.06、毛利率 73.3%，本週最高效益商品。目前廣告費僅 NT$198，具備大幅放大空間，建議逐步提高每日預算測試量級上限。' },
+    { n:5, level:'positive', tag:'備貨補倉', title:'補充無線充電盤・行動電源庫存',
+      desc:'CHG-WL-15W 毛利 66.9%、POWER-MAG-10K 毛利 56.0%，廣告效率優良，是本週最值得主力推廣的 SKU，請確認庫存備貨充足。' }
+  ];
+
+  // ── Terminal line definitions ──────────────────────
+  function buildTermLines() {
+    var lines = [
+      { t:'利潤健檢 AI  v1.0.0  ─── 分析引擎就緒', c:'tc-white' },
+      { t:'', c:'tc-dim' },
+      { t:'[1/3]  驗證並讀取資料來源', c:'tc-blue' },
+      { t:'  ✓  shopee_sales_report.csv      45 筆訂單   10 個 SKU', c:'tc-green' },
+      { t:'  ✓  product_cost.csv             10 項商品成本已比對', c:'tc-green' },
+      { t:'  ✓  ads_discount_return.csv      廣告・折扣・退貨已整合', c:'tc-green' },
+      { t:'', c:'tc-dim' },
+      { t:'[2/3]  計算真實毛利率（含廣告費・退貨損失・折扣補貼）', c:'tc-blue' }
+    ];
+    var statusLabel = { star:'最賺錢', good:'優質', slow:'滯銷', fake:'假爆品', crisis:'退貨危機', adloss:'廣告虧損', waste:'廣告無效' };
+    SKU_RESULTS.forEach(function (s) {
+      var sign  = s.net >= 0 ? '+' : '';
+      var netStr = sign + 'NT$' + Math.abs(s.net).toLocaleString();
+      var mStr  = (s.margin >= 0 ? '+' : '') + s.margin.toFixed(1) + '%';
+      var label = statusLabel[s.status] || '';
+      var good = s.status === 'star' || s.status === 'good';
+      var warn = s.status === 'fake' || s.status === 'slow';
+      var indicator = good ? ' OK ' : (warn ? 'WARN' : 'FAIL');
+      var padSku = (s.sku + '                ').slice(0, 16);
+      var padNet = (netStr + '              ').slice(0, 14);
+      var padM   = (mStr  + '         ').slice(0, 9);
+      var cls = (s.net >= 0) ? (s.status === 'fake' ? 'tc-orange' : 'tc-green') : 'tc-red';
+      lines.push({ t:'  [' + indicator + ']  ' + padSku + '  ' + padNet + '  ' + padM + '  ' + label, c: cls });
+    });
+    lines.push({ t:'', c:'tc-dim' });
+    lines.push({ t:'[3/3]  生成行動優先清單', c:'tc-blue' });
+    lines.push({ t:'  ✓  5 項行動建議已依優先順序排列', c:'tc-green' });
+    lines.push({ t:'', c:'tc-dim' });
+    lines.push({ t:'分析完成  ─  10 個 SKU・5 項行動建議・報告已生成', c:'tc-white' });
+    return lines;
+  }
+
+  // ── DOM refs ────────────────────────────────────────
+  var modal    = document.getElementById('demo-modal');
+  var terminal = document.getElementById('dmo-terminal');
+  var report   = document.getElementById('dmo-report');
+  var termBox  = document.getElementById('term-lines');
+  var bar      = document.getElementById('term-bar');
+  var viewBtn  = document.getElementById('term-view-btn');
+  var openBtn  = document.getElementById('demo-open-btn');
+  var closeBtn = document.getElementById('demo-close-btn');
+  var closeBtn2= document.getElementById('demo-close-btn2');
+  var ctaLink  = document.getElementById('demo-cta-link');
+
+  var demoTimers = [];
+  function dAfter(ms, fn) { demoTimers.push(setTimeout(fn, ms)); }
+  function dClearAll() { demoTimers.forEach(clearTimeout); demoTimers = []; }
+
+  // ── Build report DOM ────────────────────────────────
+  function buildReport() {
+    var tbody = document.getElementById('rpt-tbody');
+    var statusCfg = {
+      star:   { cls:'rpt-row-star', badge:'rb-star',   label:'最賺錢' },
+      good:   { cls:'rpt-row-star', badge:'rb-good',   label:'優質' },
+      slow:   { cls:'',             badge:'rb-slow',   label:'滯銷庫存' },
+      fake:   { cls:'rpt-row-fake', badge:'rb-fake',   label:'假爆品' },
+      crisis: { cls:'rpt-row-loss', badge:'rb-crisis', label:'退貨危機' },
+      adloss: { cls:'rpt-row-loss', badge:'rb-adloss', label:'廣告虧損' },
+      waste:  { cls:'rpt-row-loss', badge:'rb-waste',  label:'廣告無效' }
+    };
+    SKU_RESULTS.forEach(function (s) {
+      var cfg = statusCfg[s.status] || { cls:'', badge:'rb-good', label:'' };
+      var netColor = s.net >= 0 ? '#09a865' : '#d94030';
+      var mColor   = s.margin >= 0 ? '#09a865' : '#d94030';
+      var barPct   = Math.min(Math.abs(s.margin), 100);
+      var barColor = s.margin >= 0 ? '#0acf83' : '#ff7262';
+      var tr = document.createElement('tr');
+      tr.className = cfg.cls;
+      tr.innerHTML =
+        '<td><div class="rpt-name">' + s.name + '</div><div class="rpt-skuid">' + s.sku + '</div></td>' +
+        '<td class="rpt-mono">' + s.units + '</td>' +
+        '<td class="rpt-mono">NT$' + s.revenue.toLocaleString() + '</td>' +
+        '<td class="rpt-mono" style="color:' + netColor + ';">' + (s.net >= 0 ? '+' : '') + 'NT$' + Math.abs(s.net).toLocaleString() + '</td>' +
+        '<td><div class="rpt-bar-wrap"><div class="rpt-bar-track"><div class="rpt-bar-fill" style="width:' + barPct + '%;background:' + barColor + ';"></div></div>' +
+        '<span class="rpt-mono" style="color:' + mColor + ';">' + (s.margin >= 0 ? '+' : '') + s.margin.toFixed(1) + '%</span></div></td>' +
+        '<td><span class="rpt-badge ' + cfg.badge + '">' + cfg.label + '</span></td>';
+      tbody.appendChild(tr);
+    });
+
+    var actContainer = document.getElementById('rpt-actions');
+    var levelCfg = {
+      critical: { itemCls:'rpt-ai-critical', tagCls:'rpt-pt-critical', numBg:'rgba(217,64,48,0.10)', numColor:'#d94030' },
+      warning:  { itemCls:'rpt-ai-warning',  tagCls:'rpt-pt-warning',  numBg:'rgba(200,60,14,0.09)', numColor:'#b83a0e' },
+      positive: { itemCls:'rpt-ai-positive', tagCls:'rpt-pt-positive', numBg:'rgba(10,207,131,0.11)', numColor:'#09a865' }
+    };
+    ACTIONS.forEach(function (a) {
+      var lc = levelCfg[a.level] || levelCfg.warning;
+      var div = document.createElement('div');
+      div.className = 'rpt-action-item ' + lc.itemCls;
+      div.innerHTML =
+        '<div class="rpt-action-num" style="background:' + lc.numBg + ';color:' + lc.numColor + ';">' + a.n + '</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:5px;">' +
+            '<strong>' + a.title + '</strong>' +
+            '<span class="rpt-priority-tag ' + lc.tagCls + '">' + a.tag + '</span>' +
+          '</div>' +
+          '<p>' + a.desc + '</p>' +
+        '</div>';
+      actContainer.appendChild(div);
+    });
+  }
+
+  // ── Run terminal animation ──────────────────────────
+  function runTerminal() {
+    termBox.innerHTML = '';
+    bar.style.width = '0%';
+    viewBtn.classList.remove('show');
+
+    var lines = buildTermLines();
+    var total = lines.length;
+    var delays = [];
+    var t = 0;
+    lines.forEach(function (line, i) {
+      var gap = i < 8 ? 210 : (i < 8 + SKU_RESULTS.length ? 190 : 230);
+      delays.push(t);
+      t += gap;
+    });
+
+    lines.forEach(function (line, i) {
+      dAfter(delays[i], function () {
+        var el = document.createElement('div');
+        el.className = 'term-line ' + line.c;
+        el.textContent = line.t;
+        termBox.appendChild(el);
+        terminal.scrollTop = terminal.scrollHeight;
+        bar.style.width = Math.round((i + 1) / total * 100) + '%';
+      });
+    });
+
+    dAfter(t + 200, function () {
+      viewBtn.classList.add('show');
+      terminal.scrollTop = terminal.scrollHeight;
+    });
+  }
+
+  // ── iOS-safe body scroll lock ────────────────────────
+  var savedScrollY = 0;
+  function lockBodyScroll() {
+    savedScrollY = window.pageYOffset || document.documentElement.scrollTop;
+    document.body.style.position = 'fixed';
+    document.body.style.top = '-' + savedScrollY + 'px';
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.overflow = 'hidden';
+  }
+  function unlockBodyScroll() {
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.overflow = '';
+    window.scrollTo(0, savedScrollY);
+  }
+
+  // ── Open / close ────────────────────────────────────
+  function openModal() {
+    terminal.style.display = 'flex';
+    report.style.display   = 'none';
+    lockBodyScroll();
+    modal.classList.add('open');
+    runTerminal();
+  }
+
+  function closeModal() {
+    dClearAll();
+    modal.classList.remove('open');
+    unlockBodyScroll();
+  }
+
+  function showReport() {
+    terminal.style.display = 'none';
+    report.style.display   = 'block';
+    report.scrollTop = 0;
+  }
+
+  // ── Wire events ─────────────────────────────────────
+  if (openBtn)   openBtn.addEventListener('click', openModal);
+  if (closeBtn)  closeBtn.addEventListener('click', closeModal);
+  if (closeBtn2) closeBtn2.addEventListener('click', closeModal);
+  if (viewBtn)   viewBtn.addEventListener('click', showReport);
+  if (ctaLink)   ctaLink.addEventListener('click', closeModal);
+
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) closeModal();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
+  });
+
+  // ── Swipe-down to close (bottom sheet on mobile) ─────
+  var swipeTouchStartY = 0;
+  var swipeTargets = [
+    document.querySelector('.dmo-drag-handle'),
+    document.querySelector('.dmo-topbar')
+  ];
+  swipeTargets.forEach(function (el) {
+    if (!el) return;
+    el.addEventListener('touchstart', function (e) {
+      swipeTouchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    el.addEventListener('touchend', function (e) {
+      if (e.changedTouches[0].clientY - swipeTouchStartY > 64) closeModal();
+    }, { passive: true });
+  });
+
+  // Build report DOM once on load
+  buildReport();
+}());
+</script>
