@@ -62,7 +62,7 @@ class ProfitHealthFlow(FlowMixin, Flow[ProfitHealthState]):
             temperature=0.2,
         )
         append_log(self.state.run_id, "驗證 → 修正 → 分析 → 建議 (4-agent crew)...")
-        crew = ProfitHealthCrew(llm=llm)
+        crew = ProfitHealthCrew(llm=llm, run_id=self.state.run_id)
         result = crew.crew().kickoff(inputs={
             "upload_id": self.state.upload_id,
             "sales_csv": self.state.sales_csv,

@@ -60,6 +60,8 @@ Touch exactly these 5 files:
 4. `src/routers/system.py` — add to `_CATALOG`
 5. `ui/app.js` — add to the UI form
 
+**File-upload job types** (e.g. `profit_health_check`) — the UI POSTs files to `POST /api/uploads` (multipart, saved under `uploads/<uuid>/`), then creates the job with a small `{upload_id}` payload; the flow reads the files from disk. Keeps the payload JSON-only and re-runnable. See [doc/profit-health-check-design.md](doc/profit-health-check-design.md).
+
 ---
 
 See [doc/dev-notes.md](doc/dev-notes.md) for PostgreSQL deployment, scalability roadmap, and deeper harness internals.

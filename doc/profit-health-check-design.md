@@ -196,23 +196,25 @@ margin → 假爆品); recommendations sensible (停賣 BAG-WATER-L, 改圖 BT-E
 (Note: `tokens: 0` — `extract_usage` reads `usage_metrics`, but CrewOutput exposes `token_usage`;
 pre-existing across all flows, not introduced here.)
 
-### Phase 5 — UI
-*Files: `ui/app.js` (edit), `src/routers/system.py` (edit)*
-- [ ] New job type in the run form; 4 `<input type="file" accept=".csv">` fields.
-- [ ] Submit handler: **two-step** — `await POST /api/uploads` (FormData) → then create job with `{upload_id}`.
-- [ ] Client-side guards: require sales + cost; surface size/format errors via `showToast`.
-- [ ] Add `FLOW_STEPS` + `TYPE_META` entries so the run page shows the 4 crew steps.
-- [ ] Add catalog entries (4 agents, 1 crew, 1 flow, 1 tool) in `system.py` for the System page.
-- [ ] *(optional)* nicer rendering of the report JSON in the run detail.
+### Phase 5 — UI ✅
+*Files: `ui/index.html` (edit), `ui/app.js` (edit), `src/routers/system.py` (edit), `src/automation/crews/profit_health_crew/crew.py` (task_callback), `src/automation/flows/profit_health_flow.py` (pass run_id)*
+- [x] New 利潤健檢 type card + `fields-profit_health_check` group with 4 `<input type="file" accept=".csv">` (sales/cost required, ads/returns optional).
+- [x] Submit handler: **two-step** — `await fetch('/api/uploads', FormData)` → then create job with `{upload_id}`.
+- [x] Client-side guards: require sales + cost; per-file 2 MB check; upload errors surfaced via `showToast`.
+- [x] Added `ALL_TYPES`, `TYPE_META` (chip 利潤健檢), `AUTO_CATALOG`, and `FLOW_STEPS` (Start→Load→驗證→修正→分析→建議→QA→Done).
+- [x] Per-agent progress: crew `task_callback` logs each agent's completion (run page lights up all 4 nodes).
+- [x] Catalog entries in `system.py`: 4 agents, 1 tool (profit_calc), 1 crew, 1 flow.
+- [ ] *(optional, deferred)* nicer rendering of the report JSON in the run detail — JSON viewer already shows it.
 
-**Test:** end-to-end in the browser — pick the 4 sample CSVs, run, see the JSON report and progress steps.
-**Done when:** a non-technical user can upload and get a report without touching the API.
+**Test:** simulated UI path (upload → create job → run) → `success`; all 4 per-agent logs fire
+matching FLOW_STEPS triggers; `/api/system` returns the new entries; `node --check ui/app.js` clean; suite 230 passed.
+**Done when:** a non-technical user can upload and get a report without touching the API. ✅
 
-### Cross-cutting / acceptance
-- [ ] `uv run pytest tests/unit tests/integration -v -m "not e2e"` green.
-- [ ] Manual e2e against `shopee/sample_data/` produces a sensible report (BT-EAR-A1-WHT should surface as 退貨異常; ad-heavy SKUs as 廣告吃利潤).
-- [ ] No `@CrewBase`; LLM injected via constructor; state fields declared as Pydantic fields (project invariants).
-- [ ] Update `CLAUDE.md` "Adding a New Job Type" note if any new step is introduced (e.g. the upload endpoint).
+### Cross-cutting / acceptance ✅
+- [x] `uv run pytest tests/unit tests/integration -m "not e2e"` green (230 passed).
+- [x] Live e2e against `shopee/sample_data/` produces a sensible report (BT-EAR-A1-WHT → 退貨異常; CABLE-MAG-2M / CASE-IP15-BLK → 廣告吃利潤; analyzer numbers match the deterministic tool).
+- [x] No `@CrewBase`; LLM injected via constructor; state fields declared as Pydantic fields (project invariants honored).
+- [x] Updated `CLAUDE.md` "Adding a New Job Type" with the file-upload note (POST /api/uploads → payload `{upload_id}`).
 
 ### Suggested commits / PRs
 1. `feat(uploads): add POST /api/uploads multipart endpoint` (Phase 1)
