@@ -167,16 +167,17 @@ error cases verified (missing→422, non-csv→400, oversize→413). Full suite 
 correct (sales 49×18, cost 10×7, ads 18×12, returns 5×9). Bad `upload_id` → `failed` with clear error. Suite green (218).
 **Done when:** the full create-job → run → result loop works against the upload from Phase 1. ✅
 
-### Phase 3 — Deterministic `profit_calc` tool
-*Files: `src/automation/tools/profit_calc_tool.py` (new)*
-- [ ] Parse the 4 CSVs strictly to the sample schemas (skip the `##` comment row in `ads_discount.csv`).
-- [ ] Join on `商品SKU`; compute per-SKU 銷售額 / 成本 (數量 × 單位總成本) / 廣告花費 / 退款 / 淨利 / 淨利率 / ROAS.
-- [ ] Derive flag candidates: 最賺錢, 假爆品 (高銷量低/負淨利), 廣告吃利潤 (廣告花費 > 淨利), 退貨異常.
-- [ ] Return a compact metrics dict matching the Phase 0 contract.
-- [ ] **Unit tests** against `shopee/sample_data/` with hand-checked expected numbers.
+### Phase 3 — Deterministic `profit_calc` tool ✅
+*Files: `src/automation/tools/profit_calc_tool.py` (new), `src/automation/profit_health_schema.py` (edit)*
+- [x] Parse the 4 CSVs strictly to the sample schemas; ads parser reads the 廣告 block only (stops before the 折扣 block).
+- [x] Join on `商品SKU`; compute per-SKU 銷售額 / 成本 (數量 × 單位總成本) / 廣告花費 / 退款 / 淨利 / 淨利率 / ROAS; exclude 不成立 orders.
+- [x] Derive flags: 最賺錢 (top-N net), 假爆品 (units ≥ 3 & margin < 10%), 廣告吃利潤 (ad_spend > net), 退貨異常 (return_count ≥ 2 or rate ≥ 20%).
+- [x] Return `ProfitCalcResult` (Phase 0 contract); added `return_count`/`return_rate` to `SkuMetrics` (backward-compatible refinement).
+- [x] **12 unit tests** in `tests/unit/test_profit_calc.py` with hand-verified numbers + edge cases (cancelled orders, optional files, 折扣-block isolation).
 
-**Test:** `pytest tests/unit/test_profit_calc.py` — numbers match a manual spreadsheet on the sample data.
-**Done when:** arithmetic is correct and deterministic for the sample data.
+**Test:** `pytest tests/unit/test_profit_calc.py` — 12 passed; numbers match manual calc
+(e.g. CHG-WL-15W net 2160, CASE-IP15-BLK 假爆品 @ 5.5% margin, BT-EAR 3 returns). Full suite 230 passed.
+**Done when:** arithmetic is correct and deterministic for the sample data. ✅
 
 ### Phase 4 — Multi-agent crew
 *Files: `src/automation/crews/profit_health_crew/` (crew.py + config/agents.yaml + config/tasks.yaml), `src/automation/flows/profit_health_flow.py` (wire crew), `src/automation/harness/validator.py` (edit)*

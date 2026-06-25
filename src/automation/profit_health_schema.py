@@ -60,6 +60,8 @@ class SkuMetrics(BaseModel):
     margin_pct: float = 0.0    # 淨利率 = net_profit / revenue × 100
     units: int = 0             # 數量 合計
     roas: float | None = None  # 廣告銷售額 / 廣告花費
+    return_count: int = 0      # 退貨筆數 (all return records)
+    return_rate: float = 0.0   # return_count / 已完成訂單數 × 100
     flags: list[str] = Field(default_factory=list)
 
 
