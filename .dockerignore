@@ -7,8 +7,10 @@ __pycache__/
 .Python
 
 # --- Test / CI artefacts ---
+# NOTE: tests/ is intentionally NOT ignored — the `test` build stage copies it
+# to run pytest in-container. The runtime stage never COPYs it, so the deployed
+# image stays clean.
 .pytest_cache/
-tests/
 .github/
 htmlcov/
 .coverage
