@@ -30,27 +30,32 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     DATABASE_URL=sqlite:///./data/auto.db \
-    # Store Playwright browsers in a predictable, non-root location
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
-    # Suppress interactive apt prompts during playwright --with-deps
+    # Run the venv's binaries (uvicorn, python) directly — no uv at runtime
+    PATH="/app/.venv/bin:$PATH" \
+    # Suppress interactive apt prompts
     DEBIAN_FRONTEND=noninteractive
 
-# Copy uv and the installed virtual environment from the builder stage
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
+# Copy only the installed virtual environment from the builder stage
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /app/pyproject.toml /app/uv.lock /app/.python-version ./
 
-# Install Playwright Chromium browser + its OS-level system libraries
-# (libnss3, libatk, libgbm, etc.). --with-deps handles apt-get internally.
-RUN uv run playwright install --with-deps chromium \
+# WeasyPrint renders the 利潤健檢 PDF in pure Python — it just needs Pango/Cairo
+# at runtime (pulled in by libpango) plus Noto CJK fonts for the Chinese report.
+# No headless browser, so the image stays ~1 GB lighter than a Chromium build.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy application source (changes most often → last layer)
 COPY src/ ./src/
 COPY ui/  ./ui/
 
-# Persistent SQLite database directory; mount a named volume here in prod
-RUN mkdir -p data
+# Persistent runtime directories; mount named volumes here in prod:
+#   data/    → SQLite database
+#   uploads/ → user-uploaded files (e.g. profit_health_check CSVs)
+#   reports/ → generated PDF reports
+RUN mkdir -p data uploads reports
 
 EXPOSE 8000
 
@@ -59,4 +64,4 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=4 \
         "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" \
     || exit 1
 
-CMD ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

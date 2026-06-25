@@ -7,8 +7,10 @@ pure presentation: same input → same bytes, consistent with the project's
 "deterministic maths stays in tools, not agents" invariant.
 
 `render_report_html(report)` builds a self-contained HTML string; `html_to_pdf`
-prints it via the Playwright Chromium that's already vendored for form_fill, so
-no new dependency and faithful CJK + flexbox rendering.
+prints it via WeasyPrint (pure-Python, no headless browser) so the deployed
+image stays lean. Layout uses CSS table/inline-block — not flexbox — because
+WeasyPrint's flex support is partial; CJK rendering relies on Noto CJK fonts
+being installed in the runtime image.
 """
 
 from html import escape
@@ -139,14 +141,16 @@ def render_report_html(report: dict, *, title: str = "AI 利潤健檢報告") ->
     return f"""<!doctype html>
 <html lang="zh-Hant"><head><meta charset="utf-8"><title>{escape(title)}</title>
 <style>
+  @page {{ size: A4; margin: 12mm 10mm; }}
   * {{ box-sizing: border-box; }}
   body {{ font-family: "PingFang TC", "Microsoft JhengHei", "Noto Sans CJK TC", "Heiti TC", sans-serif;
           color: #1f2430; margin: 0; padding: 32px 36px; background: #fff; font-size: 13px; }}
-  .head {{ display:flex; align-items:center; gap:12px; margin-bottom:22px; }}
+  .head {{ margin-bottom:22px; }}
   .head h1 {{ font-size: 22px; margin: 0; font-weight: 700; }}
   .badge-demo {{ background:#f97316; color:#fff; font-size:12px; font-weight:600; padding:3px 10px; border-radius:6px; }}
-  .cards {{ display:flex; gap:14px; margin-bottom:26px; }}
-  .card {{ flex:1; border:1px solid #e6e8ee; border-radius:12px; padding:18px 20px; }}
+  /* table layout (not flexbox) so WeasyPrint renders the 4 equal-width cards faithfully */
+  .cards {{ display:table; width:100%; table-layout:fixed; border-spacing:14px 0; margin:0 -14px 26px; }}
+  .card {{ display:table-cell; width:25%; vertical-align:top; border:1px solid #e6e8ee; border-radius:12px; padding:18px 20px; }}
   .card.green {{ border-color:#86e0b8; }}
   .card.red {{ border-color:#f1a9a0; }}
   .card .big {{ font-size:26px; font-weight:800; line-height:1.1; }}
@@ -165,23 +169,24 @@ def render_report_html(report: dict, *, title: str = "AI 利潤健檢報告") ->
   .sku-code {{ color:#9aa1ad; font-size:11px; margin-top:2px; font-family:ui-monospace,monospace; }}
   .pos {{ color:#10b981; }}
   .neg {{ color:#ef4444; }}
-  .margin-cell {{ display:flex; align-items:center; gap:10px; }}
-  .bar {{ width:64px; height:6px; background:#eceef2; border-radius:4px; overflow:hidden; }}
+  .margin-cell {{ white-space:nowrap; }}
+  .bar {{ display:inline-block; vertical-align:middle; width:64px; height:6px; margin-right:10px; background:#eceef2; border-radius:4px; overflow:hidden; }}
   .bar-fill {{ height:100%; border-radius:4px; }}
   .bar-good {{ background:#10b981; }}
   .bar-bad {{ background:#ef4444; }}
-  .margin-pct {{ font-weight:700; font-variant-numeric: tabular-nums; }}
+  .margin-pct {{ display:inline-block; vertical-align:middle; font-weight:700; font-variant-numeric: tabular-nums; }}
   .chip {{ display:inline-block; font-size:11px; font-weight:600; padding:3px 9px; border-radius:6px; margin:1px 2px; }}
   .chip-good {{ background:#e6f7ef; color:#0f9d6b; }}
   .chip-warn {{ background:#f3eafe; color:#8b5cf6; }}
   .chip-bad {{ background:#fdecea; color:#e8543c; }}
   .chip-neutral {{ background:#f1f3f6; color:#6b7280; }}
-  .action-card {{ display:flex; gap:14px; border:1px solid #e6e8ee; border-left-width:4px; border-radius:10px; padding:14px 16px; margin-bottom:12px; }}
+  .action-card {{ display:table; width:100%; border:1px solid #e6e8ee; border-left-width:4px; border-radius:10px; padding:14px 16px; margin-bottom:12px; }}
   .ac-urgent {{ border-left-color:#ef4444; background:#fef4f2; }}
   .ac-soon {{ border-left-color:#f59e0b; background:#fffaf2; }}
   .ac-scale {{ border-left-color:#10b981; background:#f1fbf6; }}
-  .ac-num {{ flex:0 0 26px; height:26px; border-radius:7px; background:#fff; border:1px solid #e6e8ee;
-             text-align:center; line-height:26px; font-weight:700; color:#6b7280; }}
+  .ac-num {{ display:table-cell; width:26px; height:26px; border-radius:7px; background:#fff; border:1px solid #e6e8ee;
+             text-align:center; line-height:26px; font-weight:700; color:#6b7280; vertical-align:top; }}
+  .ac-body {{ display:table-cell; padding-left:14px; vertical-align:top; }}
   .ac-title {{ font-weight:700; font-size:14px; margin-bottom:5px; }}
   .ac-badge {{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:5px; margin-left:8px; }}
   .ab-urgent {{ background:#fdecea; color:#e8543c; }}
@@ -211,25 +216,17 @@ def render_report_html(report: dict, *, title: str = "AI 利潤健檢報告") ->
 
 
 def html_to_pdf(html: str, out_path: Path) -> Path:
-    """Render an HTML string to a PDF file via headless Chromium (Playwright)."""
-    from playwright.sync_api import sync_playwright
+    """Render an HTML string to a PDF file via WeasyPrint (no browser needed).
+
+    Page size and margins come from the ``@page`` rule in the document's CSS.
+    Imported lazily so the module loads on dev machines without WeasyPrint's
+    native libs (pango/cairo); rendering is only exercised in the container.
+    """
+    from weasyprint import HTML
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        try:
-            page = browser.new_context().new_page()
-            page.set_content(html, wait_until="networkidle")
-            page.emulate_media(media="print")
-            page.pdf(
-                path=str(out_path),
-                format="A4",
-                print_background=True,
-                margin={"top": "12mm", "bottom": "12mm", "left": "10mm", "right": "10mm"},
-            )
-        finally:
-            browser.close()
+    HTML(string=html).write_pdf(str(out_path))
     return out_path
 
 

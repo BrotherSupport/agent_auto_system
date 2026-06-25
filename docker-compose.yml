@@ -13,6 +13,8 @@ services:
       OTEL_SERVICE_NAME: agent-auto-system
     volumes:
       - app_data:/app/data
+      - app_uploads:/app/uploads
+      - app_reports:/app/reports
     restart: unless-stopped
     healthcheck:
       test:
@@ -42,6 +44,10 @@ services:
 
 volumes:
   app_data:
+    driver: local
+  app_uploads:
+    driver: local
+  app_reports:
     driver: local
   prom_data:
     driver: local
