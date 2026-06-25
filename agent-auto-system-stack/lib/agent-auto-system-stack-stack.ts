@@ -114,5 +114,13 @@ export class AgentAutoSystemStackStack extends Stack {
       interval: Duration.seconds(30),
       healthyThresholdCount: 2,
     });
+
+    // 7. Two ALB tweaks for this single-task, SSE-streaming app:
+    //    - shrink the 300s default connection-drain so stop-then-start deploys
+    //      don't hang ~5 min waiting for the old task to deregister;
+    //    - raise the 60s default idle timeout so long-lived, low-traffic SSE
+    //      log streams (GET /api/runs/{id}/stream) aren't cut mid-run.
+    service.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '15');
+    service.loadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
   }
 }

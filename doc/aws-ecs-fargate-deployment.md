@@ -165,10 +165,18 @@ GMAIL_ADDRESS, GMAIL_APP_PASSWORD          # + SHOPEE_* / NITTER_* if used
   into image layers, pushed to ECR, and recoverable via `docker history`.
 - ✅ Task-def env vars keep keys **out of the image**. Code needs **zero
   changes** — same env var names either way.
+- Keys that aren't set in the deploy shell are **omitted entirely** (not set to
+  an empty string that would override the app and masquerade as "configured but
+  blank"); the stack prints a synth-time warning naming any that are missing.
 
-> Accepted trade: task-def env vars are plaintext to anyone with IAM read on
-> ECS. Acceptable for a single internal box. Free hardening later without
-> Secrets Manager: **SSM Parameter Store SecureString** (see §8).
+> **Accepted trade — and its real blast radius:** because the values are passed
+> as a plaintext `environment` block, they are baked into the **synthesized
+> CloudFormation template**, which CDK uploads to the bootstrap **S3 bucket** and
+> CloudFormation keeps in **stack history**. So the keys are readable by anyone
+> with read access to CloudFormation or that S3 bucket — not just ECS. For a
+> single internal box in an account you control this is acceptable. Free
+> hardening without Secrets Manager: **SSM Parameter Store SecureString**
+> referenced via `ecs.Secret.fromSsmParameter()` (see §8).
 
 ### 3.5 Image registry — ECR
 
@@ -262,17 +270,12 @@ const svc = new ecsp.ApplicationLoadBalancedFargateService(this, 'Svc', {
   ephemeralStorageGiB: 21,              // local disk for data/uploads/reports
   taskImageOptions: {
     image, containerPort: 8000,
-    // API keys as plain runtime env vars (phase 1 — no Secrets Manager).
-    // Prefer reading from CDK context / process.env at synth time over
-    // hardcoding; never commit real keys to the repo.
-    environment: {
-      OPENAI_API_KEY:     process.env.OPENAI_API_KEY     ?? '',
-      ANTHROPIC_API_KEY:  process.env.ANTHROPIC_API_KEY  ?? '',
-      GEMINI_API_KEY:     process.env.GEMINI_API_KEY     ?? '',
-      GMAIL_ADDRESS:      process.env.GMAIL_ADDRESS       ?? '',
-      GMAIL_APP_PASSWORD: process.env.GMAIL_APP_PASSWORD  ?? '',
-      // DATABASE_URL left at the Dockerfile default → sqlite on local disk
-    },
+    // API keys as plain runtime env vars (phase 1 — no Secrets Manager). Only
+    // inject keys actually present in the deploy shell; unset ones are omitted
+    // (an empty string would override the app) and reported as a synth warning.
+    // Never hardcode real values or commit them to the repo.
+    environment,   // built from process.env over API_KEY_ENV_VARS; see lib/
+    // DATABASE_URL left at the Dockerfile default → sqlite on local disk
   },
   assignPublicIp: true,                 // egress without NAT
   taskSubnets: { subnetType: ec2.SubnetType.PUBLIC },
@@ -281,6 +284,10 @@ const svc = new ecsp.ApplicationLoadBalancedFargateService(this, 'Svc', {
   publicLoadBalancer: true,
 });
 svc.targetGroup.configureHealthCheck({ path: '/health' });
+
+// Fast stop-then-start deploys + stable SSE streams.
+svc.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '15');
+svc.loadBalancer.setAttribute('idle_timeout.timeout_seconds', '300');
 ```
 
 That's the whole stack — no EFS volumes, no Secret constructs, no IAM for

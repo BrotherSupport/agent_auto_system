@@ -34,6 +34,12 @@ GEMINI_API_KEY=...           \
 GMAIL_ADDRESS=...            \
 GMAIL_APP_PASSWORD=...       \
   cdk deploy
+
+
+
+# example
+export OPENAI_API_KEY=sk-...
+cdk deploy
 ```
 
 The stack outputs the ALB DNS name; open `http://<that-name>/` to reach the app.

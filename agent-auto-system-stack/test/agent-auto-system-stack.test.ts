@@ -45,6 +45,21 @@ test('ALB health check targets /health', () => {
   });
 });
 
+test('tunes the ALB for fast deploys and SSE streaming', () => {
+  const template = synth();
+
+  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', {
+    LoadBalancerAttributes: Match.arrayWith([
+      { Key: 'idle_timeout.timeout_seconds', Value: '300' },
+    ]),
+  });
+  template.hasResourceProperties('AWS::ElasticLoadBalancingV2::TargetGroup', {
+    TargetGroupAttributes: Match.arrayWith([
+      { Key: 'deregistration_delay.timeout_seconds', Value: '15' },
+    ]),
+  });
+});
+
 test('injects API keys from the environment and omits unset ones', () => {
   const prev = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = 'sk-test';
