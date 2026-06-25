@@ -334,19 +334,49 @@ function navigate(page) {
   });
   history.replaceState(null, '', `#${page}`);
 
+  if (page === 'landing')     renderLandingAutos();
   if (page === 'system')      loadSystemPage();
   if (page === 'automations') renderAutomationsPage();
   if (page === 'performance') loadPerformancePage();
+  if (page === 'landing')     window.scrollTo({ top: 0 });
 }
 
-document.getElementById('nav-tabs').addEventListener('click', (e) => {
-  const tab = e.target.closest('.nav-tab');
-  if (tab) navigate(tab.dataset.page);
+// Delegated navigation: nav tabs, logo, footer links — anything with [data-page]
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-page]');
+  if (el) { e.preventDefault(); navigate(el.dataset.page); }
 });
 
-// Navigate to the page in the hash on load, defaulting to dashboard
-const initialPage = (location.hash.slice(1) || 'dashboard');
-navigate(['dashboard','system','automations','performance'].includes(initialPage) ? initialPage : 'dashboard');
+// ── Landing page ────────────────────────────────────────────────────────────
+function renderLandingAutos() {
+  const grid = document.getElementById('lp-autos');
+  if (!grid || grid.dataset.rendered) return;
+  grid.innerHTML = ALL_TYPES.map(t => {
+    const a = AUTO_CATALOG[t]; if (!a) return '';
+    const m = TYPE_META[t] || {};
+    return `<button class="lp-auto" data-type="${t}">
+      <div class="lp-auto-top">
+        <span class="lp-auto-icon">${a.icon}</span>
+        <span class="type-chip ${m.cls || ''}">${m.chip || ''}</span>
+      </div>
+      <h4>${a.name}</h4>
+      <p>${a.desc}</p>
+    </button>`;
+  }).join('');
+  grid.dataset.rendered = '1';
+  grid.querySelectorAll('.lp-auto').forEach(card =>
+    card.addEventListener('click', () => openModal(card.dataset.type)));
+}
+
+document.getElementById('lp-launch').addEventListener('click', () => navigate('dashboard'));
+document.getElementById('lp-run').addEventListener('click', () => openModal());
+document.getElementById('lp-cta-run').addEventListener('click', () => openModal());
+document.getElementById('lp-cta-dash').addEventListener('click', () => navigate('dashboard'));
+
+// Navigate to the page in the hash on load, defaulting to the landing page
+const VALID_PAGES = ['landing','dashboard','system','automations','performance'];
+const initialPage = (location.hash.slice(1) || 'landing');
+navigate(VALID_PAGES.includes(initialPage) ? initialPage : 'landing');
 
 // ── Hero dismiss / restore ────────────────────────────────────────────────────
 
