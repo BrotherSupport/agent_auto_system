@@ -68,3 +68,10 @@ def test_classify_keywords():
     assert uploads_mod._classify("shopee_sales_report.csv") == "sales"
     assert uploads_mod._classify("廣告報表.csv") == "ads"
     assert uploads_mod._classify("random.csv") is None
+
+
+def test_classify_ignores_ad_inside_words():
+    # "ad" hides inside download/upload/load — token matching must not call these ads.
+    assert uploads_mod._classify("shopee_download_sales.csv") == "sales"
+    assert uploads_mod._classify("upload_cost_2024.csv") == "cost"
+    assert uploads_mod._classify("downloads.csv") is None  # 'ads' is a substring, not a token

@@ -14,12 +14,15 @@ from src.routers.uploads import UPLOAD_ROOT
 
 logger = logging.getLogger(__name__)
 
-_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*\n?(.*?)\n?\s*```\s*$", re.DOTALL | re.IGNORECASE)
+# Unanchored so a fenced ```json block is found even with surrounding prose
+# (e.g. "Here is the report: ```json ...```").
+_FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?\s*```", re.DOTALL | re.IGNORECASE)
 
 
 def _parse_report(raw: str) -> dict | None:
     """Best-effort parse of the crew's raw output into a report dict (or None)."""
-    for candidate in (raw, (_FENCE_RE.match(raw).group(1) if isinstance(raw, str) and _FENCE_RE.match(raw) else None)):
+    fenced = _FENCE_RE.search(raw).group(1) if isinstance(raw, str) and _FENCE_RE.search(raw) else None
+    for candidate in (raw, fenced):
         if candidate is None:
             continue
         try:

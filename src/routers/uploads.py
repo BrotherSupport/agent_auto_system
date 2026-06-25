@@ -1,3 +1,4 @@
+import re
 import uuid
 from pathlib import Path
 
@@ -22,22 +23,33 @@ _REQUIRED = {"sales", "cost"}
 # Filename keyword → role. The uploader drops ALL CSVs in one go and we route each
 # by what its name contains, so a seller never has to match a file to a slot. Order
 # matters: more specific roles are checked first so e.g. "order_return_refund.csv"
-# lands in `returns` (not snagged by a looser keyword). Matching is case-insensitive
-# and substring-based, covering both the Shopee English exports and 中文 names.
+# lands in `returns` (not snagged by a looser keyword). Covers both the Shopee
+# English exports and 中文 names.
 _ROLE_KEYWORDS = [
     ("returns", ("return", "refund", "退貨", "退款")),
     ("cost",    ("cost", "成本")),
-    ("ads",     ("ad", "advert", "廣告", "discount", "折扣")),
+    ("ads",     ("ads", "advert", "廣告", "discount", "折扣")),
     ("sales",   ("sales", "sale", "order", "銷售", "訂單")),
 ]
+
+# Split an ASCII filename into whole tokens. We match keywords against tokens — not
+# raw substrings — so a stray short keyword can't hide inside an unrelated word
+# (e.g. "ad" inside "downl**oad**" / "upl**oad**"). CJK keywords have no token
+# separators, so those fall back to substring matching.
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
 def _classify(filename: str) -> str | None:
     """Map an uploaded filename to a logical role by keyword, or None if unknown."""
     name = (filename or "").lower()
+    tokens = _TOKEN_RE.findall(name)
     for role, keywords in _ROLE_KEYWORDS:
-        if any(kw in name for kw in keywords):
-            return role
+        for kw in keywords:
+            if kw.isascii():
+                if any(tok == kw or tok.startswith(kw) for tok in tokens):
+                    return role
+            elif kw in name:  # CJK: no word separators, match as substring
+                return role
     return None
 
 

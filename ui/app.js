@@ -445,15 +445,26 @@ function selectJobType(type) {
 const _PH_ROLE_KEYWORDS = [
   ['returns', ['return', 'refund', '退貨', '退款']],
   ['cost',    ['cost', '成本']],
-  ['ads',     ['ad', 'advert', '廣告', 'discount', '折扣']],
+  ['ads',     ['ads', 'advert', '廣告', 'discount', '折扣']],
   ['sales',   ['sales', 'sale', 'order', '銷售', '訂單']],
 ];
 const _PH_ROLE_LABEL = { sales: '銷售', cost: '成本', ads: '廣告', returns: '退貨' };
 
+// Mirrors _classify in src/routers/uploads.py: match keywords against whole tokens
+// (not raw substrings) so a short keyword can't hide inside a word (e.g. "ad" in
+// "download"). CJK keywords have no token separators, so fall back to substring.
 function classifyCsv(filename) {
   const name = (filename || '').toLowerCase();
+  const tokens = name.match(/[a-z0-9]+/g) || [];
   for (const [role, kws] of _PH_ROLE_KEYWORDS) {
-    if (kws.some(k => name.includes(k))) return role;
+    for (const k of kws) {
+      const ascii = /^[\x00-\x7f]+$/.test(k);
+      if (ascii) {
+        if (tokens.some(t => t === k || t.startsWith(k))) return role;
+      } else if (name.includes(k)) {
+        return role;
+      }
+    }
   }
   return null;
 }

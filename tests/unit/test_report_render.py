@@ -45,3 +45,13 @@ def test_empty_report_is_safe():
     html = render_report_html({})
     assert "AI 利潤健檢報告" in html
     assert "NT$0" in html
+
+
+def test_non_numeric_cells_do_not_crash():
+    """LLM-emitted garbage values must render (as 0) rather than raise."""
+    html = render_report_html({"skus": [
+        {"sku": "X", "name": "壞資料", "units": "N/A", "revenue": "120 NTD",
+         "net_profit": None, "margin_pct": "n/a", "flags": []},
+    ]})
+    assert "壞資料" in html
+    assert "NT$0" in html

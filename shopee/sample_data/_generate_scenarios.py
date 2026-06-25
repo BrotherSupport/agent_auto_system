@@ -41,7 +41,6 @@ def _csv_text(header, rows):
 def build(scenario, rng):
     """Return {filename: text} for one scenario dict."""
     products = scenario["products"]
-    date0 = scenario["date0"]  # "2024-02-05" → day index added
     order_seq = iter(range(1000, 9999))
 
     sales_rows, returns_rows = [], []
@@ -211,7 +210,7 @@ def main():
     from src.automation.tools.profit_calc_tool import compute_profit
 
     for name, scen in SCENARIOS.items():
-        rng = random.Random(hash(name) & 0xFFFF)  # deterministic per scenario
+        rng = random.Random(name)  # str seed → reproducible across processes (no PYTHONHASHSEED dependency)
         files = build(scen, rng)
         out = HERE / name
         out.mkdir(exist_ok=True)

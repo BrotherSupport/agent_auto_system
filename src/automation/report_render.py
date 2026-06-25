@@ -38,28 +38,33 @@ _ACTION_STYLE = {
 }
 
 
+def _safe_float(value, default: float = 0.0) -> float:
+    """Coerce a (possibly LLM-emitted) cell to float; blank/garbage → default.
+
+    The report dict is re-emitted by the advisor agent, so a stray "N/A" or
+    "120 NTD" must not crash rendering.
+    """
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _nt(value: float) -> str:
     """Format a number as NT$ with thousands separators, no decimals."""
-    try:
-        return f"NT${round(float(value)):,}"
-    except (TypeError, ValueError):
-        return "NT$0"
+    return f"NT${round(_safe_float(value)):,}"
 
 
 def _signed_nt(value: float) -> str:
-    try:
-        v = round(float(value))
-    except (TypeError, ValueError):
-        v = 0
+    v = round(_safe_float(value))
     sign = "+" if v > 0 else ("−" if v < 0 else "")  # − for negatives
     return f"{sign}NT${abs(v):,}"
 
 
 def _signed_pct(value: float) -> str:
-    try:
-        v = float(value)
-    except (TypeError, ValueError):
-        v = 0.0
+    v = _safe_float(value)
     sign = "+" if v > 0 else ("−" if v < 0 else "")
     return f"{sign}{abs(v):.1f}%"
 
@@ -77,18 +82,18 @@ def render_report_html(report: dict, *, title: str = "AI 利潤健檢報告") ->
     recommendations = list(report.get("recommendations") or [])
     action_items = list(report.get("action_items") or [])
 
-    total_revenue = sum(float(s.get("revenue", 0) or 0) for s in skus)
-    total_net = sum(float(s.get("net_profit", 0) or 0) for s in skus)
-    profitable = sum(1 for s in skus if float(s.get("margin_pct", 0) or 0) > 50)
-    losing = sum(1 for s in skus if float(s.get("net_profit", 0) or 0) < 0)
+    total_revenue = sum(_safe_float(s.get("revenue")) for s in skus)
+    total_net = sum(_safe_float(s.get("net_profit")) for s in skus)
+    profitable = sum(1 for s in skus if _safe_float(s.get("margin_pct")) > 50)
+    losing = sum(1 for s in skus if _safe_float(s.get("net_profit")) < 0)
 
     # Sort SKUs by margin desc so winners lead and loss-makers sink — matches demo.
-    skus_sorted = sorted(skus, key=lambda s: float(s.get("margin_pct", 0) or 0), reverse=True)
+    skus_sorted = sorted(skus, key=lambda s: _safe_float(s.get("margin_pct")), reverse=True)
 
     rows = []
     for s in skus_sorted:
-        margin = float(s.get("margin_pct", 0) or 0)
-        net = float(s.get("net_profit", 0) or 0)
+        margin = _safe_float(s.get("margin_pct"))
+        net = _safe_float(s.get("net_profit"))
         # Bar width: clamp |margin| to 0..100; colour by profit sign.
         width = max(0, min(100, abs(margin)))
         bar_cls = "bar-good" if net >= 0 else "bar-bad"
@@ -98,7 +103,7 @@ def render_report_html(report: dict, *, title: str = "AI 利潤健檢報告") ->
         <tr>
           <td><div class="sku-name">{escape(str(s.get('name') or s.get('sku', '')))}</div>
               <div class="sku-code">{escape(str(s.get('sku', '')))}</div></td>
-          <td class="num">{int(s.get('units', 0) or 0)}</td>
+          <td class="num">{int(_safe_float(s.get('units')))}</td>
           <td class="num">{_nt(s.get('revenue', 0))}</td>
           <td class="num {net_cls}">{_signed_nt(net)}</td>
           <td><div class="margin-cell"><div class="bar"><div class="bar-fill {bar_cls}" style="width:{width:.0f}%"></div></div>
