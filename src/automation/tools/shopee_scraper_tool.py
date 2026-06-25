@@ -50,7 +50,7 @@ class ShopeeSellerScraperTool(BaseTool):
     args_schema: type[BaseModel] = ShopeeScrapeInput
 
     def _run(self, keyword: str, limit: int = 5) -> dict:
-        limit = max(1, min(int(limit), 20))
+        limit = max(1, min(int(limit), 100))
         state_path = os.getenv("SHOPEE_STORAGE_STATE", DEFAULT_STATE_PATH)
         username = os.getenv("SHOPEE_USERNAME", "")
         password = os.getenv("SHOPEE_PASSWORD", "")
@@ -222,32 +222,64 @@ def _api_get(page, path: str, errors: list[str]) -> dict | None:
         return None
 
 
+_SEARCH_PAGE_SIZE = 60  # Shopee search_items caps page size at 60 items.
+
+
+def _max_search_pages(limit: int) -> int:
+    """Page budget for the search pagination loop.
+
+    `limit` counts UNIQUE shops, but many top products share a shop, so one page
+    of 60 products yields fewer than 60 unique shops. Allow enough pages to gather
+    `limit` unique shops even with heavy repetition, bounded so a sparse/blocked
+    search can't loop forever.
+    """
+    return max(3, limit // 20 + 2)
+
+
 def _search_api(page, keyword: str, limit: int, errors: list[str]) -> list[dict]:
+    """Fetch search results, paginating until we have at least `limit` UNIQUE
+    shops (since sellers repeat across products) or results run out.
+
+    The previous version requested exactly `limit` products and let the caller
+    dedupe by shop, so a keyword whose top results came from one shop collapsed
+    to a single seller. Fetching a larger pool and stopping on unique-shop count
+    keeps a request for N sellers actually returning N sellers.
+    """
     kw = urllib.parse.quote(keyword)
-    path = (
-        f"/api/v4/search/search_items?by=relevancy&keyword={kw}"
-        f"&limit={limit}&newest=0&order=desc&page_type=search"
-        f"&scenario=PAGE_GLOBAL_SEARCH&version=2"
-    )
-    data = _api_get(page, path, errors)
-    if not isinstance(data, dict):
-        return []
-    items = data.get("items")
-    if not isinstance(items, list):
-        errors.append("api search: no items in payload")
-        return []
     products: list[dict] = []
-    for entry in items:
-        basic = entry.get("item_basic") or entry.get("basic") or entry
-        shopid, itemid = basic.get("shopid"), basic.get("itemid")
-        if not shopid or not itemid:
-            continue
-        products.append({
-            "shopid": int(shopid),
-            "itemid": int(itemid),
-            "name": basic.get("name", ""),
-            "url": f"{_BASE}/product/{shopid}/{itemid}",
-        })
+    unique_shops: set[int] = set()
+    offset = 0
+    for page_idx in range(_max_search_pages(limit)):
+        path = (
+            f"/api/v4/search/search_items?by=relevancy&keyword={kw}"
+            f"&limit={_SEARCH_PAGE_SIZE}&newest={offset}&order=desc&page_type=search"
+            f"&scenario=PAGE_GLOBAL_SEARCH&version=2"
+        )
+        data = _api_get(page, path, errors)
+        if not isinstance(data, dict):
+            break
+        items = data.get("items")
+        if not isinstance(items, list) or not items:
+            break
+        for entry in items:
+            basic = entry.get("item_basic") or entry.get("basic") or entry
+            shopid, itemid = basic.get("shopid"), basic.get("itemid")
+            if not shopid or not itemid:
+                continue
+            products.append({
+                "shopid": int(shopid),
+                "itemid": int(itemid),
+                "name": basic.get("name", ""),
+                "url": f"{_BASE}/product/{shopid}/{itemid}",
+            })
+            unique_shops.add(int(shopid))
+        if len(unique_shops) >= limit:
+            break
+        if len(items) < _SEARCH_PAGE_SIZE:
+            break  # last page — no more results to fetch
+        offset += _SEARCH_PAGE_SIZE
+        if page_idx + 1 < _max_search_pages(limit):
+            page.wait_for_timeout(800)  # be gentle with the anti-bot layer
     if not products:
         errors.append("api search: no items in payload")
     return products
@@ -316,27 +348,37 @@ def _search_dom(page, keyword: str, limit: int, errors: list[str]) -> list[dict]
 
     products: list[dict] = []
     seen: set[tuple[int, int]] = set()
-    for a in page.locator('a[href*="-i."]').all():
-        try:
-            href = a.get_attribute("href") or ""
-            m = _IID_RE.search(href)
-            if not m:
+    unique_shops: set[int] = set()
+    # Scroll to trigger lazy-loading until we have `limit` unique shops or stop
+    # making progress. `limit` counts unique shops, so re-scan the full DOM each
+    # pass to pick up newly loaded cards.
+    max_scrolls = max(4, limit // 5 + 3)
+    for _ in range(max_scrolls):
+        before = len(products)
+        for a in page.locator('a[href*="-i."]').all():
+            try:
+                href = a.get_attribute("href") or ""
+                m = _IID_RE.search(href)
+                if not m:
+                    continue
+                shopid, itemid = int(m.group(1)), int(m.group(2))
+                if (shopid, itemid) in seen:
+                    continue
+                seen.add((shopid, itemid))
+                name = (a.get_attribute("aria-label") or a.inner_text() or "").strip()[:200]
+                products.append({
+                    "shopid": shopid,
+                    "itemid": itemid,
+                    "name": name,
+                    "url": urllib.parse.urljoin(_BASE, href),
+                })
+                unique_shops.add(shopid)
+            except Exception:  # noqa: BLE001 — skip elements that detach mid-scrape
                 continue
-            shopid, itemid = int(m.group(1)), int(m.group(2))
-            if (shopid, itemid) in seen:
-                continue
-            seen.add((shopid, itemid))
-            name = (a.get_attribute("aria-label") or a.inner_text() or "").strip()[:200]
-            products.append({
-                "shopid": shopid,
-                "itemid": itemid,
-                "name": name,
-                "url": urllib.parse.urljoin(_BASE, href),
-            })
-        except Exception:  # noqa: BLE001 — skip elements that detach mid-scrape
-            continue
-        if len(products) >= limit:
-            break
+        if len(unique_shops) >= limit or len(products) == before:
+            break  # reached target, or scrolling stopped loading new cards
+        page.mouse.wheel(0, 20_000)
+        page.wait_for_timeout(1500)
     if not products:
         errors.append("dom search: no product links matched")
     return products

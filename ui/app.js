@@ -80,7 +80,7 @@ const AUTO_CATALOG = {
     desc: 'Search shopee.tw for a keyword and collect the sellers behind the top N products — shop name, URL, location, join date, rating, followers, and item count. Reuses a saved login session.',
     inputs: [
       { name: 'keyword', type: 'str', desc: 'Product search keyword (e.g. 無線耳機)' },
-      { name: 'limit',   type: 'int (1–20)', desc: 'Number of top products / sellers to collect' },
+      { name: 'limit',   type: 'int (1–100)', desc: 'Number of top products / sellers to collect' },
     ],
     crew: 'ShopeeSellerCrew', flow: 'ShopeeSellerFlow',
     agent: 'Shopee Seller Analyst', tools: ['Shopee Seller Scraper'],
@@ -463,7 +463,7 @@ function renderPipelineStepFields(stepIdx, jobType) {
     case 'shopee_seller_scraper':
       return `${tipHtml}
         <div class="field"><label>Search Keyword</label><input type="text" class="ps-field" data-field="keyword" placeholder="e.g. 無線耳機" /></div>
-        <div class="field"><label>Products (1–20)</label><input type="text" class="ps-field" data-field="limit" value="5" placeholder="5" /></div>`;
+        <div class="field"><label>Products (1–100)</label><input type="text" class="ps-field" data-field="limit" value="5" placeholder="5" /></div>`;
     default: return '';
   }
 }
