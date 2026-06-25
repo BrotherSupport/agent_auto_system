@@ -402,8 +402,10 @@ const VALID_PAGES = ['landing','run','activity','system','analytics','admin'];
 // intersection of globally-enabled and their personal allowlist).
 function visibleTypeSet() {
   if (!CURRENT_USER) return new Set();
-  if (CURRENT_USER.is_admin) return new Set(ALL_TYPES);
+  // The global enabled set applies to everyone (disabled = blocked for all,
+  // including admins). Admins bypass only the per-user allowlist.
   const enabled = new Set(CURRENT_USER.enabled_automations || ALL_TYPES);
+  if (CURRENT_USER.is_admin) return new Set(ALL_TYPES.filter(t => enabled.has(t)));
   const allowed = CURRENT_USER.allowed_automations;
   const allowAll = allowed === '*';
   return new Set(ALL_TYPES.filter(t =>
@@ -730,8 +732,10 @@ async function renderAdminAutos() {
       body: JSON.stringify({ enabled: next }),
     });
     if (!r.ok) { alert('Failed to update'); return renderAdminAutos(); }
-    // Keep the run-page filter in sync without a reload.
+    // Keep the run/landing filters in sync without a reload.
     if (CURRENT_USER) CURRENT_USER.enabled_automations = (await r.json()).enabled;
+    const lp = document.getElementById('lp-autos');
+    if (lp) delete lp.dataset.rendered;  // force the landing grid to re-filter
   });
 }
 
