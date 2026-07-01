@@ -148,6 +148,18 @@ _CATALOG: dict = {
             "job_type": "profit_health_check",
             "source_file": "src/automation/crews/profit_health_crew/config/agents.yaml",
         },
+        {
+            "id": "proposal_writer",
+            "name": "Proposal Writer",
+            "role": "外包接案提案文案專家",
+            "goal": "針對 tasker.com.tw 上的單一案件，撰寫一段簡潔、專業、真誠的繁體中文提案說明，提高被選上的機會。",
+            "backstory": "資深自由接案者，能快速讀懂案件需求，用三到五句話說明理解、經驗與交付方式，語氣有禮不浮誇，只輸出提案說明本文。",
+            "tools": [],
+            "crew": "TaskerProposalCrew",
+            "task": "write_proposal_task",
+            "job_type": "tasker_apply",
+            "source_file": "src/automation/crews/tasker_apply_crew/config/agents.yaml",
+        },
     ],
     "tools": [
         {
@@ -267,6 +279,29 @@ _CATALOG: dict = {
             ],
             "used_by": ["ProfitHealthFlow"],
             "source_file": "src/automation/report_render.py",
+        },
+        {
+            "id": "tasker_apply",
+            "name": "Tasker Auto-Apply",
+            "class": "TaskerApplyTool",
+            "description": (
+                "Log in to tasker.com.tw (persisted session or .env credentials) and "
+                "auto-apply (提案) to open cases in a category. Collects open case links "
+                "from /cases?selected_categories=<ids>, opens each, clicks 我要提案, fills "
+                "the 初次估價 min/max charge and 提案說明, skips already-applied cases, and "
+                "clicks 送出提案 only when dry_run is false. Called directly by the flow "
+                "(with an LLM proposal_fn); this BaseTool wrapper uses a static template."
+            ),
+            "inputs": [
+                {"name": "category_ids",      "type": "str",  "description": "Category id(s), e.g. '110' or '110,101001'"},
+                {"name": "min_charge",        "type": "int",  "description": "初次估價 lower bound"},
+                {"name": "max_charge",        "type": "int",  "description": "初次估價 upper bound"},
+                {"name": "proposal_template", "type": "str",  "description": "Base/fallback 提案說明 text"},
+                {"name": "max_cases",         "type": "int",  "description": "Max cases to process (default 5)"},
+                {"name": "dry_run",           "type": "bool", "description": "If true (default), prepare but do NOT click 送出提案"},
+            ],
+            "used_by": ["TaskerApplyFlow"],
+            "source_file": "src/automation/tools/tasker_apply_tool.py",
         },
     ],
     "crews": [
@@ -423,6 +458,23 @@ _CATALOG: dict = {
                 },
             ],
             "source_file": "src/automation/crews/profit_health_crew/crew.py",
+        },
+        {
+            "id": "tasker_apply_crew",
+            "name": "TaskerProposalCrew",
+            "process": "sequential",
+            "agents": ["proposal_writer"],
+            "job_type": "tasker_apply",
+            "flow": "TaskerApplyFlow",
+            "tasks": [
+                {
+                    "name": "write_proposal_task",
+                    "description": "Write a tailored Traditional-Chinese 提案說明 for a single case (one kickoff per case). Browser automation is handled directly by TaskerApplyFlow via the tasker_apply tool.",
+                    "expected_output": "A ready-to-send 提案說明 plain-text string (no title/quotes/markdown).",
+                    "config_file": "src/automation/crews/tasker_apply_crew/config/tasks.yaml",
+                }
+            ],
+            "source_file": "src/automation/crews/tasker_apply_crew/crew.py",
         },
     ],
     "workflows": [
@@ -648,6 +700,40 @@ _CATALOG: dict = {
                 },
             ],
             "source_file": "src/automation/pipeline.py",
+        },
+        {
+            "id": "tasker_apply_flow",
+            "name": "TaskerApplyFlow",
+            "job_type": "tasker_apply",
+            "crew": "TaskerProposalCrew (per-case 提案說明) + tasker_apply tool (browser)",
+            "state_fields": [
+                {"name": "category_ids",      "type": "str",  "default": ""},
+                {"name": "min_charge",        "type": "int",  "default": 0},
+                {"name": "max_charge",        "type": "int",  "default": 0},
+                {"name": "proposal_template", "type": "str",  "default": ""},
+                {"name": "max_cases",         "type": "int",  "default": 5},
+                {"name": "dry_run",           "type": "bool", "default": True},
+                {"name": "run_id",            "type": "int",  "default": 0},
+            ],
+            "steps": [
+                {
+                    "name": "validate_payload",
+                    "decorator": "@start()",
+                    "description": "Validates category_ids, min_charge, max_charge (min <= max).",
+                },
+                {
+                    "name": "execute_apply",
+                    "decorator": "@listen(validate_payload)",
+                    "description": (
+                        "Resolves the LLM, logs in to tasker.com.tw, scans open cases in "
+                        "the category, and for each: writes a tailored 提案說明 via "
+                        "TaskerProposalCrew, fills 初次估價 min/max + 提案說明, skips "
+                        "already-applied cases, and clicks 送出提案 unless dry_run. "
+                        "Returns an applied/skipped summary JSON."
+                    ),
+                },
+            ],
+            "source_file": "src/automation/flows/tasker_apply_flow.py",
         },
     ],
 }
