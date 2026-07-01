@@ -56,11 +56,22 @@ def _noop(_msg: str) -> None:
 # ── session / login ────────────────────────────────────────────────────────────
 
 def _looks_logged_out(page) -> bool:
-    """Heuristic: are we on / redirected to a login wall?"""
+    """Heuristic: are we on / redirected to a login wall?
+
+    tasker.com.tw keeps a /auth/login link in the header/footer even when
+    authenticated, so a login link is NOT a reliable signal. The reliable
+    positive signals are a 登出 (logout) control or the member's 會員代碼.
+    """
     if "/auth/login" in page.url or "/auth/legacy" in page.url:
         return True
     try:
-        # A visible top-level 登入 / 立即登入 entry point means no active session.
+        for sel in (':text("登出")', ':text("會員代碼")', 'img[src*="avatar"]'):
+            loc = page.locator(sel)
+            if loc.count() > 0:
+                return False  # authenticated
+    except Exception:  # noqa: BLE001
+        pass
+    try:
         loc = page.locator('a[href*="/auth/login"], a:has-text("立即登入")')
         return loc.count() > 0 and loc.first.is_visible()
     except Exception:  # noqa: BLE001
@@ -218,8 +229,13 @@ def _text_or(page, selector: str, default: str = "") -> str:
 # ── proposal submission ──────────────────────────────────────────────────────
 
 def _find_apply_button(page):
-    """Return a visible 我要提案 button/link locator, or None."""
-    for sel in ['button:has-text("我要提案")', 'a:has-text("我要提案")', ':text("我要提案")']:
+    """Return a visible 我要提案 button/link locator, or None.
+
+    The propose control is `<button data-el="case_client_propose">`; prefer it,
+    then fall back to text matching.
+    """
+    for sel in ['button[data-el="case_client_propose"]',
+                'button:has-text("我要提案")', 'a:has-text("我要提案")', ':text("我要提案")']:
         try:
             loc = page.locator(sel)
             for i in range(loc.count()):
@@ -229,6 +245,17 @@ def _find_apply_button(page):
         except Exception:  # noqa: BLE001
             continue
     return None
+
+
+def _proposal_form_open(page) -> bool:
+    """Did clicking 我要提案 actually surface the proposal composer?"""
+    try:
+        if page.locator("textarea").count() > 0:
+            return True
+        body = page.locator("body").inner_text(timeout=3000)
+        return ("初次估價" in body) or ("提案說明" in body) or ("送出提案" in body)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _already_applied(page) -> bool:
@@ -334,11 +361,24 @@ def _apply_to_case(page, case_url: str, min_charge: int, max_charge: int,
     description = _text_or(page, "main") or _text_or(page, "body")
     description = description[:2000]
 
+    url_before = page.url
     try:
         apply_btn.click(timeout=8000)
     except Exception:  # noqa: BLE001
         apply_btn.click(timeout=8000, force=True)
-    page.wait_for_timeout(2000)
+    page.wait_for_timeout(2500)
+
+    # The propose button is a NuxtLink whose target is empty for accounts that
+    # aren't eligible to propose (unverified/incomplete 專家 profile), so the
+    # click silently does nothing. Detect that and skip with a clear reason
+    # instead of blindly reporting success.
+    if not (_proposal_form_open(page) or page.url != url_before):
+        entry.update(status="skipped",
+                     reason="proposal form did not open — the logged-in account "
+                            "may not be an eligible/verified 專家 able to submit "
+                            "proposals (complete expert onboarding on tasker.com.tw)")
+        log(f"↷ {case_id}: 我要提案 clicked but no proposal form appeared — skipping")
+        return entry
 
     proposal = (proposal_fn(title, description) or "").strip() or _DEFAULT_TEMPLATE
     filled_estimate = _fill_estimate(page, min_charge, max_charge, log)
