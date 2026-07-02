@@ -91,6 +91,20 @@
     .nav-tab:hover { color: var(--ink); background: rgba(10,10,10,0.04); }
     .nav-tab.active { color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 
+    /* ── Header icon buttons (GitHub + theme toggle) ── */
+    .header-icons { display: flex; align-items: center; gap: 0.3rem; }
+    .icon-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 34px; height: 34px; border-radius: 999px; border: 1px solid transparent;
+      background: none; color: var(--text-muted); cursor: pointer; text-decoration: none;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .icon-btn:hover { background: rgba(10,10,10,0.05); color: var(--ink); }
+    .icon-btn svg { width: 18px; height: 18px; display: block; }
+    .icon-sun { display: none; }
+    html.theme-dark .icon-moon { display: none; }
+    html.theme-dark .icon-sun  { display: block; }
+
     /* ── Page visibility ── */
     .page { display: none; }
     .page.active { display: block; }
@@ -622,7 +636,7 @@
     .lp-hero-actions { margin-top: 2.5rem; display: flex; gap: 0.85rem; justify-content: center; flex-wrap: wrap; }
     .btn-lg { padding: 0.8rem 1.7rem; font-size: 0.95rem; }
     /* film-control buttons: solid white primary, glass secondary */
-    .lp-hero .btn-primary { background: #fff; color: var(--ink); }
+    .lp-hero .btn-primary { background: #fff; color: #0a0a0a; }
     .lp-hero .btn-primary:hover { background: #f0f4ff; box-shadow: 0 8px 28px rgba(0,0,0,0.22); }
     .lp-hero .btn-ghost { background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.5); }
     .lp-hero .btn-ghost:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
@@ -715,7 +729,7 @@
     .lp-cta h2 { font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 300; letter-spacing: -0.025em; }
     .lp-cta p { margin-top: 0.8rem; font-size: 1.02rem; color: rgba(255,255,255,0.9); }
     .lp-cta .lp-hero-actions { margin-top: 1.9rem; }
-    .lp-cta .btn-primary { background: #fff; color: var(--ink); }
+    .lp-cta .btn-primary { background: #fff; color: #0a0a0a; }
     .lp-cta .btn-primary:hover { background: #f0f4ff; box-shadow: 0 8px 28px rgba(0,0,0,0.22); }
     .lp-cta .btn-ghost { background: rgba(255,255,255,0.08); color: #fff; border-color: rgba(255,255,255,0.5); }
     .lp-cta .btn-ghost:hover { background: rgba(255,255,255,0.18); border-color: #fff; }
@@ -739,7 +753,85 @@
       .lp-metrics { grid-template-columns: repeat(2, 1fr); }
       .lp-hero { min-height: 60vh; padding: 4rem 1rem; }
     }
+
+    /* ════════════════════════════ DARK ("black") THEME ════════════════════════════ */
+    html.theme-dark {
+      --bg: #0b0f14;
+      --bg-alt: #12171f;
+      --surface: #12171f;
+      --surface2: #171d26;
+      --ink: #f4f6f8;              /* primary text / headings in dark */
+      --border: #263040;
+
+      --accent: #5b8cff;          /* lightened Waymo blue for dark contrast */
+      --accent-dim: #7aa2ff;
+      --accent-deep: #2f6bff;
+      --accent-soft: rgba(91,140,255,0.16);
+
+      --moss: #3dd69a;
+      --moss-soft: rgba(52,201,138,0.16);
+
+      --text: #e4e8ee;
+      --text-muted: #9aa4b2;
+      --text-dim: #6b7482;
+
+      --green: #3dd69a;  --green-soft: rgba(52,201,138,0.16);
+      --red: #ff6a5a;    --red-soft: rgba(224,64,46,0.18);
+      --blue: #5b8cff;   --blue-soft: rgba(91,140,255,0.16);
+      --orange: #f0a020; --orange-soft: rgba(240,160,32,0.16);
+      --yellow: #e0b64a; --yellow-soft: rgba(224,182,74,0.16);
+      --gray: #6b7482;
+
+      --shadow-card: 0 2px 12px rgba(0,0,0,0.45);
+      --shadow-card-hover: 0 8px 24px rgba(0,0,0,0.55);
+    }
+
+    /* Chrome + overlays that used hardcoded light values */
+    html.theme-dark header { background: rgba(11,15,20,0.8); }
+    html.theme-dark .nav-tab:hover { background: rgba(255,255,255,0.06); }
+    html.theme-dark .icon-btn:hover { background: rgba(255,255,255,0.08); }
+    html.theme-dark .modal { box-shadow: 0 24px 64px rgba(0,0,0,0.6); }
+
+    /* Light-tinted chips/badges → translucent on dark */
+    html.theme-dark .chip-x,
+    html.theme-dark .chip-unknown,
+    html.theme-dark .badge-pending { background: rgba(255,255,255,0.08); }
+    html.theme-dark .chip-shopee { background: rgba(224,64,46,0.18); color: #ff8a72; }
+    html.theme-dark .chip-tasker { background: rgba(109,63,224,0.24); color: #b39bff; }
+    html.theme-dark .chip-profit { color: #3dd69a; }
+
+    /* Code block → one-dark on dark surface */
+    html.theme-dark .source-body pre { background: #0d1117; color: #c9d1d9; border-top-color: var(--border); }
+    html.theme-dark .hl-k  { color: #c678dd; }
+    html.theme-dark .hl-ki { color: #c678dd; }
+    html.theme-dark .hl-s  { color: #e5c07b; }
+    html.theme-dark .hl-c  { color: #7d8590; }
+    html.theme-dark .hl-d  { color: #98c379; }
+    html.theme-dark .hl-fn { color: #61afef; }
+    html.theme-dark .hl-bi { color: #56b6c2; }
+    html.theme-dark .hl-n  { color: #d19a66; }
+    html.theme-dark .hl-yk { color: #e06c75; }
+    html.theme-dark .hl-yv { color: #98c379; }
   </style>
+  <script>
+    /* Apply saved / preferred theme before first paint to avoid a flash. */
+    (function () {
+      try {
+        var stored = localStorage.getItem('theme');
+        var dark = stored ? stored === 'dark'
+          : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('theme-dark');
+      } catch (e) {}
+      document.addEventListener('DOMContentLoaded', function () {
+        var btn = document.getElementById('theme-toggle');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var isDark = document.documentElement.classList.toggle('theme-dark');
+          try { localStorage.setItem('theme', isDark ? 'dark' : 'light'); } catch (e) {}
+        });
+      });
+    })();
+  </script>
 </head>
 <body>
 
@@ -752,6 +844,15 @@
     <button class="nav-tab" data-page="system">System</button>
     <button class="nav-tab" data-page="analytics">Analytics</button>
   </nav>
+  <div class="header-icons">
+    <a class="icon-btn" href="https://github.com/yennanliu/agent_auto_system" target="_blank" rel="noopener" title="View on GitHub" aria-label="View on GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.57.1.78-.25.78-.55v-1.9c-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.72-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.08 0 4.41-2.69 5.38-5.25 5.67.41.35.78 1.05.78 2.12v3.14c0 .3.2.66.79.55A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"/></svg>
+    </a>
+    <button class="icon-btn" id="theme-toggle" title="Toggle light / dark theme" aria-label="Toggle light and dark theme">
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
+  </div>
   <button class="btn btn-primary" id="new-run-btn">+ New Run</button>
 </header>
 
