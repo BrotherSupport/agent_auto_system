@@ -7,7 +7,11 @@ from src.automation.crews.tasker_apply_crew.crew import TaskerProposalCrew
 from src.automation.flows.base import FlowMixin
 from src.automation.flows.utils import extract_usage
 from src.automation.progress import append_log
-from src.automation.tools.tasker_apply_tool import _DEFAULT_TEMPLATE, run_tasker_apply
+from src.automation.tools.tasker_apply_tool import (
+    _DEFAULT_TEMPLATE,
+    _MIN_CHARGE_FLOOR,
+    run_tasker_apply,
+)
 
 
 class TaskerApplyState(BaseModel):
@@ -29,6 +33,8 @@ class TaskerApplyFlow(FlowMixin, Flow[TaskerApplyState]):
     @start()
     def validate_payload(self):
         self._check_required("category_ids", "min_charge", "max_charge")
+        if self.state.min_charge < _MIN_CHARGE_FLOOR:
+            raise ValueError(f"min_charge must be >= {_MIN_CHARGE_FLOOR} (site minimum)")
         if self.state.min_charge > self.state.max_charge:
             raise ValueError("min_charge must be <= max_charge")
         append_log(

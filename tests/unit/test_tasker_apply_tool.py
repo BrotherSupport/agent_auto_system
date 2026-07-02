@@ -67,6 +67,14 @@ def test_case_info_minimal_payload(mocker):
     assert info["title"] == "" and info["proposal_content"] == ""
 
 
+def test_case_info_handles_non_dict_response(mocker):
+    # A JSON list / null must not raise AttributeError.
+    for bad in ([1, 2, 3], None, "oops"):
+        mocker.patch.object(T, "_get_json", return_value=bad)
+        info = T._case_info(MagicMock(), "bearer", "TK1")
+        assert info["title"] == "" and info["proposal_content"] == ""
+
+
 # ── _submit (multipart POST) ──────────────────────────────────────────────────
 
 def test_submit_success_sends_expected_multipart():
@@ -100,6 +108,14 @@ def test_submit_network_exception():
     ctx.post.side_effect = RuntimeError("boom")
     ok, msg = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
     assert ok is False and "boom" in msg
+
+
+def test_submit_non_dict_json_body():
+    # resp.json() returning a list must not raise AttributeError.
+    ctx = MagicMock()
+    ctx.post.return_value = _resp(200, ["unexpected"])
+    ok, msg = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
+    assert ok is False  # status missing -> not "0"
 
 
 # ── _looks_logged_out ─────────────────────────────────────────────────────────

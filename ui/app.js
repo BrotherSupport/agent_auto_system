@@ -740,6 +740,7 @@ runForm.addEventListener('submit', async (e) => {
     const minCharge = parseInt(document.getElementById('tasker-min').value, 10);
     const maxCharge = parseInt(document.getElementById('tasker-max').value, 10);
     if (isNaN(minCharge) || isNaN(maxCharge)) { showToast('請填寫初次估價最低與最高金額', 'error'); return; }
+    if (minCharge < 1000) { showToast('最低金額不可小於 1000 元', 'error'); return; }
     if (minCharge > maxCharge) { showToast('最低金額不可大於最高金額', 'error'); return; }
     const template = document.getElementById('tasker-template').value.trim();
     payload = {

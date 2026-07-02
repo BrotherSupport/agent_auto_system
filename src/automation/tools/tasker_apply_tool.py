@@ -169,7 +169,12 @@ def _collect_case_ids(page, category_ids: str, max_cases: int, log: Callable) ->
         if len(seen) == prev:
             break
         prev = len(seen)
-        page.mouse.wheel(0, 3000)
+        # window.scrollBy is more deterministic than mouse.wheel (no dependency
+        # on cursor position over the scroll container) for triggering lazy load.
+        try:
+            page.evaluate("() => window.scrollBy(0, 3000)")
+        except Exception:  # noqa: BLE001
+            page.mouse.wheel(0, 3000)
         page.wait_for_timeout(1000)
     log(f"Found {len(seen)} case link(s) in category {category_ids}")
     return seen[:max_cases]
@@ -187,7 +192,9 @@ def _get_json(ctx_request, bearer: str, path: str) -> dict | None:
 
 def _case_info(ctx_request, bearer: str, cid: str) -> dict:
     """Title / description / budget / my existing proposal for a case."""
-    d = _get_json(ctx_request, bearer, f"/api/issue/{cid}/proposal") or {}
+    d = _get_json(ctx_request, bearer, f"/api/issue/{cid}/proposal")
+    if not isinstance(d, dict):
+        d = {}
     data = d.get("data") if isinstance(d.get("data"), dict) else d
     if not isinstance(data, dict):
         data = {}
@@ -232,6 +239,8 @@ def _submit(ctx_request, bearer: str, cid: str, min_charge: int, max_charge: int
         return False, f"{type(exc).__name__}: {exc}"
     try:
         d = resp.json()
+        if not isinstance(d, dict):
+            d = {}
     except Exception:  # noqa: BLE001
         return (resp.status == 200), f"HTTP {resp.status}"
     status = str(d.get("status"))

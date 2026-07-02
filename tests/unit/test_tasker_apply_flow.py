@@ -41,7 +41,15 @@ def test_flow_raises_when_min_gt_max():
 
     flow = TaskerApplyFlow()
     with pytest.raises(Exception):
-        flow.kickoff(inputs={"category_ids": "110", "min_charge": 900, "max_charge": 100})
+        flow.kickoff(inputs={"category_ids": "110", "min_charge": 5000, "max_charge": 100})
+
+
+def test_flow_raises_when_min_below_site_floor():
+    from src.automation.flows.tasker_apply_flow import TaskerApplyFlow
+
+    flow = TaskerApplyFlow()
+    with pytest.raises(Exception):
+        flow.kickoff(inputs={"category_ids": "110", "min_charge": 500, "max_charge": 9000})
 
 
 # ── flow orchestration ───────────────────────────────────────────────────────
