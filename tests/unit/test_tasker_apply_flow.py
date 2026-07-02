@@ -95,6 +95,76 @@ def test_proposal_fn_falls_back_to_template_without_llm(mocker):
     assert text == "Hi about Build a scraper"
 
 
+# ── tool orchestration (mocked API; no live calls) ───────────────────────────
+
+def _mock_playwright(mocker):
+    import src.automation.tools.tasker_apply_tool as T
+    mocker.patch.object(T.os.path, "exists", return_value=True)
+    fake_ctx = mocker.MagicMock()
+    fake_pw = mocker.MagicMock()
+    fake_pw.chromium.launch.return_value.new_context.return_value = fake_ctx
+    cm = mocker.MagicMock()
+    cm.__enter__ = lambda s: fake_pw
+    cm.__exit__ = lambda *a: False
+    mocker.patch("playwright.sync_api.sync_playwright", return_value=cm)
+    mocker.patch.object(T, "_capture_session", return_value="Bearer x")
+    mocker.patch.object(T, "_collect_case_ids", return_value=["TK1", "TK2"])
+    # TK1 is fresh & eligible; TK2 already proposed.
+    mocker.patch.object(T, "_case_info", side_effect=lambda req, b, cid: {
+        "title": f"case {cid}", "content": "desc", "budget_text": "$1",
+        "proposal_content": "prev proposal" if cid == "TK2" else "",
+    })
+    mocker.patch.object(T, "_check", return_value=(True, ""))
+    return T
+
+
+def test_dry_run_prepares_without_submitting(mocker):
+    T = _mock_playwright(mocker)
+    submit = mocker.patch.object(T, "_submit", return_value=(True, "ok"))
+
+    res = T.run_tasker_apply(
+        category_ids="110", min_charge=5000, max_charge=9000, max_cases=5,
+        dry_run=True, proposal_fn=lambda t, d: "MY PROPOSAL", log=lambda m: None,
+    )
+
+    assert submit.call_count == 0                     # never submits in dry-run
+    assert res["applied_count"] == 1                  # TK1 prepared
+    assert res["skipped_count"] == 1                  # TK2 already proposed
+    assert res["applied"][0]["status"] == "prepared"
+    assert res["applied"][0]["proposal"] == "MY PROPOSAL"
+    assert res["skipped"][0]["reason"] == "already proposed"
+
+
+def test_submit_posts_expected_payload(mocker):
+    T = _mock_playwright(mocker)
+    submit = mocker.patch.object(T, "_submit", return_value=(True, "ok"))
+
+    res = T.run_tasker_apply(
+        category_ids="110", min_charge=5000, max_charge=9000, max_cases=5,
+        dry_run=False, proposal_fn=lambda t, d: "MY PROPOSAL", log=lambda m: None,
+    )
+
+    submit.assert_called_once()
+    _req, _bearer, cid, lo, hi, content = submit.call_args.args
+    assert cid == "TK1" and lo == 5000 and hi == 9000 and content == "MY PROPOSAL"
+    assert res["submitted_count"] == 1
+    assert res["applied"][0]["status"] == "submitted"
+
+
+def test_ineligible_case_skipped(mocker):
+    T = _mock_playwright(mocker)
+    mocker.patch.object(T, "_check", return_value=(False, "your own case (您無法對自己的案件提案)"))
+    submit = mocker.patch.object(T, "_submit", return_value=(True, "ok"))
+
+    res = T.run_tasker_apply(
+        category_ids="110", min_charge=5000, max_charge=9000, max_cases=1,
+        dry_run=False, proposal_fn=lambda t, d: "x", log=lambda m: None,
+    )
+    assert submit.call_count == 0
+    assert res["applied_count"] == 0
+    assert "own case" in res["skipped"][0]["reason"]
+
+
 # ── wiring consistency ───────────────────────────────────────────────────────
 
 def test_job_type_wired_everywhere():
