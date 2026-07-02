@@ -133,6 +133,7 @@
     .chip-sheet   { background: rgba(234,179,8,0.14);   color: var(--yellow); }
     .chip-shopee  { background: rgba(238,77,45,0.15);   color: #ee4d2d; }
     .chip-profit  { background: rgba(16,185,129,0.15);  color: #10b981; }
+    .chip-tasker  { background: rgba(139,92,246,0.15);  color: #8b5cf6; }
     .chip-unknown { background: rgba(100,116,139,0.15); color: var(--gray); }
 
     /* ── Status badge ── */
@@ -947,6 +948,10 @@
           <div class="type-card-header"><span class="type-card-icon">🧾</span><span class="type-card-name">利潤健檢</span></div>
           <div class="type-card-desc">Upload Shopee CSVs → profit report</div>
         </div>
+        <div class="type-card" data-type="tasker_apply">
+          <div class="type-card-header"><span class="type-card-icon">🧰</span><span class="type-card-name">Tasker 自動提案</span></div>
+          <div class="type-card-desc">Auto-apply to tasker.com.tw cases</div>
+        </div>
         <div class="type-card" data-type="pipeline">
           <div class="type-card-header"><span class="type-card-icon">🔗</span><span class="type-card-name">Pipeline</span></div>
           <div class="type-card-desc">Chain automations in sequence</div>
@@ -1027,6 +1032,24 @@
         <div style="font-size:0.75rem;color:var(--text-muted);background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
           一次選取所有蝦皮 CSV，系統會依檔名自動分類：含 <b>sales</b>→銷售、<b>cost</b>→成本、<b>ad</b>→廣告、<b>return/refund</b>→退貨。
           銷售與成本為必備，每檔上限 2 MB。AI 會驗證 → 修正 → 分析 → 建議，並產出 PDF 利潤健檢報告。
+        </div>
+      </div>
+
+      <div id="fields-tasker_apply" class="hidden">
+        <div class="field"><label>分類 ID（selected_categories）</label><input type="text" id="tasker-categories" placeholder="e.g. 110 或 110,101001" /></div>
+        <div class="field" style="display:flex;gap:0.5rem">
+          <div style="flex:1"><label>初次估價・最低 (元)</label><input type="number" id="tasker-min" min="1000" placeholder="e.g. 5000" /></div>
+          <div style="flex:1"><label>初次估價・最高 (元)</label><input type="number" id="tasker-max" min="1000" placeholder="e.g. 15000" /></div>
+        </div>
+        <div class="field"><label>最多處理案件數 (1–50)</label><input type="number" id="tasker-max-cases" value="5" min="1" max="50" /></div>
+        <div class="field"><label>提案說明範本（可留空，AI 會依案件客製；此為備援/基底）</label><textarea id="tasker-template" rows="3" placeholder="留空則由 AI 依每個案件內容自動撰寫繁中提案說明"></textarea></div>
+        <div class="field" style="display:flex;align-items:center;gap:0.5rem">
+          <input type="checkbox" id="tasker-dry-run" checked style="width:auto;margin:0" />
+          <label for="tasker-dry-run" style="margin:0">試跑模式 (dry-run)：只填寫、不按「送出提案」</label>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-muted);background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
+          需要已登入的 tasker.com.tw session。首次請執行 <code style="font-family:ui-monospace,monospace">uv run python scripts/tasker_login.py</code> 手動登入一次，並在 <code style="font-family:ui-monospace,monospace">.env</code> 設定 <code style="font-family:ui-monospace,monospace">TASKER_USERNAME / TASKER_PASSWORD / TASKER_STORAGE_STATE</code>。
+          <b>取消勾選試跑模式會送出真實提案。</b>
         </div>
       </div>
 

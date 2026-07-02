@@ -37,6 +37,10 @@ _CHECKS: dict = {
         bool(r.get("skus") or r.get("action_items") or r.get("recommendations")),
         "no profit analysis in result",
     ),
+    "tasker_apply": lambda r: (
+        isinstance(r.get("applied"), list) and r.get("cases_found") is not None,
+        "no cases processed",
+    ),
 }
 
 

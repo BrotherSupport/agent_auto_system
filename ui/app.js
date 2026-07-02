@@ -1,6 +1,6 @@
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'shopee_seller_scraper', 'profit_health_check', 'pipeline'];
+const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'shopee_seller_scraper', 'profit_health_check', 'tasker_apply', 'pipeline'];
 
 const TYPE_META = {
   google_form_fill:   { chip: 'FORM',  cls: 'chip-form'     },
@@ -11,6 +11,7 @@ const TYPE_META = {
   google_sheet_reader: { chip: 'SHEET', cls: 'chip-sheet'    },
   shopee_seller_scraper: { chip: 'SHOPEE', cls: 'chip-shopee' },
   profit_health_check: { chip: '利潤健檢', cls: 'chip-profit' },
+  tasker_apply:        { chip: 'TASKER', cls: 'chip-tasker' },
   pipeline:            { chip: 'PIPE',  cls: 'chip-pipeline' },
 };
 
@@ -94,6 +95,19 @@ const AUTO_CATALOG = {
     ],
     crew: 'ProfitHealthCrew', flow: 'ProfitHealthFlow',
     agent: '資料驗證員 · 資料修正員 · 利潤分析師 · 行動建議員', tools: ['Profit Calc', 'Report Renderer'],
+  },
+  tasker_apply: {
+    icon: '🧰', name: 'Tasker 自動提案',
+    desc: 'Log in to tasker.com.tw and auto-apply (提案) to open cases in a category: fill the 初次估價 min/max charge, write a tailored 提案說明 per case with AI, skip already-applied cases, and submit. Dry-run by default — prepares proposals without clicking 送出提案.',
+    inputs: [
+      { name: 'category_ids', type: 'str',       desc: 'Category id(s) from selected_categories, e.g. 110 or 110,101001' },
+      { name: 'min_charge',   type: 'int',       desc: '初次估價 lower bound (元)' },
+      { name: 'max_charge',   type: 'int',       desc: '初次估價 upper bound (元)' },
+      { name: 'max_cases',    type: 'int (1–50)', desc: 'Max cases to process' },
+      { name: 'dry_run',      type: 'bool',      desc: 'If checked, fill but do NOT click 送出提案' },
+    ],
+    crew: 'TaskerProposalCrew', flow: 'TaskerApplyFlow',
+    agent: 'Proposal Writer', tools: ['Tasker Auto-Apply'],
   },
   pipeline: {
     icon: '🔗', name: 'Pipeline',
@@ -192,6 +206,14 @@ const FLOW_STEPS = {
     { label: '分析',     trigger: '蝦皮利潤分析師' },
     { label: '建議',     trigger: '蝦皮營運行動建議員' },
     { label: 'PDF',      trigger: 'PDF 報告' },
+    ..._QA_STEPS,
+    { label: 'Done',     trigger: 'completed successfully' },
+  ],
+  tasker_apply: [
+    { label: 'Start',    trigger: 'Starting' },
+    { label: 'Validate', trigger: 'Payload validated' },
+    { label: 'Login',    trigger: 'Loading tasker.com.tw session' },
+    { label: 'Apply',    trigger: 'run complete' },
     ..._QA_STEPS,
     { label: 'Done',     trigger: 'completed successfully' },
   ],
@@ -711,6 +733,25 @@ runForm.addEventListener('submit', async (e) => {
     }
     payload = { upload_id: uploadId };
     jobName = `利潤健檢：${roles.sales}`;
+
+  } else if (jobType === 'tasker_apply') {
+    const categories = document.getElementById('tasker-categories').value.trim();
+    if (!categories) { showToast('分類 ID 為必填 (e.g. 110)', 'error'); return; }
+    const minCharge = parseInt(document.getElementById('tasker-min').value, 10);
+    const maxCharge = parseInt(document.getElementById('tasker-max').value, 10);
+    if (isNaN(minCharge) || isNaN(maxCharge)) { showToast('請填寫初次估價最低與最高金額', 'error'); return; }
+    if (minCharge < 1000) { showToast('最低金額不可小於 1000 元', 'error'); return; }
+    if (minCharge > maxCharge) { showToast('最低金額不可大於最高金額', 'error'); return; }
+    const template = document.getElementById('tasker-template').value.trim();
+    payload = {
+      category_ids: categories,
+      min_charge: minCharge,
+      max_charge: maxCharge,
+      max_cases: parseInt(document.getElementById('tasker-max-cases').value, 10) || 5,
+      dry_run: document.getElementById('tasker-dry-run').checked,
+      ...(template ? { proposal_template: template } : {}),
+    };
+    jobName = `Tasker 提案: ${categories}${payload.dry_run ? ' (dry-run)' : ''}`;
 
   } else if (jobType === 'pipeline') {
     const steps = collectPipelineSteps();
