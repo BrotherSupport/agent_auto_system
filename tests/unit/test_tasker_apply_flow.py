@@ -2,7 +2,6 @@ import json
 
 import pytest
 
-
 # ── validator ────────────────────────────────────────────────────────────────
 
 def test_validator_accepts_processed_run():

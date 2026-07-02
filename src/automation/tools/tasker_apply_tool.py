@@ -32,7 +32,7 @@ using a static template, for catalog/agent parity.
 """
 import os
 import re
-from typing import Callable
+from collections.abc import Callable
 
 from crewai.tools import BaseTool
 from pydantic import BaseModel
