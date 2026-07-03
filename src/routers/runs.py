@@ -193,7 +193,7 @@ def get_run_leads_csv(
     leads = result.get("leads") or []
 
     buf = io.StringIO()
-    buf.write("﻿")  # BOM so Excel reads UTF-8 (Chinese) correctly
+    buf.write("\ufeff")  # BOM so Excel reads UTF-8 (Chinese) correctly
     writer = csv.DictWriter(buf, fieldnames=_LEAD_CSV_FIELDS, extrasaction="ignore")
     writer.writeheader()
     for lead in leads:

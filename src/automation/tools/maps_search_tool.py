@@ -127,6 +127,7 @@ def _collect_place_urls(page, limit: int, warnings: list[str], log) -> list[str]
     seen_set: set[str] = set()
     stale = 0
     for _ in range(20):
+        prev = len(seen_set)  # count before this pass, to detect a stalled feed
         hrefs = page.evaluate(
             """() => Array.from(document.querySelectorAll('a[href*="/maps/place/"]'))
                        .map(a => a.href)"""
@@ -137,6 +138,13 @@ def _collect_place_urls(page, limit: int, warnings: list[str], log) -> list[str]
                 seen.append(h)
         if len(seen) >= limit:
             break
+        # Stop early once the feed stops yielding new listings for a few passes.
+        if len(seen_set) == prev:
+            stale += 1
+            if stale >= 3:
+                break
+        else:
+            stale = 0
         # Scroll the feed container (not the window) to trigger lazy-loading.
         try:
             page.evaluate(
@@ -146,14 +154,6 @@ def _collect_place_urls(page, limit: int, warnings: list[str], log) -> list[str]
         except Exception:  # noqa: BLE001
             pass
         page.wait_for_timeout(1_600)
-        # Stop early if Google says we've hit the end of the list.
-        prev = len(seen_set)
-        if prev == len(seen_set):
-            stale += 1
-            if stale >= 3:
-                break
-        else:
-            stale = 0
     log(f"Discovered {len(seen)} listing link(s)")
     return seen
 

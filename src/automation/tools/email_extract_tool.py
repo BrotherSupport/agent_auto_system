@@ -12,10 +12,12 @@ role addresses (info@, contact@, hello@…) are ranked first — they're the saf
 to cold-email and the most likely to be monitored.
 
 Pure `urllib` (no browser): SMB sites are mostly static and this keeps the stage
-cheap. If nothing is found, two role addresses are *guessed* from the domain and
-flagged `guessed=True` so the verify stage can confirm them before use.
+cheap. If nothing is found, a single role address (`info@<domain>`) is *guessed*
+and flagged `guessed=True` so the verify stage can confirm it before use — never
+on shared hosts (facebook.com, etc.), where a guess would be meaningless.
 """
 import re
+import ssl
 import urllib.parse
 import urllib.request
 
@@ -29,6 +31,9 @@ _HEADERS = {
     )
 }
 _MAX_BYTES = 3 * 1024 * 1024
+# SMB sites routinely have expired/self-signed/misconfigured certs. We only read
+# public HTML (no credentials sent), so skip verification to avoid losing leads.
+_SSL_CTX = ssl._create_unverified_context()
 
 _EMAIL_RE = re.compile(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
 
@@ -145,7 +150,7 @@ def _normalize(website: str) -> str:
 def _fetch(url: str) -> str | None:
     try:
         req = urllib.request.Request(url, headers=_HEADERS)
-        resp = urllib.request.urlopen(req, timeout=15)
+        resp = urllib.request.urlopen(req, timeout=15, context=_SSL_CTX)
         cl = resp.headers.get("Content-Length")
         if cl and int(cl) > _MAX_BYTES:
             return None
