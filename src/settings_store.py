@@ -37,6 +37,7 @@ ALL_AUTOMATIONS = [
     "google_sheet_reader",
     "shopee_seller_scraper",
     "profit_health_check",
+    "tasker_apply",
     "pipeline",
 ]
 
