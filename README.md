@@ -171,6 +171,31 @@ All LLM-backed jobs accept optional `llm_provider`, `llm_model`, and `max_retrie
 
 ---
 
+## Authentication
+
+The app is gated behind a login screen. On first startup — when no users exist
+yet — a default admin account is seeded automatically:
+
+| Field | Default | Env var |
+|---|---|---|
+| Username | `admin` | `ADMIN_USERNAME` |
+| Password | `admin` | `ADMIN_PASSWORD` |
+
+```
+Username: admin
+Password: admin
+```
+
+> ⚠️ **Change this before exposing the app.** Update the password from the
+> **Admin** page (or set `ADMIN_PASSWORD` in `.env`) immediately. The seed only
+> runs while the users table is empty, so changing the env vars afterwards has
+> no effect — manage users from the Admin page instead.
+
+Admins can create additional users, toggle their access, reset passwords, and
+scope which automations each user may run — all from the **Admin** tab.
+
+---
+
 ## Key Features
 
 | Feature | Detail |
@@ -324,6 +349,8 @@ All config comes from `.env` (template: `.env.example`):
 | Variable | Required | Purpose |
 |---|---|---|
 | `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | ≥ 1 | LLM provider key(s) |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` | no | First admin seeded on startup; defaults to `admin` / `admin` |
+| `APP_SECRET` | prod | Signs session cookies; set a long random value in production |
 | `DATABASE_URL` | no | Defaults to `sqlite:///./data/auto.db`; set a Postgres URL for production |
 | `GMAIL_ADDRESS` / `GMAIL_APP_PASSWORD` | for `email_sender` | Gmail SMTP credentials |
 | `SHOPEE_USERNAME` / `SHOPEE_PASSWORD` / `SHOPEE_STORAGE_STATE` | for Shopee scraper | Shopee session creds |
