@@ -141,6 +141,38 @@ async def test_get_and_set_automations(client):
     assert (await client.get("/api/admin/automations")).json()["enabled"] == ["web_scraper"]
 
 
+async def test_eval_judge_defaults_to_auto(client):
+    data = (await client.get("/api/admin/eval-judge")).json()
+    assert data["provider"] is None  # Auto
+    assert data["default"]["provider"] == "gemini"
+    assert "gemini" in data["providers"]
+
+
+async def test_set_and_get_eval_judge(client):
+    resp = await client.put("/api/admin/eval-judge",
+                            json={"provider": "gemini", "model": "gemini/gemini-2.5-flash"})
+    assert resp.status_code == 200
+    assert resp.json()["provider"] == "gemini"
+    data = (await client.get("/api/admin/eval-judge")).json()
+    assert data["model"] == "gemini/gemini-2.5-flash"
+
+
+async def test_set_eval_judge_clears_on_empty(client):
+    await client.put("/api/admin/eval-judge", json={"provider": "gemini", "model": None})
+    resp = await client.put("/api/admin/eval-judge", json={"provider": None})
+    assert resp.json()["provider"] is None  # reverted to Auto
+
+
+async def test_set_eval_judge_unknown_provider(client):
+    assert (await client.put("/api/admin/eval-judge",
+                             json={"provider": "bogus"})).status_code == 404
+
+
+async def test_set_eval_judge_unknown_model(client):
+    assert (await client.put("/api/admin/eval-judge",
+                             json={"provider": "gemini", "model": "gemini/nope"})).status_code == 400
+
+
 # ── Per-automation run enforcement ────────────────────────────────────────────
 
 async def test_user_can_create_allowed_job(user_client):

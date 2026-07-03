@@ -45,6 +45,11 @@ class AutomationsUpdate(BaseModel):
     enabled: list[str]
 
 
+class EvalJudgeUpdate(BaseModel):
+    provider: str | None = None  # falsy → revert to env/default ("Auto")
+    model: str | None = None     # falsy → the provider's default model
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _public(user: User) -> dict:
@@ -223,3 +228,37 @@ def set_automations(data: AutomationsUpdate):
         "all": settings_store.ALL_AUTOMATIONS,
         "enabled": settings_store.get_enabled_automations(),
     }
+
+
+# ── Evaluation judge (LLM-as-judge model) ─────────────────────────────────────
+
+def _eval_judge_payload() -> dict:
+    from src.automation.harness.evaluator import _DEFAULT_JUDGE
+    from src.automation.harness.provider import _CATALOG
+
+    provider, model = settings_store.get_eval_judge()
+    return {
+        "provider": provider,  # None → "Auto" (env/default)
+        "model": model,
+        "default": {"provider": _DEFAULT_JUDGE[0], "model": _DEFAULT_JUDGE[1]},
+        "providers": {name: cfg["models"] for name, cfg in _CATALOG.items()},
+    }
+
+
+@router.get("/admin/eval-judge")
+def get_eval_judge():
+    return _eval_judge_payload()
+
+
+@router.put("/admin/eval-judge")
+def set_eval_judge(data: EvalJudgeUpdate):
+    from src.automation.harness.provider import _CATALOG
+
+    provider = (data.provider or "").strip() or None
+    if provider and provider not in _CATALOG:
+        raise HTTPException(status_code=404, detail="Unknown provider")
+    model = (data.model or "").strip() or None
+    if provider and model and model not in _CATALOG[provider]["models"]:
+        raise HTTPException(status_code=400, detail="Unknown model for provider")
+    settings_store.set_eval_judge(provider, model)
+    return _eval_judge_payload()

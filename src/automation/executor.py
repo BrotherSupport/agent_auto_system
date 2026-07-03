@@ -163,6 +163,7 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
             tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost,
             duration_secs=time.monotonic() - _t0,
             eval_score=ev.score, eval_confidence=ev.confidence, eval_notes=ev.notes,
+            eval_method=ev.method, judge_model=ev.judge_model,
         )
         if url:
             append_log(run_id, f"Langfuse trace: {url}")

@@ -60,7 +60,10 @@ def test_record_run_emits_trace_and_scores(monkeypatch):
     # Root span + nested generation created, and the run's IO/scores recorded.
     client.start_observation.assert_called_once()
     root.start_observation.assert_called_once()
-    assert root.score_trace.call_count == 2  # eval_score + eval_confidence
+    # eval_score + eval_quality (categorical) + eval_confidence
+    assert root.score_trace.call_count == 3
+    score_names = {c.kwargs["name"] for c in root.score_trace.call_args_list}
+    assert score_names == {"eval_score", "eval_quality", "eval_confidence"}
     client.flush.assert_called_once()
 
 

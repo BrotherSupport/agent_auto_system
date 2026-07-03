@@ -60,6 +60,7 @@ async def lifespan(app: FastAPI):
     _tel.setup(app)
     from src.automation.harness import langfuse_tracer
     langfuse_tracer.get_client()  # initialise + log once if Langfuse is configured
+    langfuse_tracer.ensure_score_configs()  # register typed score schemas (idempotent)
     init_db()
     _seed_admin()
     stale = reconcile_stale_runs()

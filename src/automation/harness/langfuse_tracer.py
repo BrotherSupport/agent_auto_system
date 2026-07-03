@@ -80,6 +80,55 @@ def flush() -> None:
             logger.debug("Langfuse flush failed; ignoring.", exc_info=True)
 
 
+# Score schemas registered with Langfuse so our scores are typed, bounds-validated,
+# and cleanly aggregatable in the UI (rather than free-floating numbers).
+_SCORE_CONFIGS = [
+    {"name": "eval_score", "data_type": "NUMERIC", "min_value": 0, "max_value": 100,
+     "description": "LLM-judge overall quality (0-100)."},
+    {"name": "eval_confidence", "data_type": "NUMERIC", "min_value": 0, "max_value": 1,
+     "description": "Judge's confidence in eval_score (0-1)."},
+    {"name": "eval_quality", "data_type": "CATEGORICAL",
+     "categories": [{"value": 0, "label": "poor"}, {"value": 1, "label": "fair"},
+                    {"value": 2, "label": "good"}, {"value": 3, "label": "excellent"}],
+     "description": "eval_score bucketed for easy filtering."},
+]
+
+
+def ensure_score_configs() -> None:
+    """Best-effort, idempotent registration of our score schemas. Never raises.
+
+    Called once at startup. Skips configs that already exist (matched by name), so
+    it's safe to call on every boot.
+    """
+    client = get_client()
+    if client is None:
+        return
+    try:
+        existing = {c.name for c in client.api.score_configs.get(limit=100).data}
+    except Exception:  # noqa: BLE001
+        logger.debug("Could not list Langfuse score configs; skipping registration.", exc_info=True)
+        return
+
+    for cfg in _SCORE_CONFIGS:
+        if cfg["name"] in existing:
+            continue
+        try:
+            client.api.score_configs.create(**cfg)
+            logger.info("Registered Langfuse score config %r.", cfg["name"])
+        except Exception:  # noqa: BLE001
+            logger.debug("Failed to register score config %r; ignoring.", cfg["name"], exc_info=True)
+
+
+def _quality_bucket(score: float) -> str:
+    if score >= 85:
+        return "excellent"
+    if score >= 70:
+        return "good"
+    if score >= 40:
+        return "fair"
+    return "poor"
+
+
 def record_run(
     *,
     run_id: int,
@@ -96,6 +145,8 @@ def record_run(
     eval_score: float | None = None,
     eval_confidence: float | None = None,
     eval_notes: str = "",
+    eval_method: str = "",
+    judge_model: str = "",
 ) -> str | None:
     """Emit one trace (root span + nested LLM generation) for a finished run.
 
@@ -124,6 +175,10 @@ def record_run(
         }
         if duration_secs is not None:
             metadata["duration_secs"] = round(duration_secs, 3)
+        if eval_method:
+            metadata["eval_method"] = eval_method
+        if judge_model:
+            metadata["judge_model"] = judge_model
 
         # Tags make runs filterable in the Langfuse UI. The root span's name and
         # input/output automatically become the trace's, so no set_trace_io.
@@ -159,12 +214,18 @@ def record_run(
                 )
                 gen.end()
 
-                # Attach the evaluator's quality signals as trace scores.
+                # Attach the evaluator's quality signals as typed trace scores.
+                # data_type is persisted and Langfuse matches these to the
+                # registered score configs by name for validation/aggregation.
                 if eval_score is not None:
                     root.score_trace(name="eval_score", value=float(eval_score),
-                                     comment=eval_notes or None)
+                                     data_type="NUMERIC", comment=eval_notes or None)
+                    root.score_trace(name="eval_quality",
+                                     value=_quality_bucket(float(eval_score)),
+                                     data_type="CATEGORICAL")
                 if eval_confidence is not None:
-                    root.score_trace(name="eval_confidence", value=float(eval_confidence))
+                    root.score_trace(name="eval_confidence", value=float(eval_confidence),
+                                     data_type="NUMERIC")
             finally:
                 root.end()
 

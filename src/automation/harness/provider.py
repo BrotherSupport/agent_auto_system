@@ -75,6 +75,16 @@ def fallback_sequence(provider: str | None, model: str | None) -> list[str]:
     return seq
 
 
+def has_api_key(provider: str) -> bool:
+    """True when an API key is available for ``provider`` (admin-set or env), without
+    constructing an LLM or logging. Lets callers skip guaranteed-to-fail providers."""
+    cfg = _CATALOG.get(provider)
+    if not cfg:
+        return False
+    from src import settings_store
+    return bool(settings_store.get_llm_key(provider, cfg["env"]))
+
+
 def resolve(provider: str | None, model: str | None, temperature: float = 0.7):
     """Return (llm_instance, effective_provider, effective_model)."""
     from crewai import LLM

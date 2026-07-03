@@ -43,6 +43,7 @@ ALL_AUTOMATIONS = [
 
 _ENABLED_KEY = "enabled_automations"
 _LLM_KEY_PREFIX = "llm_key:"
+_EVAL_JUDGE_KEY = "eval_judge"
 
 
 # ── Generic key/value access ──────────────────────────────────────────────────
@@ -161,3 +162,27 @@ def set_enabled_automations(job_types: list[str]) -> None:
 
 def is_automation_enabled(job_type: str) -> bool:
     return job_type in get_enabled_automations()
+
+
+# ── Evaluation judge (LLM-as-judge model) ─────────────────────────────────────
+
+def get_eval_judge() -> tuple[str | None, str | None]:
+    """Admin-configured judge as (provider, model). ``(None, None)`` means unset —
+    the evaluator then uses its env override or code default. A provider with a
+    ``None`` model means "that provider's default model"."""
+    raw = get_setting(_EVAL_JUDGE_KEY)
+    if not raw:
+        return None, None
+    try:
+        data = json.loads(raw)
+        return (data.get("provider") or None), (data.get("model") or None)
+    except (ValueError, TypeError):
+        return None, None
+
+
+def set_eval_judge(provider: str | None, model: str | None) -> None:
+    """Set (or, with a falsy provider, clear → revert to env/default) the judge."""
+    if not provider:
+        delete_setting(_EVAL_JUDGE_KEY)
+        return
+    set_setting(_EVAL_JUDGE_KEY, json.dumps({"provider": provider, "model": model or None}))

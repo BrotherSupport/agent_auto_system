@@ -76,3 +76,25 @@ def test_is_automation_enabled(store_engine):
     settings_store.set_enabled_automations(["web_scraper"])
     assert settings_store.is_automation_enabled("web_scraper")
     assert not settings_store.is_automation_enabled("email_sender")
+
+
+# ── Evaluation judge ──────────────────────────────────────────────────────────
+
+def test_eval_judge_defaults_unset(store_engine):
+    assert settings_store.get_eval_judge() == (None, None)
+
+
+def test_set_and_get_eval_judge(store_engine):
+    settings_store.set_eval_judge("gemini", "gemini/gemini-2.5-flash")
+    assert settings_store.get_eval_judge() == ("gemini", "gemini/gemini-2.5-flash")
+
+
+def test_set_eval_judge_provider_only(store_engine):
+    settings_store.set_eval_judge("gemini", None)
+    assert settings_store.get_eval_judge() == ("gemini", None)
+
+
+def test_clear_eval_judge_reverts_to_unset(store_engine):
+    settings_store.set_eval_judge("gemini", "gemini/gemini-2.5-flash")
+    settings_store.set_eval_judge(None, None)  # falsy provider clears
+    assert settings_store.get_eval_judge() == (None, None)
