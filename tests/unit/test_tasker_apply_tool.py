@@ -77,7 +77,9 @@ def test_case_info_handles_non_dict_response(mocker):
 
 # ── _submit (multipart POST) ──────────────────────────────────────────────────
 
-def test_submit_success_sends_expected_multipart():
+def test_submit_success_sends_exactly_three_fields():
+    # The real 送出提案 form sends ONLY these 3 fields. An extra field (we used to
+    # send quota_amount) makes the API reject the request with 2700271.
     ctx = MagicMock()
     ctx.post.return_value = _resp(200, {"status": "0"})
     ok, msg, status = T._submit(ctx, "bearer", "TK1", 1000, 2000, "my proposal")
@@ -86,7 +88,8 @@ def test_submit_success_sends_expected_multipart():
     mp = ctx.post.call_args.kwargs["multipart"]
     assert url == f"{T._API}/api/issue/TK1/proposal"
     assert mp == {"initial_price_min": "1000", "initial_price_max": "2000",
-                  "content": "my proposal", "quota_amount": "0"}
+                  "content": "my proposal"}
+    assert "quota_amount" not in mp
 
 
 def test_submit_maps_known_error():
@@ -96,14 +99,18 @@ def test_submit_maps_known_error():
     assert ok is False and "min price" in msg and status == "2700247"
 
 
-def test_submit_maps_quota_exhausted():
-    # 2700271 = out of proposal points/quota; it's an account-wide block status.
+def test_submit_maps_2700271_but_it_is_not_a_stop_status():
+    # 2700271 was caused by our own malformed request (extra field), NOT an
+    # account-wide block, so it must NOT be in _STOP_STATUSES.
     ctx = MagicMock()
     ctx.post.return_value = _resp(400, {"status": "2700271"})
     ok, msg, status = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
     assert ok is False and status == "2700271"
-    assert "quota" in msg.lower() or "點數" in msg
-    assert status in T._QUOTA_BLOCK_STATUSES
+    assert status not in T._STOP_STATUSES
+
+
+def test_ineligible_account_is_a_stop_status():
+    assert "1230075" in T._STOP_STATUSES
 
 
 def test_submit_unknown_status():

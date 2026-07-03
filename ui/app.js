@@ -98,7 +98,7 @@ const AUTO_CATALOG = {
   },
   tasker_apply: {
     icon: '🧰', name: 'Tasker 自動提案',
-    desc: 'Log in to tasker.com.tw and auto-apply (提案) to open cases in a category: fill the 初次估價 min/max charge, write a tailored 提案說明 per case with AI, and submit. Auto-advances through listing pages, skipping cases you already proposed to or can\'t propose to, until it has applied to max_cases eligible ones. A submission is only counted as successful when the site confirms it. Dry-run by default — prepares proposals without clicking 送出提案. Note: submitting consumes tasker proposal points/quota.',
+    desc: 'Log in to tasker.com.tw and auto-apply (提案) to open cases in a category: fill the 初次估價 min/max charge, write a tailored 提案說明 per case with AI, and submit. Auto-advances through listing pages, skipping cases you already proposed to or can\'t propose to, until it has applied to max_cases eligible ones. A submission is only counted as successful when the site confirms it. Dry-run by default — prepares proposals without clicking 送出提案.',
     inputs: [
       { name: 'category_ids', type: 'str',       desc: 'Category id(s) from selected_categories, e.g. 110 or 110,101001' },
       { name: 'min_charge',   type: 'int',       desc: '初次估價 lower bound (元)' },

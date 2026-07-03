@@ -180,12 +180,12 @@ def test_submit_success_only_when_site_confirms(mocker):
     assert res["skipped"][0]["status"] == "unconfirmed"
 
 
-def test_quota_block_stops_scanning(mocker):
-    # 2700271 on the first submit is account-wide → stop immediately, report it,
-    # and never claim success.
+def test_account_block_stops_scanning(mocker):
+    # 1230075 (account not eligible to propose) on the first submit is
+    # account-wide → stop immediately, report it, and never claim success.
     T = _mock_playwright(mocker, page_ids=["TK1", "TK2", "TK3"], proposed=())
     submit = mocker.patch.object(
-        T, "_submit", return_value=(False, "quota exhausted", "2700271"))
+        T, "_submit", return_value=(False, "not eligible to propose", "1230075"))
 
     res = T.run_tasker_apply(
         category_ids="110", min_charge=5000, max_charge=9000, max_cases=5,
@@ -193,7 +193,7 @@ def test_quota_block_stops_scanning(mocker):
     )
     assert submit.call_count == 1                      # stopped after the block
     assert res["applied_count"] == 0
-    assert res["blocked"] and "quota" in res["blocked"].lower()
+    assert res["blocked"] and "eligible" in res["blocked"].lower()
 
 
 def test_ineligible_case_skipped(mocker):

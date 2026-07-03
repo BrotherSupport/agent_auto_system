@@ -12,7 +12,7 @@ same API the site uses, which is deterministic and reliable:
   GET  /api/issue/{tk_no}/proposal/check  -> {status, data:{can_propose}}
   POST /api/issue/{tk_no}/proposal        -> submit (multipart form-data:
                                              initial_price_min, initial_price_max,
-                                             content, quota_amount)
+                                             content — those three ONLY)
 
 Auth is a per-session `Authorization: Bearer <token>` the SPA derives from the
 logged-in cookies. The token isn't in a readable storage key, so we capture it
@@ -35,9 +35,10 @@ Flow per run:
      it as applied once the site confirms it (can_propose flips to false). A
      "status 0" response alone is not trusted.
 
-Known site status codes: proposal POST returns 2700271 when the account is out
-of proposal points / has hit its proposal quota — no submission succeeds until
-points are topped up, regardless of this tool.
+The submit POST must send EXACTLY three multipart fields — initial_price_min,
+initial_price_max, content — matching the real 送出提案 form. Sending any extra
+field (e.g. quota_amount) makes the API reject the request with status 2700271.
+Proposals do NOT require points/quota.
 
 `run_tasker_apply(...)` is the primary entry point (the flow calls it directly
 with an LLM-backed proposal_fn). `TaskerApplyTool` is a thin BaseTool wrapper
@@ -73,12 +74,15 @@ _SUBMIT_ERRORS = {
     "2700071": "proposal text format error (提案說明格式錯誤)",
     "2700247": "min price missing/invalid (初次報價最小值未填或格式錯誤)",
     "2700248": "max price missing/invalid (初次報價最大值/範圍錯誤，最大值須大於最小值)",
-    "2700271": "proposal points/quota exhausted (提案點數不足或已達提案上限，無法送出)",
+    # 2700271 = request rejected. We used to hit this by sending an extra
+    # multipart field (quota_amount); the fix is to send only the 3 real fields.
+    "2700271": "proposal rejected (status 2700271 — check request fields/price)",
     "1230075": "not eligible to propose (您尚未具備提案資格)",
 }
 # Submit statuses that mean *every* further submission will also fail (a global
-# account limit, not a per-case problem) — stop scanning when we hit one.
-_QUOTA_BLOCK_STATUSES = {"2700271", "1230075"}
+# account state, not a per-case problem) — stop scanning when we hit one.
+# 1230075 = the account is not eligible to propose at all.
+_STOP_STATUSES = {"1230075"}
 
 _DEFAULT_TEMPLATE = (
     "您好，我對這個案件很有興趣。我具備完成此需求的相關經驗，"
@@ -289,6 +293,9 @@ def _submit(ctx_request, bearer: str, cid: str, min_charge: int, max_charge: int
     non-JSON body or any other status is a failure — we never infer success from
     the HTTP code alone (a plain 200 page is not a recorded proposal)."""
     try:
+        # EXACTLY the three fields the real 送出提案 form sends. Sending an extra
+        # field (we previously sent quota_amount) makes the API reject the whole
+        # request with status 2700271 — proposals do NOT require points/quota.
         resp = ctx_request.post(
             f"{_API}/api/issue/{cid}/proposal",
             headers=_headers(bearer),
@@ -296,7 +303,6 @@ def _submit(ctx_request, bearer: str, cid: str, min_charge: int, max_charge: int
                 "initial_price_min": str(min_charge),
                 "initial_price_max": str(max_charge),
                 "content": content,
-                "quota_amount": "0",
             },
             timeout=30000,
         )
@@ -447,7 +453,7 @@ def run_tasker_apply(
                             entry.update(status="failed", submitted=False, reason=smsg)
                             log(f"✗ {cid}: submit failed — {smsg}")
                             skipped.append(entry)
-                            if sstatus in _QUOTA_BLOCK_STATUSES:
+                            if sstatus in _STOP_STATUSES:
                                 block_msg = smsg
                                 log("■ Account-wide block hit — every further "
                                     "submission would also fail; stopping.")
