@@ -133,7 +133,12 @@ def _judge_candidates(run_provider: str, run_model: str, provider_models: dict) 
     Precedence: the configured/preferred judge → a *different* model within the
     run's provider → (last resort) the run's own model. De-duped, order kept.
     """
-    ordered: list[tuple[str, str | None]] = [_preferred_judge(run_provider)]
+    ordered: list[tuple[str, str | None]] = []
+    # Only lead with the preferred judge if it's independent of the run model —
+    # otherwise it'd self-grade even when an independent sibling is available.
+    preferred = _preferred_judge(run_provider)
+    if preferred != (run_provider, run_model):
+        ordered.append(preferred)
     # A sibling model in the run's provider is still independent of run_model.
     for m in provider_models.get(run_provider, []):
         if m != run_model:

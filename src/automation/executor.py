@@ -150,7 +150,9 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
         append_log(run_id, f"Using {effective_provider} / {effective_model}")
 
     tokens_in = tokens_out = 0
+    cost = 0.0
     vr = None
+    ev = None  # set before every _trace_run call site; init keeps the closure safe
 
     async def _trace_run(status: str, result: dict) -> None:
         # Emit a Langfuse trace off the event loop (record_run flushes over the
@@ -162,8 +164,11 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
             payload=payload, result=result,
             tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost,
             duration_secs=time.monotonic() - _t0,
-            eval_score=ev.score, eval_confidence=ev.confidence, eval_notes=ev.notes,
-            eval_method=ev.method, judge_model=ev.judge_model,
+            eval_score=ev.score if ev else None,
+            eval_confidence=ev.confidence if ev else None,
+            eval_notes=ev.notes if ev else "",
+            eval_method=ev.method if ev else "",
+            judge_model=ev.judge_model if ev else "",
         )
         if url:
             append_log(run_id, f"Langfuse trace: {url}")

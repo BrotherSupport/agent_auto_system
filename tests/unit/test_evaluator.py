@@ -102,6 +102,18 @@ def test_admin_setting_overrides_judge(mocker):
     assert ev.judge_model == "gemini/gemini-2.5-pro"
 
 
+def test_judge_candidates_skip_self_when_preferred_equals_run(mocker):
+    """If the preferred judge IS the run model, an independent sibling leads and the
+    run model drops to last resort (avoids needless self-grading)."""
+    from src.automation.harness.evaluator import _judge_candidates
+    mocker.patch("src.automation.harness.evaluator._preferred_judge",
+                 return_value=("gemini", "gemini/gemini-2.5-flash"))
+    pm = {"gemini": ["gemini/gemini-2.5-flash", "gemini/gemini-2.5-pro"]}
+    cands = _judge_candidates("gemini", "gemini/gemini-2.5-flash", pm)
+    assert cands[0] == ("gemini", "gemini/gemini-2.5-pro")       # independent sibling first
+    assert cands[-1] == ("gemini", "gemini/gemini-2.5-flash")    # run model only as last resort
+
+
 def test_evaluate_self_grade_discounts_confidence(mocker):
     """When only the run's own model is available, confidence is halved + flagged."""
     fake = _FakeLLM('{"score": 90, "confidence": 0.8, "notes": "great"}')
