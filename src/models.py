@@ -3,6 +3,23 @@ from datetime import UTC, datetime
 from sqlmodel import Field, SQLModel
 
 
+class User(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    username: str = Field(index=True, unique=True)
+    password_hash: str
+    is_admin: bool = False
+    is_active: bool = True
+    allowed_automations: str = "[]"  # JSON list of job_type; "*" = all
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_login_at: datetime | None = None
+
+
+class Setting(SQLModel, table=True):
+    key: str = Field(primary_key=True)  # e.g. "llm_key:openai", "enabled_automations"
+    value: str  # JSON string; API-key values are Fernet-encrypted
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
 class Job(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
@@ -15,6 +32,7 @@ class Job(SQLModel, table=True):
 class Run(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     job_id: int = Field(foreign_key="job.id")
+    user_id: int | None = Field(default=None, foreign_key="user.id")  # who triggered it
     status: str = "pending"  # pending | running | success | failed
     result: str | None = None  # JSON string
     log: str | None = None  # JSON array of {ts, msg} progress entries

@@ -81,7 +81,14 @@ def resolve(provider: str | None, model: str | None, temperature: float = 0.7):
 
     effective_provider, effective_model = normalize(provider, model)
     cfg = _CATALOG.get(effective_provider, _CATALOG["openai"])
-    api_key = os.getenv(cfg["env"])
+
+    # Prefer an admin-configured key from the DB, falling back to the env var.
+    from src import settings_store
+    api_key = settings_store.get_llm_key(effective_provider, cfg["env"])
+    if api_key:
+        # litellm / Gemini code paths read the provider env var directly, so make
+        # the resolved key visible to them for this process too.
+        os.environ[cfg["env"]] = api_key
 
     if not api_key:
         logger.error("API key %s not set for provider '%s'", cfg["env"], effective_provider)

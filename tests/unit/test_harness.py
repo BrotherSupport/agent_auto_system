@@ -150,8 +150,13 @@ def test_normalize_unknown_provider_falls_back_to_openai_default_model():
 
 
 def test_resolve_raises_when_api_key_missing(monkeypatch):
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    # resolve() reads the key solely through settings_store.get_llm_key (DB →
+    # env). Stub it to None to simulate "no key anywhere" deterministically —
+    # deleting the env var is unreliable since crewai/database re-run load_dotenv.
+    from src import settings_store
     from src.automation.harness.provider import resolve
+
+    monkeypatch.setattr(settings_store, "get_llm_key", lambda provider, env_name: None)
     with pytest.raises(EnvironmentError, match="OPENAI_API_KEY"):
         resolve("openai", "gpt-4o-mini")
 

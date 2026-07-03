@@ -38,6 +38,7 @@
     <button class="nav-tab" data-page="activity">Activity</button>
     <button class="nav-tab" data-page="system">System</button>
     <button class="nav-tab" data-page="analytics">Analytics</button>
+    <button class="nav-tab" data-page="admin" id="nav-admin" hidden>Admin</button>
   </nav>
   <div class="header-icons">
     <a class="icon-btn" href="https://github.com/yennanliu/agent_auto_system" target="_blank" rel="noopener" title="View on GitHub" aria-label="View on GitHub">
@@ -48,8 +49,27 @@
       <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
     </button>
   </div>
+  <div class="user-menu" id="user-menu" hidden>
+    <span class="user-chip" id="user-chip" title="Logged in"></span>
+    <button class="btn btn-ghost" id="logout-btn">Logout</button>
+  </div>
   <button class="btn btn-primary" id="new-run-btn">+ New Run</button>
 </header>
+
+<!-- Login gate: covers the whole app until authenticated -->
+<div id="login-overlay">
+  <form class="login-card" id="login-form">
+    <div class="login-brand"><span class="logo-mark">⚡</span> agent<span>auto</span></div>
+    <h2>Sign in</h2>
+    <p class="login-sub">You must sign in to view or run automations.</p>
+    <label for="login-username">Username</label>
+    <input id="login-username" name="username" type="text" autocomplete="username" required autofocus />
+    <label for="login-password">Password</label>
+    <input id="login-password" name="password" type="password" autocomplete="current-password" required />
+    <div class="login-error" id="login-error" hidden></div>
+    <button class="btn btn-primary" type="submit" id="login-submit">Sign in</button>
+  </form>
+</div>
 
 <!-- ══════════════════════════════════════ LANDING ════════════════════════════════════ -->
 <div class="page active" id="page-landing">
@@ -263,6 +283,60 @@
 
   <div class="section" style="padding-top:0">
     <div id="perf-content"><div class="loading-state">Loading…</div></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════ ADMIN ══════════════════════════════════════ -->
+<div class="page" id="page-admin">
+  <div class="page-header">
+    <h1>Admin</h1>
+    <p>Manage users and permissions, LLM API keys, and which automations are enabled.</p>
+  </div>
+
+  <div class="cat-tabs" id="admin-tabs">
+    <button class="cat-tab active" data-adm="users">Users</button>
+    <button class="cat-tab" data-adm="keys">LLM Keys</button>
+    <button class="cat-tab" data-adm="autos">Automations</button>
+  </div>
+
+  <div class="section" style="padding-top:0">
+    <div id="admin-users" class="admin-panel"><div class="loading-state">Loading…</div></div>
+    <div id="admin-keys" class="admin-panel" hidden><div class="loading-state">Loading…</div></div>
+    <div id="admin-autos" class="admin-panel" hidden><div class="loading-state">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Admin: create / edit user modal -->
+<div class="modal-overlay hidden" id="admin-user-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="auser-title">New User</h3>
+      <button class="modal-close" id="auser-close">&times;</button>
+    </div>
+    <form id="auser-form">
+      <input type="hidden" id="auser-id" />
+      <div class="field">
+        <label for="auser-username">Username</label>
+        <input id="auser-username" type="text" autocomplete="off" required />
+      </div>
+      <div class="field" id="auser-password-field">
+        <label for="auser-password">Password <span class="muted" id="auser-password-hint">(min 8 chars)</span></label>
+        <input id="auser-password" type="password" autocomplete="new-password" placeholder="Set a password" />
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="auser-admin" /> Administrator (full access)</label>
+      </div>
+      <div class="field" id="auser-allow-field">
+        <label>Allowed automations</label>
+        <label class="allow-all"><input type="checkbox" id="auser-allow-all" /> All automations (wildcard)</label>
+        <div class="allow-grid" id="auser-allow-grid"></div>
+      </div>
+      <div class="auser-error" id="auser-error" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" id="auser-cancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="auser-save">Save</button>
+      </div>
+    </form>
   </div>
 </div>
 

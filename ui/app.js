@@ -369,6 +369,7 @@ const confirmModal    = document.getElementById('confirm-modal');
 // ── Page routing ──────────────────────────────────────────────────────────────
 
 function navigate(page) {
+  if (page === 'admin' && !(CURRENT_USER && CURRENT_USER.is_admin)) page = 'landing';
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.page === page));
   document.querySelectorAll('.page').forEach(p => {
     p.classList.toggle('active', p.id === `page-${page}`);
@@ -379,6 +380,7 @@ function navigate(page) {
   if (page === 'system')    loadSystemPage();
   if (page === 'run')       renderAutomationsPage();
   if (page === 'analytics') loadPerformancePage();
+  if (page === 'admin')     loadAdminPage();
   if (page === 'landing')   window.scrollTo({ top: 0 });
 }
 
@@ -392,7 +394,8 @@ document.addEventListener('click', (e) => {
 function renderLandingAutos() {
   const grid = document.getElementById('lp-autos');
   if (!grid || grid.dataset.rendered) return;
-  grid.innerHTML = ALL_TYPES.map(t => {
+  const visible = visibleTypeSet();
+  grid.innerHTML = ALL_TYPES.filter(t => visible.has(t)).map(t => {
     const a = AUTO_CATALOG[t]; if (!a) return '';
     const m = TYPE_META[t] || {};
     return `<button class="lp-auto" data-type="${t}">
@@ -415,14 +418,390 @@ document.getElementById('lp-cta-run').addEventListener('click', () => openModal(
 document.getElementById('lp-cta-dash').addEventListener('click', () => navigate('activity'));
 
 // Navigate to the page in the hash on load, defaulting to the landing page
-const VALID_PAGES = ['landing','run','activity','system','analytics'];
-const initialPage = (location.hash.slice(1) || 'landing');
-navigate(VALID_PAGES.includes(initialPage) ? initialPage : 'landing');
+const VALID_PAGES = ['landing','run','activity','system','analytics','admin'];
+
+// Automations the current user may see/launch (admins see all; others get the
+// intersection of globally-enabled and their personal allowlist).
+function visibleTypeSet() {
+  if (!CURRENT_USER) return new Set();
+  // The global enabled set applies to everyone (disabled = blocked for all,
+  // including admins). Admins bypass only the per-user allowlist.
+  const enabled = new Set(CURRENT_USER.enabled_automations || ALL_TYPES);
+  if (CURRENT_USER.is_admin) return new Set(ALL_TYPES.filter(t => enabled.has(t)));
+  const allowed = CURRENT_USER.allowed_automations;
+  const allowAll = allowed === '*';
+  return new Set(ALL_TYPES.filter(t =>
+    enabled.has(t) && (allowAll || (Array.isArray(allowed) && allowed.includes(t)))));
+}
+
+// ── Auth gate ───────────────────────────────────────────────────────────────
+// The whole app sits behind a login. We check /api/auth/me on boot; a 401 (here
+// or on any later request) drops a full-screen login overlay back over the app.
+let CURRENT_USER = null;
+
+const loginOverlay = document.getElementById('login-overlay');
+const loginForm    = document.getElementById('login-form');
+const loginError   = document.getElementById('login-error');
+const userMenu     = document.getElementById('user-menu');
+const userChip     = document.getElementById('user-chip');
+
+function showLogin() {
+  CURRENT_USER = null;
+  if (userMenu) userMenu.hidden = true;
+  loginOverlay.classList.add('show');
+  const u = document.getElementById('login-username');
+  if (u) u.focus();
+}
+
+function onAuthenticated(user) {
+  CURRENT_USER = user;
+  loginOverlay.classList.remove('show');
+  if (userMenu) userMenu.hidden = false;
+  if (userChip) userChip.textContent = user.username + (user.is_admin ? ' · admin' : '');
+  const navAdmin = document.getElementById('nav-admin');
+  if (navAdmin) navAdmin.hidden = !user.is_admin;
+  loginError.hidden = true;
+  if (loginForm) loginForm.reset();
+  loadHistory();  // populate the activity panel now that we're authenticated
+}
+
+function bootApp() {
+  const initialPage = (location.hash.slice(1) || 'landing');
+  navigate(VALID_PAGES.includes(initialPage) ? initialPage : 'landing');
+}
+
+// Any 401 from an /api/ call (e.g. session expiry) re-shows the login overlay.
+// The login request itself is exempt so a bad password shows an inline error.
+const _origFetch = window.fetch.bind(window);
+window.fetch = async (input, init) => {
+  const resp = await _origFetch(input, init);
+  const url = typeof input === 'string' ? input : (input && (input.url || input.href)) || '';
+  if (resp.status === 401 && url.includes('/api/') && !url.includes('/api/auth/login')) {
+    showLogin();
+  }
+  return resp;
+};
+
+if (loginForm) {
+  loginForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    loginError.hidden = true;
+    const submitBtn = document.getElementById('login-submit');
+    submitBtn.disabled = true;
+    try {
+      const resp = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('login-username').value,
+          password: document.getElementById('login-password').value,
+        }),
+      });
+      if (!resp.ok) {
+        const body = await resp.json().catch(() => ({}));
+        loginError.textContent = body.detail || 'Sign in failed';
+        loginError.hidden = false;
+        return;
+      }
+      onAuthenticated(await resp.json());
+      bootApp();
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
+const logoutBtn = document.getElementById('logout-btn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    showLogin();
+  });
+}
+
+// ── Admin page ────────────────────────────────────────────────────────────
+// All endpoints are admin-only server-side; the UI just renders/edits.
+let ADMIN_TAB = 'users';
+
+function loadAdminPage() {
+  const tabs = document.getElementById('admin-tabs');
+  if (tabs && !tabs.dataset.wired) {
+    tabs.dataset.wired = '1';
+    tabs.addEventListener('click', (e) => {
+      const b = e.target.closest('.cat-tab');
+      if (b) adminSwitch(b.dataset.adm);
+    });
+  }
+  adminSwitch(ADMIN_TAB);
+}
+
+function adminSwitch(tab) {
+  ADMIN_TAB = tab;
+  document.querySelectorAll('#admin-tabs .cat-tab')
+    .forEach(b => b.classList.toggle('active', b.dataset.adm === tab));
+  document.getElementById('admin-users').hidden = tab !== 'users';
+  document.getElementById('admin-keys').hidden  = tab !== 'keys';
+  document.getElementById('admin-autos').hidden = tab !== 'autos';
+  if (tab === 'users') renderAdminUsers();
+  if (tab === 'keys')  renderAdminKeys();
+  if (tab === 'autos') renderAdminAutos();
+}
+
+async function renderAdminUsers() {
+  const el = document.getElementById('admin-users');
+  el.innerHTML = '<div class="loading-state">Loading…</div>';
+  const resp = await fetch('/api/admin/users');
+  if (!resp.ok) { el.innerHTML = '<div class="loading-state">Failed to load users.</div>'; return; }
+  const users = await resp.json();
+  const rows = users.map(u => {
+    const allow = u.allowed_automations === '*'
+      ? '<span class="badge badge-admin">all</span>'
+      : (u.allowed_automations.length
+          ? u.allowed_automations.map(t => `<span class="badge badge-off">${escHtml(t)}</span>`).join(' ')
+          : '<span class="muted">none</span>');
+    return `<tr>
+      <td>${escHtml(u.username)}</td>
+      <td>${u.is_admin ? '<span class="badge badge-admin">admin</span>' : '<span class="muted">user</span>'}</td>
+      <td>${u.is_active ? '<span class="badge badge-on">active</span>' : '<span class="badge badge-off">disabled</span>'}</td>
+      <td>${u.is_admin ? '<span class="muted">—</span>' : allow}</td>
+      <td><div class="admin-actions">
+        <button class="btn-sm" data-act="edit" data-id="${u.id}">Edit</button>
+        <button class="btn-sm" data-act="toggle" data-id="${u.id}">${u.is_active ? 'Disable' : 'Enable'}</button>
+        <button class="btn-sm" data-act="pw" data-id="${u.id}">Reset PW</button>
+        <button class="btn-sm danger" data-act="del" data-id="${u.id}">Delete</button>
+      </div></td></tr>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="admin-bar">
+      <div class="muted">${users.length} user(s)</div>
+      <button class="btn btn-primary btn-sm" id="admin-add-user">+ New User</button>
+    </div>
+    <div class="admin-card" style="padding:0;overflow-x:auto">
+      <table class="admin-table">
+        <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Allowed automations</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  document.getElementById('admin-add-user').onclick = () => openUserModal(null);
+  el.querySelectorAll('[data-act]').forEach(b =>
+    b.onclick = () => adminUserAction(b.dataset.act, +b.dataset.id, users));
+}
+
+async function adminUserAction(act, id, users) {
+  const u = users.find(x => x.id === id);
+  if (act === 'edit') return openUserModal(u);
+  if (act === 'toggle') {
+    const r = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: !u.is_active }),
+    });
+    if (!r.ok) alert((await r.json().catch(() => ({}))).detail || 'Failed');
+    return renderAdminUsers();
+  }
+  if (act === 'pw') {
+    const pw = prompt(`New password for "${u.username}" (min 8 characters):`);
+    if (!pw) return;
+    const r = await fetch(`/api/admin/users/${id}/password`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_password: pw }),
+    });
+    alert(r.ok ? 'Password updated.' : ((await r.json().catch(() => ({}))).detail || 'Failed'));
+    return;
+  }
+  if (act === 'del') {
+    if (!confirm(`Delete user "${u.username}"? This cannot be undone.`)) return;
+    const r = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+    if (!r.ok) alert((await r.json().catch(() => ({}))).detail || 'Failed');
+    return renderAdminUsers();
+  }
+}
+
+function openUserModal(user) {
+  const m = document.getElementById('admin-user-modal');
+  const isEdit = !!user;
+  document.getElementById('auser-title').textContent = isEdit ? `Edit ${user.username}` : 'New User';
+  document.getElementById('auser-id').value = isEdit ? user.id : '';
+  const un = document.getElementById('auser-username');
+  un.value = isEdit ? user.username : '';
+  un.disabled = isEdit;
+  // Password is set at creation; for existing users use the "Reset PW" action.
+  document.getElementById('auser-password-field').hidden = isEdit;
+  document.getElementById('auser-password').value = '';
+  document.getElementById('auser-admin').checked = isEdit ? user.is_admin : false;
+
+  const grid = document.getElementById('auser-allow-grid');
+  grid.innerHTML = ALL_TYPES.map(t =>
+    `<label><input type="checkbox" class="auser-allow" value="${t}"> ${escHtml(AUTO_CATALOG[t]?.name || t)}</label>`
+  ).join('');
+  const wild = isEdit && user.allowed_automations === '*';
+  document.getElementById('auser-allow-all').checked = wild;
+  const allowedList = (isEdit && Array.isArray(user.allowed_automations)) ? user.allowed_automations : [];
+  grid.querySelectorAll('.auser-allow').forEach(cb => cb.checked = allowedList.includes(cb.value));
+
+  syncAllowDisabled();
+  document.getElementById('auser-error').hidden = true;
+  m.classList.remove('hidden');
+}
+
+function syncAllowDisabled() {
+  const isAdmin  = document.getElementById('auser-admin').checked;
+  const allowAll = document.getElementById('auser-allow-all').checked;
+  document.getElementById('auser-allow-field').style.opacity = isAdmin ? '0.5' : '1';
+  document.getElementById('auser-allow-all').disabled = isAdmin;
+  document.querySelectorAll('.auser-allow').forEach(cb => cb.disabled = isAdmin || allowAll);
+}
+
+async function saveUser(e) {
+  e.preventDefault();
+  const errEl = document.getElementById('auser-error');
+  errEl.hidden = true;
+  const id = document.getElementById('auser-id').value;
+  const isAdmin  = document.getElementById('auser-admin').checked;
+  const allowAll = document.getElementById('auser-allow-all').checked;
+  let allowed;
+  if (isAdmin || allowAll) allowed = ['*'];
+  else allowed = [...document.querySelectorAll('.auser-allow:checked')].map(c => c.value);
+
+  let resp;
+  if (id) {
+    resp = await fetch(`/api/admin/users/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_admin: isAdmin, allowed_automations: allowed }),
+    });
+  } else {
+    resp = await fetch('/api/admin/users', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('auser-username').value.trim(),
+        password: document.getElementById('auser-password').value,
+        is_admin: isAdmin,
+        allowed_automations: allowed,
+      }),
+    });
+  }
+  if (!resp.ok) {
+    errEl.textContent = (await resp.json().catch(() => ({}))).detail || 'Save failed';
+    errEl.hidden = false;
+    return;
+  }
+  document.getElementById('admin-user-modal').classList.add('hidden');
+  renderAdminUsers();
+}
+
+async function renderAdminKeys() {
+  const el = document.getElementById('admin-keys');
+  el.innerHTML = '<div class="loading-state">Loading…</div>';
+  const resp = await fetch('/api/admin/llm-keys');
+  if (!resp.ok) { el.innerHTML = '<div class="loading-state">Failed to load keys.</div>'; return; }
+  const keys = await resp.json();
+  el.innerHTML = keys.map(k => `
+    <div class="admin-card">
+      <div class="admin-card-row">
+        <div>
+          <strong>${escHtml(k.provider)}</strong>
+          ${k.configured
+            ? `<span class="badge badge-on">configured</span> <span class="badge badge-src">${escHtml(k.source)}</span> <span class="muted">${escHtml(k.masked || '')}</span>`
+            : '<span class="badge badge-off">not set</span>'}
+          <div class="muted" style="font-size:0.75rem;margin-top:0.25rem">env var: ${escHtml(k.env)} · models: ${k.models.map(escHtml).join(', ')}</div>
+        </div>
+      </div>
+      <div class="key-input" style="margin-top:0.7rem">
+        <input type="password" placeholder="Paste new API key to override…" data-key-input="${k.provider}" />
+        <button class="btn-sm" data-key-save="${k.provider}">Save</button>
+        ${k.source === 'db' ? `<button class="btn-sm danger" data-key-clear="${k.provider}">Clear</button>` : ''}
+      </div>
+    </div>`).join('');
+  el.querySelectorAll('[data-key-save]').forEach(b => b.onclick = async () => {
+    const p = b.dataset.keySave;
+    const val = el.querySelector(`[data-key-input="${p}"]`).value;
+    const r = await fetch(`/api/admin/llm-keys/${p}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: val }),
+    });
+    if (!r.ok) alert((await r.json().catch(() => ({}))).detail || 'Failed');
+    renderAdminKeys();
+  });
+  el.querySelectorAll('[data-key-clear]').forEach(b => b.onclick = async () => {
+    const p = b.dataset.keyClear;
+    if (!confirm(`Clear the stored ${p} key and revert to the environment variable?`)) return;
+    await fetch(`/api/admin/llm-keys/${p}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_key: '' }),
+    });
+    renderAdminKeys();
+  });
+}
+
+async function renderAdminAutos() {
+  const el = document.getElementById('admin-autos');
+  el.innerHTML = '<div class="loading-state">Loading…</div>';
+  const resp = await fetch('/api/admin/automations');
+  if (!resp.ok) { el.innerHTML = '<div class="loading-state">Failed to load.</div>'; return; }
+  const data = await resp.json();
+  const enabled = new Set(data.enabled);
+  el.innerHTML = `<div class="admin-card">
+    <div class="muted" style="margin-bottom:0.6rem">Disabled automations cannot be created or run by anyone (including admins). Re-enable to use them.</div>
+    ${data.all.map(t => `
+      <div class="toggle-row">
+        <div><strong>${escHtml(AUTO_CATALOG[t]?.name || t)}</strong> <span class="muted" style="font-size:0.78rem">${escHtml(t)}</span></div>
+        <label class="switch"><input type="checkbox" data-auto="${t}" ${enabled.has(t) ? 'checked' : ''}><span class="track"></span></label>
+      </div>`).join('')}
+  </div>`;
+  el.querySelectorAll('[data-auto]').forEach(cb => cb.onchange = async () => {
+    const next = [...el.querySelectorAll('[data-auto]:checked')].map(c => c.dataset.auto);
+    const r = await fetch('/api/admin/automations', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: next }),
+    });
+    if (!r.ok) { alert('Failed to update'); return renderAdminAutos(); }
+    // Keep the run/landing filters in sync without a reload.
+    if (CURRENT_USER) CURRENT_USER.enabled_automations = (await r.json()).enabled;
+    const lp = document.getElementById('lp-autos');
+    if (lp) delete lp.dataset.rendered;  // force the landing grid to re-filter
+  });
+}
+
+// Wire the user create/edit modal once (its markup is static).
+(function wireAdminUserModal() {
+  const m = document.getElementById('admin-user-modal');
+  if (!m) return;
+  const close = () => m.classList.add('hidden');
+  document.getElementById('auser-close').onclick = close;
+  document.getElementById('auser-cancel').onclick = close;
+  m.addEventListener('click', (e) => { if (e.target === m) close(); });
+  document.getElementById('auser-form').addEventListener('submit', saveUser);
+  document.getElementById('auser-admin').addEventListener('change', syncAllowDisabled);
+  document.getElementById('auser-allow-all').addEventListener('change', syncAllowDisabled);
+})();
+
+// Boot: only enter the app if there's a live session.
+(async () => {
+  try {
+    const resp = await _origFetch('/api/auth/me');
+    if (resp.ok) {
+      onAuthenticated(await resp.json());
+      bootApp();
+    } else {
+      showLogin();
+    }
+  } catch {
+    showLogin();
+  }
+})();
 
 // ── Modal open/close ──────────────────────────────────────────────────────────
 
 function openModal(preselect) {
-  if (preselect) selectJobType(preselect);
+  // Hide automation types this user may not run (server enforces too).
+  const visible = visibleTypeSet();
+  let firstVisible = null;
+  document.querySelectorAll('#type-grid .type-card').forEach(card => {
+    const ok = visible.has(card.dataset.type);
+    card.classList.toggle('hidden', !ok);
+    if (ok && !firstVisible) firstVisible = card.dataset.type;
+  });
+  if (preselect && visible.has(preselect)) selectJobType(preselect);
+  else if (firstVisible) selectJobType(firstVisible);
   modal.classList.remove('hidden');
 }
 function closeModalFn() { modal.classList.add('hidden'); }
@@ -1190,6 +1569,9 @@ function renderHistory(runs, hasMore = false) {
     const cbChecked  = selectedRunIds.has(run.id) ? 'checked' : '';
     const cbDis      = isActive ? 'disabled' : '';
     const rowSel     = selectedRunIds.has(run.id) ? 'selected' : '';
+    // Admins see everyone's runs; tag each with its owner.
+    const ownerBadge = (CURRENT_USER && CURRENT_USER.is_admin && run.owner)
+      ? `<span class="badge badge-admin" title="Run by ${escHtml(run.owner)}">@${escHtml(run.owner)}</span>` : '';
 
     return `
       <tr class="data-row ${rowSel}" data-run-id="${run.id}">
@@ -1202,7 +1584,7 @@ function renderHistory(runs, hasMore = false) {
             <span class="job-name-text">${escHtml(run.job_name)}</span>
             <div style="display:flex;gap:0.3rem;align-items:center;flex-wrap:wrap">
               <span class="type-chip ${meta.cls}">${meta.chip}</span>
-              ${llmBadge}${retryBadge}${evalBadge}
+              ${ownerBadge}${llmBadge}${retryBadge}${evalBadge}
             </div>
           </div>
         </td>
@@ -1524,7 +1906,8 @@ function renderSourceSection(code, filePath, label = 'Source Code') {
 
 function renderAutomationsPage() {
   const grid = document.getElementById('auto-grid');
-  grid.innerHTML = Object.entries(AUTO_CATALOG).map(([type, meta]) => {
+  const visible = visibleTypeSet();
+  grid.innerHTML = Object.entries(AUTO_CATALOG).filter(([type]) => visible.has(type)).map(([type, meta]) => {
     const inputs = meta.inputs.map(inp =>
       `<div class="auto-input-row">
          <span class="auto-input-name">${escHtml(inp.name)}</span>
@@ -1983,5 +2366,5 @@ document.getElementById('load-more-btn').addEventListener('click', async () => {
   await loadHistory(false);
 });
 
-loadHistory();
-setInterval(() => { if (!activeEventSource) loadHistory(); }, 5000);
+// History loads once authenticated (see onAuthenticated); poll only while logged in.
+setInterval(() => { if (CURRENT_USER && !activeEventSource) loadHistory(); }, 5000);
