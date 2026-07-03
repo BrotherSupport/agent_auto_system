@@ -1,0 +1,31 @@
+qualify_task:
+  description: >
+    You are qualifying discovered businesses as leads for this offer:
+    "{offer}"
+
+    Target region context: {region}
+
+    Here is the list of businesses (JSON array; each has an integer "i", a
+    "company" name, a "website", and a "category"):
+
+    {leads_json}
+
+    For EACH business, decide:
+      - icp_fit: integer 1-5 — how well it fits as a buyer of the offer above
+        (5 = strong fit, 1 = poor fit). Base this only on the company, category,
+        and region given.
+      - reason: <= 12 words on why that score.
+      - hook: ONE concrete, specific opening line (<= 25 words) for a cold email
+        to this business, referencing what they plausibly do. No greeting, no
+        signature, no generic flattery.
+
+    If retrying, fix this issue from the previous attempt: {previous_error}
+  expected_output: >
+    ONLY a JSON array (no markdown fences), one object per input business, each
+    with exactly these keys:
+    - "i": the same integer index from the input
+    - "icp_fit": integer 1-5
+    - "reason": short string
+    - "hook": string
+    Preserve every input "i". Return the array and nothing else.
+  agent: lead_qualifier_agent

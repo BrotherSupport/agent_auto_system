@@ -1,6 +1,6 @@
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'shopee_seller_scraper', 'profit_health_check', 'tasker_apply', 'pipeline'];
+const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'shopee_seller_scraper', 'profit_health_check', 'tasker_apply', 'email_collect', 'pipeline'];
 
 const TYPE_META = {
   google_form_fill:   { chip: 'FORM',  cls: 'chip-form'     },
@@ -12,6 +12,7 @@ const TYPE_META = {
   shopee_seller_scraper: { chip: 'SHOPEE', cls: 'chip-shopee' },
   profit_health_check: { chip: '利潤健檢', cls: 'chip-profit' },
   tasker_apply:        { chip: 'TASKER', cls: 'chip-tasker' },
+  email_collect:        { chip: 'EMAILS', cls: 'chip-leads' },
   pipeline:            { chip: 'PIPE',  cls: 'chip-pipeline' },
 };
 
@@ -108,6 +109,20 @@ const AUTO_CATALOG = {
     ],
     crew: 'TaskerProposalCrew', flow: 'TaskerApplyFlow',
     agent: 'Proposal Writer', tools: ['Tasker Auto-Apply'],
+  },
+  email_collect: {
+    icon: '📧', name: 'Email Collector',
+    desc: 'Find businesses on Google Maps and collect their contact emails — no paid database. For a search + region it discovers businesses, scrapes each website for emails, verifies them (MX + SMTP), removes duplicates, then uses AI to score fit and write a personalized opening line for each one, ready for your outreach.',
+    inputs: [
+      { name: 'query',    type: 'str', desc: 'What businesses to find (e.g. marketing agency, dental clinic)' },
+      { name: 'region',   type: 'str', desc: 'Where (e.g. Taipei / Berlin / Austin, TX). Blank = anywhere' },
+      { name: 'industry', type: 'str (optional)', desc: 'Extra qualifier folded into the search term' },
+      { name: 'offer',    type: 'str (optional)', desc: "What you're pitching — drives ICP scoring & hooks" },
+      { name: 'limit',    type: 'int (1–40)', desc: 'Number of businesses to discover' },
+      { name: 'smtp_check', type: 'bool', desc: 'Run the SMTP RCPT probe during verification' },
+    ],
+    crew: 'EmailCollectCrew', flow: 'EmailCollectFlow',
+    agent: 'Lead Qualifier', tools: ['Google Maps Search', 'Web Email Extractor', 'Email Verifier'],
   },
   pipeline: {
     icon: '🔗', name: 'Pipeline',
@@ -216,6 +231,16 @@ const FLOW_STEPS = {
     { label: 'Apply',    trigger: 'run complete' },
     ..._QA_STEPS,
     { label: 'Done',     trigger: 'completed successfully' },
+  ],
+  email_collect: [
+    { label: 'Start',     trigger: 'Starting' },
+    { label: 'Validate',  trigger: 'Payload validated' },
+    { label: 'Discover',  trigger: 'Discovering businesses' },
+    { label: 'Extract',   trigger: 'Extracting email' },
+    { label: 'Collect',   trigger: 'Collected' },
+    { label: 'Qualify',   trigger: 'Qualifying' },
+    ..._QA_STEPS,
+    { label: 'Done',      trigger: 'completed successfully' },
   ],
 };
 
@@ -945,6 +970,7 @@ const PIPELINE_TYPE_OPTIONS = [
   { value: 'email_sender',       label: 'Email Sender' },
   { value: 'google_sheet_reader', label: 'Sheet Reader' },
   { value: 'shopee_seller_scraper', label: 'Shopee Sellers' },
+  { value: 'email_collect',        label: 'Email Collector' },
 ];
 
 function renderPipelineStepFields(stepIdx, jobType) {
@@ -989,6 +1015,11 @@ function renderPipelineStepFields(stepIdx, jobType) {
       return `${tipHtml}
         <div class="field"><label>Search Keyword</label><input type="text" class="ps-field" data-field="keyword" placeholder="e.g. 無線耳機" /></div>
         <div class="field"><label>Products (1–100)</label><input type="text" class="ps-field" data-field="limit" value="5" placeholder="5" /></div>`;
+    case 'email_collect':
+      return `${tipHtml}
+        <div class="field"><label>Business Query</label><input type="text" class="ps-field" data-field="query" placeholder="e.g. marketing agency" /></div>
+        <div class="field"><label>Region</label><input type="text" class="ps-field" data-field="region" placeholder="e.g. Taipei" /></div>
+        <div class="field"><label>Limit (1–40)</label><input type="text" class="ps-field" data-field="limit" value="15" placeholder="15" /></div>`;
     default: return '';
   }
 }
@@ -1182,6 +1213,22 @@ runForm.addEventListener('submit', async (e) => {
     };
     jobName = `Tasker 提案: ${categories}${payload.dry_run ? ' (dry-run)' : ''}`;
 
+  } else if (jobType === 'email_collect') {
+    const query = document.getElementById('lead-query').value.trim();
+    if (!query) { showToast('Business query is required', 'error'); return; }
+    const region   = document.getElementById('lead-region').value.trim();
+    const industry = document.getElementById('lead-industry').value.trim();
+    const offer    = document.getElementById('lead-offer').value.trim();
+    const limit    = parseInt(document.getElementById('lead-limit').value, 10) || 15;
+    payload = {
+      query, limit,
+      smtp_check: document.getElementById('lead-smtp').checked,
+      ...(region   ? { region }   : {}),
+      ...(industry ? { industry } : {}),
+      ...(offer    ? { offer }    : {}),
+    };
+    jobName = `Leads: ${query}${region ? ' @ ' + region : ''}`;
+
   } else if (jobType === 'pipeline') {
     const steps = collectPipelineSteps();
     if (!steps.length) { showToast('Add at least one step', 'error'); return; }
@@ -1196,6 +1243,7 @@ runForm.addEventListener('submit', async (e) => {
       else if   (jt === 'x_scraper'        && missing('username'))      { showToast(`Step ${i + 1}: X Username is required`, 'error'); return; }
       else if   (jt === 'google_form_fill' && missing('company_name')) { showToast(`Step ${i + 1}: Company name is required`, 'error'); return; }
       else if   (jt === 'shopee_seller_scraper' && missing('keyword'))  { showToast(`Step ${i + 1}: Search keyword is required`, 'error'); return; }
+      else if   (jt === 'email_collect' && missing('query'))            { showToast(`Step ${i + 1}: Business query is required`, 'error'); return; }
     }
     const typeNames = steps.map(s => (AUTO_CATALOG[s.job_type]?.name || s.job_type));
     payload  = { steps };
@@ -1664,7 +1712,9 @@ function renderHistory(runs, hasMore = false) {
             <div class="pane-toolbar">
               <button class="btn-copy" data-action="copy" data-run-id="${run.id}">Copy JSON</button>
               ${resultJson && resultJson.pdf_url ? `<a class="btn-copy" href="/api/runs/${run.id}/report.pdf" target="_blank" rel="noopener">📄 下載 PDF 報告</a>` : ''}
+              ${run.job_type === 'email_collect' && resultJson ? `<a class="btn-copy" href="/api/runs/${run.id}/leads.csv">⬇ Download CSV</a>` : ''}
             </div>
+            ${run.job_type === 'email_collect' && resultJson ? renderLeadsTable(resultJson) : ''}
             <pre>${escHtml(resultJson ? JSON.stringify(resultJson, null, 2) : (run.result || ''))}</pre>
           </div>
           ${flowPane}
@@ -1720,6 +1770,31 @@ function initElapsedTimers() {
 function stopElapsedTimer(runId) {
   const id = elapsedTimers.get(runId);
   if (id !== undefined) { clearInterval(id); elapsedTimers.delete(runId); }
+}
+
+// ── Email Collector result table ──────────────────────────────────────────────
+
+function renderLeadsTable(rj) {
+  const leads = Array.isArray(rj.leads) ? rj.leads : [];
+  const summary = `<div class="leads-summary">
+      Discovered <b>${rj.discovered_count ?? 0}</b> · with website
+      <b>${rj.with_website ?? 0}</b> · verified leads
+      <b>${rj.lead_count ?? leads.length}</b></div>`;
+  if (!leads.length) {
+    return summary + '<div class="leads-summary">No contact emails collected.</div>';
+  }
+  const conf = c => `<span class="lead-conf lead-conf-${escHtml(c || 'low')}">${escHtml(c || '—')}</span>`;
+  const rows = leads.map(l => `<tr>
+      <td>${escHtml(l.company || '')}</td>
+      <td><a href="mailto:${escHtml(l.email || '')}">${escHtml(l.email || '')}</a>${l.source === 'guessed' ? ' <span class="lead-guessed">guessed</span>' : ''}</td>
+      <td>${conf(l.confidence)}</td>
+      <td style="text-align:center">${l.icp_fit ?? ''}</td>
+      <td>${escHtml(l.hook || '')}</td>
+      <td>${l.website ? `<a href="${escHtml(l.website)}" target="_blank" rel="noopener">site</a>` : ''}</td>
+    </tr>`).join('');
+  return summary + `<div class="leads-table-wrap"><table class="leads-table">
+      <thead><tr><th>Company</th><th>Email</th><th>Conf.</th><th>ICP</th><th>Hook</th><th>Site</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
 }
 
 // ── Copy result JSON ──────────────────────────────────────────────────────────

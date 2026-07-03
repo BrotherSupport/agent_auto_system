@@ -387,6 +387,10 @@
           <div class="type-card-header"><span class="type-card-icon">🧰</span><span class="type-card-name">Tasker 自動提案</span></div>
           <div class="type-card-desc">Auto-apply to tasker.com.tw cases</div>
         </div>
+        <div class="type-card" data-type="email_collect">
+          <div class="type-card-header"><span class="type-card-icon">📧</span><span class="type-card-name">Email Collector</span></div>
+          <div class="type-card-desc">Find businesses & collect their emails</div>
+        </div>
         <div class="type-card" data-type="pipeline">
           <div class="type-card-header"><span class="type-card-icon">🔗</span><span class="type-card-name">Pipeline</span></div>
           <div class="type-card-desc">Chain automations in sequence</div>
@@ -494,6 +498,24 @@
         <div style="font-size:0.75rem;color:var(--text-muted);background:var(--accent-soft);border:1px solid rgba(47,107,255,0.2);border-radius:10px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
           需要已登入的 tasker.com.tw session。首次請執行 <code style="font-family:ui-monospace,monospace">uv run python scripts/tasker_login.py</code> 手動登入一次，並在 <code style="font-family:ui-monospace,monospace">.env</code> 設定 <code style="font-family:ui-monospace,monospace">TASKER_USERNAME / TASKER_PASSWORD / TASKER_STORAGE_STATE</code>。
           <b>取消勾選試跑模式會送出真實提案。</b>
+        </div>
+      </div>
+
+      <div id="fields-email_collect" class="hidden">
+        <div class="field"><label>Business Query <span style="color:var(--red)">*</span></label><input type="text" id="lead-query" placeholder="e.g. marketing agency, dental clinic, coffee shop" /></div>
+        <div class="field"><label>Region</label><input type="text" id="lead-region" placeholder="e.g. Taipei / Berlin / Austin, TX — blank = anywhere" /></div>
+        <div class="field"><label>Industry (optional)</label><input type="text" id="lead-industry" placeholder="Extra qualifier folded into the search, e.g. B2B SaaS" /></div>
+        <div class="field"><label>Your Offer (optional — drives ICP scoring &amp; hooks)</label><textarea id="lead-offer" rows="2" placeholder="e.g. an AI agent that automates customer support & lead follow-up for SMBs"></textarea></div>
+        <div class="field" style="display:flex;gap:0.5rem">
+          <div style="flex:1"><label>Businesses to discover (1–40)</label><input type="number" id="lead-limit" value="15" min="1" max="40" /></div>
+        </div>
+        <div class="field" style="display:flex;align-items:center;gap:0.5rem">
+          <input type="checkbox" id="lead-smtp" checked style="width:auto;margin:0" />
+          <label for="lead-smtp" style="margin:0">SMTP verification probe (may be slow / blocked on some networks)</label>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-muted);background:var(--accent-soft);border:1px solid rgba(47,107,255,0.2);border-radius:10px;padding:0.6rem 0.75rem;margin-bottom:0.5rem">
+          Funnel: discover on Google Maps → scrape each website for emails → verify (MX + SMTP, no paid DB) → dedupe → AI qualifies ICP fit &amp; writes a per-lead hook. Uses headless Chromium (<code style="font-family:ui-monospace,monospace">uv run playwright install chromium</code>).
+          <b>For compliant B2B outreach only</b> — prefer role addresses, always include an unsubscribe + your identity, and honor opt-outs (GDPR / CAN-SPAM / PDPA).
         </div>
       </div>
 
