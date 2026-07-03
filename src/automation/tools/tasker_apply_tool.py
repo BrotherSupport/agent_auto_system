@@ -85,9 +85,15 @@ _SUBMIT_ERRORS = {
 _STOP_STATUSES = {"1230075"}
 
 _DEFAULT_TEMPLATE = (
-    "您好，我對這個案件很有興趣。我具備完成此需求的相關經驗，"
-    "能依您的規格與時程交付，並在過程中保持清楚溝通。"
-    "上方為我的初步估價，實際費用可依細節討論調整。期待與您合作，謝謝！"
+    "您好，我對這個案件很感興趣，具備完成此需求的相關經驗，"
+    "能依您的規格與時程交付，過程中保持清楚溝通。\n\n"
+    "請參考我的專案:\n"
+    "- https://brothersupport.github.io/ai_consultant/index.html\n"
+    "- https://yennj12.js.org/ai_builder.html\n"
+    "- https://yennj12.js.org/yennj12_blog_V4/\n\n"
+    "前FANNG工程師, 9年開發經驗 精通backend, AI, full stack, cloud infra. "
+    "python/javascript/java/typescript\n\n"
+    "上方為初步估價，實際費用可依細節討論調整。期待與您合作，謝謝！"
 )
 
 
@@ -334,7 +340,7 @@ def run_tasker_apply(
     proposal_fn: Callable[[str, str], str] | None = None,
     log: Callable[[str], None] | None = None,
     state_path: str | None = None,
-    max_pages: int = 20,
+    max_pages: int = 60,
 ) -> dict:
     """Log in and apply to open cases in the given category. See module docstring.
 
@@ -348,8 +354,8 @@ def run_tasker_apply(
     proposal_fn = proposal_fn or (lambda _t, _d: _DEFAULT_TEMPLATE)
     state_path = state_path or os.getenv("TASKER_STORAGE_STATE", DEFAULT_STATE_PATH)
     username = os.getenv("TASKER_USERNAME", "")  # noqa: F841 (kept for parity/logs)
-    max_cases = max(1, min(int(max_cases), 50))
-    max_pages = max(1, min(int(max_pages), 50))
+    max_cases = max(1, min(int(max_cases), 500))
+    max_pages = max(1, min(int(max_pages), 100))
 
     base = {"category_ids": category_ids, "dry_run": dry_run,
             "applied": [], "skipped": []}

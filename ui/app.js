@@ -103,7 +103,7 @@ const AUTO_CATALOG = {
       { name: 'category_ids', type: 'str',       desc: 'Category id(s) from selected_categories, e.g. 110 or 110,101001' },
       { name: 'min_charge',   type: 'int',       desc: '初次估價 lower bound (元)' },
       { name: 'max_charge',   type: 'int',       desc: '初次估價 upper bound (元, 須大於 min)' },
-      { name: 'max_cases',    type: 'int (1–50)', desc: 'Number of eligible cases to actually apply to (auto-advances pages)' },
+      { name: 'max_cases',    type: 'int (1–500)', desc: 'Number of eligible cases to actually apply to (auto-advances pages)' },
       { name: 'dry_run',      type: 'bool',      desc: 'If checked, fill but do NOT click 送出提案' },
     ],
     crew: 'TaskerProposalCrew', flow: 'TaskerApplyFlow',
