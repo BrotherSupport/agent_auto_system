@@ -167,10 +167,10 @@ _CATALOG: dict = {
             "goal": "Score how well each discovered business fits the offer's ICP and write one concrete personalization hook for a cold email.",
             "backstory": "Sharp B2B sales strategist who turns raw prospect lists into ready-to-contact leads. Reasons only from the company, website, category, and region provided — never invents facts — and writes specific, human hooks. Outputs clean JSON.",
             "tools": [],
-            "crew": "LeadCollectCrew",
+            "crew": "EmailCollectCrew",
             "task": "qualify_task",
-            "job_type": "lead_collect",
-            "source_file": "src/automation/crews/lead_collect_crew/config/agents.yaml",
+            "job_type": "email_collect",
+            "source_file": "src/automation/crews/email_collect_crew/config/agents.yaml",
         },
     ],
     "tools": [
@@ -325,7 +325,7 @@ _CATALOG: dict = {
                 {"name": "region", "type": "str", "description": "Where, e.g. 'Taipei' / 'Berlin' / 'Austin, TX'"},
                 {"name": "limit",  "type": "int (1–40)", "description": "Number of listings to collect"},
             ],
-            "used_by": ["LeadCollectFlow"],
+            "used_by": ["EmailCollectFlow"],
             "source_file": "src/automation/tools/maps_search_tool.py",
         },
         {
@@ -336,7 +336,7 @@ _CATALOG: dict = {
             "inputs": [
                 {"name": "website", "type": "str", "description": "Business website URL"},
             ],
-            "used_by": ["LeadCollectFlow"],
+            "used_by": ["EmailCollectFlow"],
             "source_file": "src/automation/tools/email_extract_tool.py",
         },
         {
@@ -348,7 +348,7 @@ _CATALOG: dict = {
                 {"name": "emails",     "type": "list[str]", "description": "Addresses to verify"},
                 {"name": "smtp_check", "type": "bool",      "description": "Run the SMTP RCPT probe (default true)"},
             ],
-            "used_by": ["LeadCollectFlow"],
+            "used_by": ["EmailCollectFlow"],
             "source_file": "src/automation/tools/email_verify_tool.py",
         },
     ],
@@ -525,21 +525,21 @@ _CATALOG: dict = {
             "source_file": "src/automation/crews/tasker_apply_crew/crew.py",
         },
         {
-            "id": "lead_collect_crew",
-            "name": "LeadCollectCrew",
+            "id": "email_collect_crew",
+            "name": "EmailCollectCrew",
             "process": "sequential",
             "agents": ["lead_qualifier_agent"],
-            "job_type": "lead_collect",
-            "flow": "LeadCollectFlow",
+            "job_type": "email_collect",
+            "flow": "EmailCollectFlow",
             "tasks": [
                 {
                     "name": "qualify_task",
-                    "description": "Score ICP fit (1–5) and write one personalization hook per discovered business. Discovery, email extraction, and verification are done deterministically in LeadCollectFlow via the maps_search / web_email_extract / email_verify tools.",
+                    "description": "Score ICP fit (1–5) and write one personalization hook per discovered business. Discovery, email extraction, and verification are done deterministically in EmailCollectFlow via the maps_search / web_email_extract / email_verify tools.",
                     "expected_output": '[{"i": 0, "icp_fit": 4, "reason": "...", "hook": "..."}]',
-                    "config_file": "src/automation/crews/lead_collect_crew/config/tasks.yaml",
+                    "config_file": "src/automation/crews/email_collect_crew/config/tasks.yaml",
                 }
             ],
-            "source_file": "src/automation/crews/lead_collect_crew/crew.py",
+            "source_file": "src/automation/crews/email_collect_crew/crew.py",
         },
     ],
     "workflows": [
@@ -801,10 +801,10 @@ _CATALOG: dict = {
             "source_file": "src/automation/flows/tasker_apply_flow.py",
         },
         {
-            "id": "lead_collect_flow",
-            "name": "LeadCollectFlow",
-            "job_type": "lead_collect",
-            "crew": "LeadCollectCrew (ICP fit + hook) + maps_search / web_email_extract / email_verify tools",
+            "id": "email_collect_flow",
+            "name": "EmailCollectFlow",
+            "job_type": "email_collect",
+            "crew": "EmailCollectCrew (ICP fit + hook) + maps_search / web_email_extract / email_verify tools",
             "state_fields": [
                 {"name": "query",      "type": "str",  "default": ""},
                 {"name": "region",     "type": "str",  "default": ""},
@@ -827,12 +827,12 @@ _CATALOG: dict = {
                         "Runs the funnel deterministically: DISCOVER businesses on Google "
                         "Maps (maps_search) → EXTRACT emails from each website "
                         "(web_email_extract) → VERIFY (email_verify: syntax/MX/SMTP) → "
-                        "dedupe & rank. Then QUALIFIES leads with LeadCollectCrew (ICP fit "
+                        "dedupe & rank. Then QUALIFIES leads with EmailCollectCrew (ICP fit "
                         "+ personalization hook). Returns discovered/lead counts + leads[]."
                     ),
                 },
             ],
-            "source_file": "src/automation/flows/lead_collect_flow.py",
+            "source_file": "src/automation/flows/email_collect_flow.py",
         },
     ],
 }

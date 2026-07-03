@@ -41,7 +41,7 @@ _CHECKS: dict = {
         isinstance(r.get("applied"), list) and r.get("cases_found") is not None,
         "no cases processed",
     ),
-    "lead_collect": lambda r: (
+    "email_collect": lambda r: (
         r.get("discovered_count", 0) > 0,
         "no businesses discovered",
     ),

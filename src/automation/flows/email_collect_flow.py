@@ -3,7 +3,7 @@ import json
 from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel
 
-from src.automation.crews.lead_collect_crew.crew import LeadCollectCrew
+from src.automation.crews.email_collect_crew.crew import EmailCollectCrew
 from src.automation.flows.base import FlowMixin
 from src.automation.flows.utils import extract_usage
 from src.automation.progress import append_log
@@ -19,7 +19,7 @@ _CONF_RANK = {"high": 0, "medium": 1, "low": 2, "invalid": 3}
 _DEFAULT_OFFER = "an AI agent / automation consulting proposal for small businesses"
 
 
-class LeadCollectState(BaseModel):
+class EmailCollectState(BaseModel):
     query: str = ""              # what to search, e.g. "marketing agency"
     region: str = ""             # where, e.g. "Taipei" / "Berlin" / "Austin, TX"
     industry: str = ""           # optional label, folded into the search term
@@ -33,7 +33,7 @@ class LeadCollectState(BaseModel):
     previous_error: str = ""
 
 
-class LeadCollectFlow(FlowMixin, Flow[LeadCollectState]):
+class EmailCollectFlow(FlowMixin, Flow[EmailCollectState]):
 
     @start()
     def validate_payload(self):
@@ -153,7 +153,7 @@ class LeadCollectFlow(FlowMixin, Flow[LeadCollectState]):
         append_log(self.state.run_id,
                    f"Qualifying {len(subset)} lead(s) with LLM (ICP fit + hook)...")
         try:
-            result = LeadCollectCrew(llm=llm).crew().kickoff(inputs={
+            result = EmailCollectCrew(llm=llm).crew().kickoff(inputs={
                 "offer": offer,
                 "region": self.state.region or "anywhere",
                 "leads_json": leads_json,

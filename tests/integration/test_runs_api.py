@@ -94,10 +94,10 @@ async def test_sse_stream_returns_event_stream(client, db_session, seed_job):
     assert b'"status": "success"' in resp.content
 
 
-# ── lead_collect CSV export ─────────────────────────────────────────────────────
+# ── email_collect CSV export ─────────────────────────────────────────────────────
 
 def _seed_lead_run(db_session, result: dict):
-    job = Job(name="Leads", job_type="lead_collect", payload=json.dumps({"query": "cafe"}))
+    job = Job(name="Leads", job_type="email_collect", payload=json.dumps({"query": "cafe"}))
     db_session.add(job)
     db_session.commit()
     db_session.refresh(job)

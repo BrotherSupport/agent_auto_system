@@ -1,6 +1,6 @@
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'shopee_seller_scraper', 'profit_health_check', 'tasker_apply', 'lead_collect', 'pipeline'];
+const ALL_TYPES = ['google_form_fill', 'web_scraper', 'hacker_news_digest', 'x_scraper', 'email_sender', 'google_sheet_reader', 'shopee_seller_scraper', 'profit_health_check', 'tasker_apply', 'email_collect', 'pipeline'];
 
 const TYPE_META = {
   google_form_fill:   { chip: 'FORM',  cls: 'chip-form'     },
@@ -12,7 +12,7 @@ const TYPE_META = {
   shopee_seller_scraper: { chip: 'SHOPEE', cls: 'chip-shopee' },
   profit_health_check: { chip: '利潤健檢', cls: 'chip-profit' },
   tasker_apply:        { chip: 'TASKER', cls: 'chip-tasker' },
-  lead_collect:        { chip: 'LEADS', cls: 'chip-leads' },
+  email_collect:        { chip: 'LEADS', cls: 'chip-leads' },
   pipeline:            { chip: 'PIPE',  cls: 'chip-pipeline' },
 };
 
@@ -110,7 +110,7 @@ const AUTO_CATALOG = {
     crew: 'TaskerProposalCrew', flow: 'TaskerApplyFlow',
     agent: 'Proposal Writer', tools: ['Tasker Auto-Apply'],
   },
-  lead_collect: {
+  email_collect: {
     icon: '📇', name: 'Lead Collector',
     desc: 'Auto-collect SMB / business contact emails via a Google Maps funnel: discover businesses for a query + region → scrape each website for emails → verify (MX + SMTP, no paid service) → dedupe → LLM qualifies ICP fit and writes a per-lead personalization hook for your outreach.',
     inputs: [
@@ -121,7 +121,7 @@ const AUTO_CATALOG = {
       { name: 'limit',    type: 'int (1–40)', desc: 'Number of businesses to discover' },
       { name: 'smtp_check', type: 'bool', desc: 'Run the SMTP RCPT probe during verification' },
     ],
-    crew: 'LeadCollectCrew', flow: 'LeadCollectFlow',
+    crew: 'EmailCollectCrew', flow: 'EmailCollectFlow',
     agent: 'Lead Qualifier', tools: ['Google Maps Search', 'Web Email Extractor', 'Email Verifier'],
   },
   pipeline: {
@@ -232,7 +232,7 @@ const FLOW_STEPS = {
     ..._QA_STEPS,
     { label: 'Done',     trigger: 'completed successfully' },
   ],
-  lead_collect: [
+  email_collect: [
     { label: 'Start',     trigger: 'Starting' },
     { label: 'Validate',  trigger: 'Payload validated' },
     { label: 'Discover',  trigger: 'Discovering businesses' },
@@ -970,7 +970,7 @@ const PIPELINE_TYPE_OPTIONS = [
   { value: 'email_sender',       label: 'Email Sender' },
   { value: 'google_sheet_reader', label: 'Sheet Reader' },
   { value: 'shopee_seller_scraper', label: 'Shopee Sellers' },
-  { value: 'lead_collect',        label: 'Lead Collector' },
+  { value: 'email_collect',        label: 'Lead Collector' },
 ];
 
 function renderPipelineStepFields(stepIdx, jobType) {
@@ -1015,7 +1015,7 @@ function renderPipelineStepFields(stepIdx, jobType) {
       return `${tipHtml}
         <div class="field"><label>Search Keyword</label><input type="text" class="ps-field" data-field="keyword" placeholder="e.g. 無線耳機" /></div>
         <div class="field"><label>Products (1–100)</label><input type="text" class="ps-field" data-field="limit" value="5" placeholder="5" /></div>`;
-    case 'lead_collect':
+    case 'email_collect':
       return `${tipHtml}
         <div class="field"><label>Business Query</label><input type="text" class="ps-field" data-field="query" placeholder="e.g. marketing agency" /></div>
         <div class="field"><label>Region</label><input type="text" class="ps-field" data-field="region" placeholder="e.g. Taipei" /></div>
@@ -1213,7 +1213,7 @@ runForm.addEventListener('submit', async (e) => {
     };
     jobName = `Tasker 提案: ${categories}${payload.dry_run ? ' (dry-run)' : ''}`;
 
-  } else if (jobType === 'lead_collect') {
+  } else if (jobType === 'email_collect') {
     const query = document.getElementById('lead-query').value.trim();
     if (!query) { showToast('Business query is required', 'error'); return; }
     const region   = document.getElementById('lead-region').value.trim();
@@ -1243,7 +1243,7 @@ runForm.addEventListener('submit', async (e) => {
       else if   (jt === 'x_scraper'        && missing('username'))      { showToast(`Step ${i + 1}: X Username is required`, 'error'); return; }
       else if   (jt === 'google_form_fill' && missing('company_name')) { showToast(`Step ${i + 1}: Company name is required`, 'error'); return; }
       else if   (jt === 'shopee_seller_scraper' && missing('keyword'))  { showToast(`Step ${i + 1}: Search keyword is required`, 'error'); return; }
-      else if   (jt === 'lead_collect' && missing('query'))            { showToast(`Step ${i + 1}: Business query is required`, 'error'); return; }
+      else if   (jt === 'email_collect' && missing('query'))            { showToast(`Step ${i + 1}: Business query is required`, 'error'); return; }
     }
     const typeNames = steps.map(s => (AUTO_CATALOG[s.job_type]?.name || s.job_type));
     payload  = { steps };
@@ -1712,9 +1712,9 @@ function renderHistory(runs, hasMore = false) {
             <div class="pane-toolbar">
               <button class="btn-copy" data-action="copy" data-run-id="${run.id}">Copy JSON</button>
               ${resultJson && resultJson.pdf_url ? `<a class="btn-copy" href="/api/runs/${run.id}/report.pdf" target="_blank" rel="noopener">📄 下載 PDF 報告</a>` : ''}
-              ${run.job_type === 'lead_collect' && resultJson ? `<a class="btn-copy" href="/api/runs/${run.id}/leads.csv">⬇ Download CSV</a>` : ''}
+              ${run.job_type === 'email_collect' && resultJson ? `<a class="btn-copy" href="/api/runs/${run.id}/leads.csv">⬇ Download CSV</a>` : ''}
             </div>
-            ${run.job_type === 'lead_collect' && resultJson ? renderLeadsTable(resultJson) : ''}
+            ${run.job_type === 'email_collect' && resultJson ? renderLeadsTable(resultJson) : ''}
             <pre>${escHtml(resultJson ? JSON.stringify(resultJson, null, 2) : (run.result || ''))}</pre>
           </div>
           ${flowPane}

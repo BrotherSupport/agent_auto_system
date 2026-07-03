@@ -47,10 +47,10 @@ Validate ~90% for free before ever sending:
 
 Textbook new job type — the 5-file touch (see `CLAUDE.md`):
 
-1. `executor.py` → `_FLOW_MAP["lead_collect"]`
-2. `flows/lead_collect_flow.py` → `Flow[LeadCollectState]` (state holds `query`,
+1. `executor.py` → `_FLOW_MAP["email_collect"]`
+2. `flows/email_collect_flow.py` → `Flow[EmailCollectState]` (state holds `query`,
    `region`, `industry`, `max_results`, `llm_provider/model`)
-3. `crews/lead_collect_crew/` → a small agent crew:
+3. `crews/email_collect_crew/` → a small agent crew:
    - **Discovery agent** (calls a Maps/search tool)
    - **Extractor agent** (Playwright tool — already used for `form_fill`)
    - **Verifier** — plain Python tool, no LLM needed (MX/SMTP)
@@ -91,7 +91,7 @@ then add directory / Facebook sources.
 
 ---
 
-## Implementation (shipped — `lead_collect` job type)
+## Implementation (shipped — `email_collect` job type)
 
 The Google Maps funnel is built. The funnel's discover → extract → verify → dedupe
 stages run **deterministically in the flow** (fast, cheap, reliable); only the
@@ -105,8 +105,8 @@ final ICP-fit + personalization-hook stage uses the LLM — mirroring the
 | `src/automation/tools/maps_search_tool.py` | Stage 1 — Playwright scrape of Google Maps: name, website, phone, address, category |
 | `src/automation/tools/email_extract_tool.py` | Stage 2 — urllib fetch of homepage + contact/about/impressum pages; mailto+text emails; junk filter; role-address ranking; single `info@` guess (never on social hosts) |
 | `src/automation/tools/email_verify_tool.py` | Stage 3 — syntax → MX (dnspython, A-record fallback) → best-effort SMTP RCPT probe (no send); high/medium/low confidence |
-| `src/automation/flows/lead_collect_flow.py` | `Flow[LeadCollectState]` — drives the funnel + dedupe, then the qualifier crew |
-| `src/automation/crews/lead_collect_crew/` | LLM qualifier (ICP fit 1-5 + hook), no tools |
+| `src/automation/flows/email_collect_flow.py` | `Flow[EmailCollectState]` — drives the funnel + dedupe, then the qualifier crew |
+| `src/automation/crews/email_collect_crew/` | LLM qualifier (ICP fit 1-5 + hook), no tools |
 | `executor.py` · `validator.py` · `evaluator.py` · `routers/system.py` · `ui/*` | wiring |
 
 **Dependency added:** `dnspython` (MX lookups).
@@ -125,9 +125,9 @@ confidence, mx_found, smtp_status, icp_fit, reason, hook), plus `businesses[]`
 
 ```bash
 uv run playwright install chromium          # one-time
-uv run pytest tests/unit/test_lead_collect_tools.py tests/unit/test_lead_collect_flow.py -v
+uv run pytest tests/unit/test_email_collect_tools.py tests/unit/test_email_collect_flow.py -v
 # then use the "Lead Collector" card in the UI, or POST /api/jobs with
-# job_type="lead_collect".
+# job_type="email_collect".
 ```
 
 **Known limits / next steps:** Google Maps DOM class names (`hfpxzc`, `DUwDvf`)

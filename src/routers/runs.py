@@ -163,7 +163,7 @@ def get_run_report(run_id: int):
     return FileResponse(path, media_type="application/pdf", filename=f"profit-health-{run_id}.pdf")
 
 
-# Column order for the lead_collect CSV export — most useful for outreach first.
+# Column order for the email_collect CSV export — most useful for outreach first.
 _LEAD_CSV_FIELDS = [
     "company", "email", "confidence", "icp_fit", "hook", "category", "phone",
     "website", "address", "region", "source", "mx_found", "smtp_status",
@@ -177,14 +177,14 @@ def get_run_leads_csv(
     session: Session = Depends(get_session),
     user: User = Depends(require_user),
 ):
-    """Export a lead_collect run's leads as CSV (UTF-8 BOM for Excel/中文)."""
+    """Export a email_collect run's leads as CSV (UTF-8 BOM for Excel/中文)."""
     run = session.get(Run, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     _assert_run_visible(run, user)
     job = session.get(Job, run.job_id)
-    if not job or job.job_type != "lead_collect":
-        raise HTTPException(status_code=400, detail="Run is not a lead_collect job")
+    if not job or job.job_type != "email_collect":
+        raise HTTPException(status_code=400, detail="Run is not a email_collect job")
 
     try:
         result = json.loads(run.result) if run.result else {}

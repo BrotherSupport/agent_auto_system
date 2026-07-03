@@ -11,7 +11,7 @@ with open(_CFG / "tasks.yaml") as _f:
     _TASKS = yaml.safe_load(_f)
 
 
-class LeadCollectCrew:
+class EmailCollectCrew:
     """Qualifies discovered businesses (ICP fit + personalization hook).
 
     Pure reasoning over the JSON list the flow passes in — no tools; the funnel's
