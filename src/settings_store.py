@@ -38,6 +38,7 @@ ALL_AUTOMATIONS = [
     "shopee_seller_scraper",
     "profit_health_check",
     "tasker_apply",
+    "lead_collect",
     "pipeline",
 ]
 

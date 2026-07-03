@@ -52,13 +52,16 @@ class MyCrew:
 
 ## Adding a New Job Type
 
-Touch exactly these 5 files:
+Touch exactly these 6 files:
 
 1. `src/automation/executor.py` — add to `_FLOW_MAP`
 2. `src/automation/flows/<name>_flow.py` — `Flow[StateModel]` subclass
 3. `src/automation/crews/<name>_crew/` — YAML configs + `crew.py`
 4. `src/routers/system.py` — add to `_CATALOG`
-5. `ui/app.js` — add to the UI form
+5. `ui/app.js` (+ `ui/index.html` fields) — add to the UI form
+6. `src/settings_store.py` — add to `ALL_AUTOMATIONS` (**required or the job type is
+   invisible in the UI and blocked server-side** by `is_automation_enabled` /
+   `assert_can_run` — this list is the allowlist, not just docs)
 
 **File-upload job types** (e.g. `profit_health_check`) — the UI POSTs files to `POST /api/uploads` (multipart, saved under `uploads/<uuid>/`), then creates the job with a small `{upload_id}` payload; the flow reads the files from disk. Keeps the payload JSON-only and re-runnable. See [doc/profit-health-check-design.md](doc/profit-health-check-design.md).
 
