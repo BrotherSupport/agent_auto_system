@@ -58,12 +58,20 @@ def _seed_admin() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _tel.setup(app)
+    # Off the event loop — these do network I/O (client auth + score-config
+    # registration) and must not block startup if Langfuse is slow/unreachable.
+    import asyncio
+
+    from src.automation.harness import langfuse_tracer
+    await asyncio.to_thread(langfuse_tracer.get_client)  # initialise + log once if configured
+    await asyncio.to_thread(langfuse_tracer.ensure_score_configs)  # typed score schemas (idempotent)
     init_db()
     _seed_admin()
     stale = reconcile_stale_runs()
     if stale:
         logger.warning("Marked %d stale run(s) as failed on startup", stale)
     yield
+    langfuse_tracer.flush()  # drain buffered traces on shutdown
 
 
 app = FastAPI(title="Agent Auto System", lifespan=lifespan)
@@ -114,8 +122,10 @@ def health():
         for name, cfg in _CATALOG.items()
     }
 
+    from src.automation.harness import langfuse_tracer
     return {
         "status": "ok" if db_ok else "degraded",
         "db": db_ok,
         "providers": providers,
+        "langfuse": langfuse_tracer.is_configured(),
     }

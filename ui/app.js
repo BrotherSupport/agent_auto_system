@@ -541,9 +541,11 @@ function adminSwitch(tab) {
     .forEach(b => b.classList.toggle('active', b.dataset.adm === tab));
   document.getElementById('admin-users').hidden = tab !== 'users';
   document.getElementById('admin-keys').hidden  = tab !== 'keys';
+  document.getElementById('admin-judge').hidden = tab !== 'judge';
   document.getElementById('admin-autos').hidden = tab !== 'autos';
   if (tab === 'users') renderAdminUsers();
   if (tab === 'keys')  renderAdminKeys();
+  if (tab === 'judge') renderAdminJudge();
   if (tab === 'autos') renderAdminAutos();
 }
 
@@ -759,6 +761,54 @@ async function renderAdminAutos() {
     const lp = document.getElementById('lp-autos');
     if (lp) delete lp.dataset.rendered;  // force the landing grid to re-filter
   });
+}
+
+async function renderAdminJudge() {
+  const el = document.getElementById('admin-judge');
+  el.innerHTML = '<div class="loading-state">Loading…</div>';
+  const resp = await fetch('/api/admin/eval-judge');
+  if (!resp.ok) { el.innerHTML = '<div class="loading-state">Failed to load.</div>'; return; }
+  const d = await resp.json();
+  const providers = d.providers || {};
+  const curP = d.provider || '';
+  const provOpts = [`<option value="">Auto — default (${escHtml(d.default.provider)} / ${escHtml(d.default.model)})</option>`]
+    .concat(Object.keys(providers).map(p =>
+      `<option value="${escHtml(p)}" ${p === curP ? 'selected' : ''}>${escHtml(p)}</option>`)).join('');
+
+  el.innerHTML = `<div class="admin-card">
+    <div class="muted" style="margin-bottom:0.6rem">
+      The <strong>Evaluate</strong> node scores every result with an LLM-as-judge (0–100 quality).
+      The judge always runs on a model <em>independent</em> of the one that ran the job.
+      Leave on <strong>Auto</strong> to use the default, with automatic fallback to any provider that has an API key.
+    </div>
+    <div class="key-input">
+      <select id="judge-provider">${provOpts}</select>
+      <select id="judge-model"></select>
+      <button class="btn-sm" id="judge-save">Save</button>
+    </div>
+    <div class="muted" style="font-size:0.75rem;margin-top:0.5rem">Set the provider's API key under the <strong>LLM Keys</strong> tab first.</div>
+  </div>`;
+
+  const provSel = el.querySelector('#judge-provider');
+  const modelSel = el.querySelector('#judge-model');
+  function fillModels() {
+    const p = provSel.value;
+    if (!p) { modelSel.innerHTML = '<option value="">—</option>'; modelSel.disabled = true; return; }
+    modelSel.disabled = false;
+    const ms = providers[p] || [];
+    modelSel.innerHTML = `<option value="">${escHtml(p)} default</option>` +
+      ms.map(m => `<option value="${escHtml(m)}" ${m === d.model ? 'selected' : ''}>${escHtml(m)}</option>`).join('');
+  }
+  fillModels();
+  provSel.onchange = fillModels;
+  el.querySelector('#judge-save').onclick = async () => {
+    const r = await fetch('/api/admin/eval-judge', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider: provSel.value || null, model: modelSel.value || null }),
+    });
+    if (!r.ok) { alert((await r.json().catch(() => ({}))).detail || 'Failed'); return; }
+    renderAdminJudge();
+  };
 }
 
 // Wire the user create/edit modal once (its markup is static).

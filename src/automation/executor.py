@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 from sqlmodel import Session
 
+from src.automation.harness import langfuse_tracer
 from src.automation.harness.costs import estimate_cost
 from src.automation.harness.evaluator import evaluate
 from src.automation.harness.provider import (
@@ -149,7 +150,28 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
         append_log(run_id, f"Using {effective_provider} / {effective_model}")
 
     tokens_in = tokens_out = 0
+    cost = 0.0
     vr = None
+    ev = None  # set before every _trace_run call site; init keeps the closure safe
+
+    async def _trace_run(status: str, result: dict) -> None:
+        # Emit a Langfuse trace off the event loop (record_run flushes over the
+        # network). No-op + never raises when Langfuse isn't configured.
+        url = await asyncio.to_thread(
+            langfuse_tracer.record_run,
+            run_id=run_id, job_type=job_type, status=status,
+            provider=effective_provider, model=effective_model,
+            payload=payload, result=result,
+            tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost,
+            duration_secs=time.monotonic() - _t0,
+            eval_score=ev.score if ev else None,
+            eval_confidence=ev.confidence if ev else None,
+            eval_notes=ev.notes if ev else "",
+            eval_method=ev.method if ev else "",
+            judge_model=ev.judge_model if ev else "",
+        )
+        if url:
+            append_log(run_id, f"Langfuse trace: {url}")
 
     for attempt in range(max_retries + 1):
         if attempt > 0:
@@ -192,11 +214,13 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
                 _record_run(job_type=job_type, status="failed", duration_secs=time.monotonic() - _t0,
                             provider=effective_provider, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost)
                 _update_run(run_id, "failed", result, **metrics)
+                await _trace_run("failed", result)
             else:
                 append_log(run_id, "Automation completed successfully!")
                 _record_run(job_type=job_type, status="success", duration_secs=time.monotonic() - _t0,
                             provider=effective_provider, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost)
                 _update_run(run_id, "success", result, **metrics)
+                await _trace_run("success", result)
             return
 
         except asyncio.CancelledError:
@@ -218,3 +242,4 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
             _record_run(job_type=job_type, status="failed", duration_secs=time.monotonic() - _t0,
                         provider=effective_provider, tokens_in=tokens_in, tokens_out=tokens_out, cost_usd=cost)
             _update_run(run_id, "failed", {"error": str(exc)}, **metrics)
+            await _trace_run("failed", {"error": str(exc)})
