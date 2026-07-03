@@ -15,6 +15,7 @@ import json
 import logging
 import os
 from datetime import UTC, datetime
+from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy.exc import SQLAlchemyError
@@ -79,7 +80,9 @@ def delete_setting(key: str) -> None:
 
 # ── Encryption ────────────────────────────────────────────────────────────────
 
+@lru_cache(maxsize=1)
 def _fernet() -> Fernet:
+    # APP_SECRET is static for the process lifetime, so derive the key once.
     secret = os.getenv("APP_SECRET") or "dev-insecure-change-me"
     key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
     return Fernet(key)

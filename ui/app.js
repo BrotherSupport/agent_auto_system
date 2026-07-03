@@ -475,7 +475,7 @@ function bootApp() {
 const _origFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
   const resp = await _origFetch(input, init);
-  const url = typeof input === 'string' ? input : (input && input.url) || '';
+  const url = typeof input === 'string' ? input : (input && (input.url || input.href)) || '';
   if (resp.status === 401 && url.includes('/api/') && !url.includes('/api/auth/login')) {
     showLogin();
   }
