@@ -1712,7 +1712,9 @@ function renderHistory(runs, hasMore = false) {
             <div class="pane-toolbar">
               <button class="btn-copy" data-action="copy" data-run-id="${run.id}">Copy JSON</button>
               ${resultJson && resultJson.pdf_url ? `<a class="btn-copy" href="/api/runs/${run.id}/report.pdf" target="_blank" rel="noopener">📄 下載 PDF 報告</a>` : ''}
+              ${run.job_type === 'lead_collect' && resultJson ? `<a class="btn-copy" href="/api/runs/${run.id}/leads.csv">⬇ Download CSV</a>` : ''}
             </div>
+            ${run.job_type === 'lead_collect' && resultJson ? renderLeadsTable(resultJson) : ''}
             <pre>${escHtml(resultJson ? JSON.stringify(resultJson, null, 2) : (run.result || ''))}</pre>
           </div>
           ${flowPane}
@@ -1768,6 +1770,31 @@ function initElapsedTimers() {
 function stopElapsedTimer(runId) {
   const id = elapsedTimers.get(runId);
   if (id !== undefined) { clearInterval(id); elapsedTimers.delete(runId); }
+}
+
+// ── Lead Collector result table ───────────────────────────────────────────────
+
+function renderLeadsTable(rj) {
+  const leads = Array.isArray(rj.leads) ? rj.leads : [];
+  const summary = `<div class="leads-summary">
+      Discovered <b>${rj.discovered_count ?? 0}</b> · with website
+      <b>${rj.with_website ?? 0}</b> · verified leads
+      <b>${rj.lead_count ?? leads.length}</b></div>`;
+  if (!leads.length) {
+    return summary + '<div class="leads-summary">No contact emails collected.</div>';
+  }
+  const conf = c => `<span class="lead-conf lead-conf-${escHtml(c || 'low')}">${escHtml(c || '—')}</span>`;
+  const rows = leads.map(l => `<tr>
+      <td>${escHtml(l.company || '')}</td>
+      <td><a href="mailto:${escHtml(l.email || '')}">${escHtml(l.email || '')}</a>${l.source === 'guessed' ? ' <span class="lead-guessed">guessed</span>' : ''}</td>
+      <td>${conf(l.confidence)}</td>
+      <td style="text-align:center">${l.icp_fit ?? ''}</td>
+      <td>${escHtml(l.hook || '')}</td>
+      <td>${l.website ? `<a href="${escHtml(l.website)}" target="_blank" rel="noopener">site</a>` : ''}</td>
+    </tr>`).join('');
+  return summary + `<div class="leads-table-wrap"><table class="leads-table">
+      <thead><tr><th>Company</th><th>Email</th><th>Conf.</th><th>ICP</th><th>Hook</th><th>Site</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
 }
 
 // ── Copy result JSON ──────────────────────────────────────────────────────────

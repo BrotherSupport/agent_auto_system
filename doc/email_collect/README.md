@@ -117,6 +117,10 @@ final ICP-fit + personalization-hook stage uses the LLM — mirroring the
 confidence, mx_found, smtp_status, icp_fit, reason, hook), plus `businesses[]`
 (all discovered) and non-fatal `warnings[]`.
 
+**Output UX:** the run detail renders a leads table (company · email · confidence
+· ICP · hook · site) and a **Download CSV** button →
+`GET /api/runs/{id}/leads.csv` (UTF-8 BOM so Excel reads 中文 correctly).
+
 **Run it:**
 
 ```bash

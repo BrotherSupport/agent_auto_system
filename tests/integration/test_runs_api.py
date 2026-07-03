@@ -1,7 +1,7 @@
 import json
 from unittest.mock import AsyncMock
 
-from src.models import Run
+from src.models import Job, Run
 
 
 async def test_trigger_run_returns_202(client, seed_job, mocker):
@@ -92,3 +92,58 @@ async def test_sse_stream_returns_event_stream(client, db_session, seed_job):
     assert resp.status_code == 200
     assert "text/event-stream" in resp.headers["content-type"]
     assert b'"status": "success"' in resp.content
+
+
+# ── lead_collect CSV export ─────────────────────────────────────────────────────
+
+def _seed_lead_run(db_session, result: dict):
+    job = Job(name="Leads", job_type="lead_collect", payload=json.dumps({"query": "cafe"}))
+    db_session.add(job)
+    db_session.commit()
+    db_session.refresh(job)
+    run = Run(job_id=job.id, status="success", result=json.dumps(result))
+    db_session.add(run)
+    db_session.commit()
+    db_session.refresh(run)
+    return run
+
+
+async def test_leads_csv_export(client, db_session):
+    run = _seed_lead_run(db_session, {
+        "discovered_count": 2, "with_website": 1, "lead_count": 1,
+        "leads": [{
+            "company": "隱寓咖啡", "email": "info@acme.com", "confidence": "medium",
+            "icp_fit": 4, "hook": "Automate your bookings", "website": "https://acme.com",
+        }],
+    })
+    resp = await client.get(f"/api/runs/{run.id}/leads.csv")
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers["content-type"]
+    assert "attachment" in resp.headers["content-disposition"]
+    body = resp.content.decode("utf-8-sig")  # strip BOM
+    lines = body.strip().splitlines()
+    assert lines[0].startswith("company,email,confidence,icp_fit,hook")
+    assert "info@acme.com" in body
+    assert "隱寓咖啡" in body  # UTF-8 round-trips
+
+
+async def test_leads_csv_rejects_non_lead_job(client, db_session, seed_job):
+    run = Run(job_id=seed_job.id, status="success", result=json.dumps({"submitted": True}))
+    db_session.add(run)
+    db_session.commit()
+    db_session.refresh(run)
+    resp = await client.get(f"/api/runs/{run.id}/leads.csv")
+    assert resp.status_code == 400
+
+
+async def test_leads_csv_run_not_found(client):
+    resp = await client.get("/api/runs/9999/leads.csv")
+    assert resp.status_code == 404
+
+
+async def test_leads_csv_empty_leads(client, db_session):
+    run = _seed_lead_run(db_session, {"discovered_count": 0, "lead_count": 0, "leads": []})
+    resp = await client.get(f"/api/runs/{run.id}/leads.csv")
+    assert resp.status_code == 200
+    # Header row only, no data rows.
+    assert len(resp.content.decode("utf-8-sig").strip().splitlines()) == 1
