@@ -73,7 +73,6 @@ def test_evaluate_llm_path_parses_score(mocker):
 
 def test_evaluate_uses_independent_judge_not_run_model(mocker):
     """The judge candidate list must lead with a model != the run's model."""
-    from src.automation.harness import provider as prov
     fake = _FakeLLM('{"score": 80, "confidence": 0.9, "notes": "ok"}')
     calls: list[tuple] = []
 
