@@ -76,6 +76,7 @@ _FLOW_MAP = {
     "shopee_seller_scraper": ("src.automation.flows.shopee_seller_flow",  "ShopeeSellerFlow",  "Loading Shopee session..."),
     "profit_health_check":   ("src.automation.flows.profit_health_flow",   "ProfitHealthFlow",  "解析 CSV，計算利潤健檢..."),
     "tasker_apply":          ("src.automation.flows.tasker_apply_flow",    "TaskerApplyFlow",   "Loading tasker.com.tw session..."),
+    "lead_collect":          ("src.automation.flows.lead_collect_flow",    "LeadCollectFlow",   "Starting lead-collection funnel..."),
 }
 
 

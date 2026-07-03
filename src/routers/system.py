@@ -160,6 +160,18 @@ _CATALOG: dict = {
             "job_type": "tasker_apply",
             "source_file": "src/automation/crews/tasker_apply_crew/config/agents.yaml",
         },
+        {
+            "id": "lead_qualifier_agent",
+            "name": "Lead Qualifier",
+            "role": "B2B Lead Qualifier & Outreach Strategist",
+            "goal": "Score how well each discovered business fits the offer's ICP and write one concrete personalization hook for a cold email.",
+            "backstory": "Sharp B2B sales strategist who turns raw prospect lists into ready-to-contact leads. Reasons only from the company, website, category, and region provided — never invents facts — and writes specific, human hooks. Outputs clean JSON.",
+            "tools": [],
+            "crew": "LeadCollectCrew",
+            "task": "qualify_task",
+            "job_type": "lead_collect",
+            "source_file": "src/automation/crews/lead_collect_crew/config/agents.yaml",
+        },
     ],
     "tools": [
         {
@@ -302,6 +314,42 @@ _CATALOG: dict = {
             ],
             "used_by": ["TaskerApplyFlow"],
             "source_file": "src/automation/tools/tasker_apply_tool.py",
+        },
+        {
+            "id": "maps_search",
+            "name": "Google Maps Search",
+            "class": "MapsSearchTool",
+            "description": "Search Google Maps for businesses matching a query in a region (headless Chromium): scroll the results feed and open each place panel to read name, website, phone, address, and category. The website feeds the email-extraction stage. Returns partial results + warnings instead of failing on markup shifts.",
+            "inputs": [
+                {"name": "query",  "type": "str", "description": "What to search, e.g. 'marketing agency'"},
+                {"name": "region", "type": "str", "description": "Where, e.g. 'Taipei' / 'Berlin' / 'Austin, TX'"},
+                {"name": "limit",  "type": "int (1–40)", "description": "Number of listings to collect"},
+            ],
+            "used_by": ["LeadCollectFlow"],
+            "source_file": "src/automation/tools/maps_search_tool.py",
+        },
+        {
+            "id": "web_email_extract",
+            "name": "Web Email Extractor",
+            "class": "WebEmailExtractTool",
+            "description": "Fetch a business website (homepage + common contact/about/impressum pages) and extract contact emails from mailto: links and page text, filtering tracking/CDN/placeholder junk and ranking role addresses (info@, contact@…) first. Guesses role addresses from the domain if none are published (flagged guessed).",
+            "inputs": [
+                {"name": "website", "type": "str", "description": "Business website URL"},
+            ],
+            "used_by": ["LeadCollectFlow"],
+            "source_file": "src/automation/tools/email_extract_tool.py",
+        },
+        {
+            "id": "email_verify",
+            "name": "Email Verifier",
+            "class": "EmailVerifyTool",
+            "description": "Verify emails for free — syntax, MX-record lookup (dnspython, A-record fallback), and a best-effort SMTP RCPT probe that never sends mail. Returns per-email deliverability signals and a high/medium/low confidence label. Port-25-blocked / greylisted probes report 'unknown', never a failure.",
+            "inputs": [
+                {"name": "emails",     "type": "list[str]", "description": "Addresses to verify"},
+                {"name": "smtp_check", "type": "bool",      "description": "Run the SMTP RCPT probe (default true)"},
+            ],
+            "used_by": ["LeadCollectFlow"],
+            "source_file": "src/automation/tools/email_verify_tool.py",
         },
     ],
     "crews": [
@@ -475,6 +523,23 @@ _CATALOG: dict = {
                 }
             ],
             "source_file": "src/automation/crews/tasker_apply_crew/crew.py",
+        },
+        {
+            "id": "lead_collect_crew",
+            "name": "LeadCollectCrew",
+            "process": "sequential",
+            "agents": ["lead_qualifier_agent"],
+            "job_type": "lead_collect",
+            "flow": "LeadCollectFlow",
+            "tasks": [
+                {
+                    "name": "qualify_task",
+                    "description": "Score ICP fit (1–5) and write one personalization hook per discovered business. Discovery, email extraction, and verification are done deterministically in LeadCollectFlow via the maps_search / web_email_extract / email_verify tools.",
+                    "expected_output": '[{"i": 0, "icp_fit": 4, "reason": "...", "hook": "..."}]',
+                    "config_file": "src/automation/crews/lead_collect_crew/config/tasks.yaml",
+                }
+            ],
+            "source_file": "src/automation/crews/lead_collect_crew/crew.py",
         },
     ],
     "workflows": [
@@ -734,6 +799,40 @@ _CATALOG: dict = {
                 },
             ],
             "source_file": "src/automation/flows/tasker_apply_flow.py",
+        },
+        {
+            "id": "lead_collect_flow",
+            "name": "LeadCollectFlow",
+            "job_type": "lead_collect",
+            "crew": "LeadCollectCrew (ICP fit + hook) + maps_search / web_email_extract / email_verify tools",
+            "state_fields": [
+                {"name": "query",      "type": "str",  "default": ""},
+                {"name": "region",     "type": "str",  "default": ""},
+                {"name": "industry",   "type": "str",  "default": ""},
+                {"name": "offer",      "type": "str",  "default": ""},
+                {"name": "limit",      "type": "int",  "default": 15},
+                {"name": "smtp_check", "type": "bool", "default": True},
+                {"name": "run_id",     "type": "int",  "default": 0},
+            ],
+            "steps": [
+                {
+                    "name": "validate_payload",
+                    "decorator": "@start()",
+                    "description": "Requires query; folds industry into the search term.",
+                },
+                {
+                    "name": "run_funnel",
+                    "decorator": "@listen(validate_payload)",
+                    "description": (
+                        "Runs the funnel deterministically: DISCOVER businesses on Google "
+                        "Maps (maps_search) → EXTRACT emails from each website "
+                        "(web_email_extract) → VERIFY (email_verify: syntax/MX/SMTP) → "
+                        "dedupe & rank. Then QUALIFIES leads with LeadCollectCrew (ICP fit "
+                        "+ personalization hook). Returns discovered/lead counts + leads[]."
+                    ),
+                },
+            ],
+            "source_file": "src/automation/flows/lead_collect_flow.py",
         },
     ],
 }
