@@ -21,10 +21,23 @@ the persisted session (created once via `scripts/tasker_login.py`).
 
 Flow per run:
   1. Load tasker.com.tw with the saved session; capture the Bearer token.
-  2. Collect open case ids from /cases?selected_categories=<ids> (DOM).
-  3. For each case: check eligibility, skip if already proposed / own / expired,
-     generate a 提案說明 via `proposal_fn`, and POST the proposal — unless
-     dry_run, which prepares everything but never submits (default).
+  2. Fetch my real submitted-proposals list (/api/member/tasker/proposal
+     ?status=proposed) — the ONLY reliable "already applied" signal. The
+     per-case `proposal_content` field is just a pre-fill template the site
+     returns for every proposable case, so it must NOT be used for this.
+  3. Page through /cases?selected_categories=<ids>&page=N (DOM), auto-advancing
+     until `max_cases` cases have actually been applied (prepared, in dry-run),
+     the listing is exhausted, or an account-wide block is hit.
+  4. For each case: skip if already proposed (via the list above) or ineligible
+     (/proposal/check → can_propose), generate a 提案說明 via `proposal_fn`, and
+     POST the proposal — unless dry_run, which prepares but never submits.
+  5. After a POST the site reports "status 0", RE-QUERY the case and only count
+     it as applied once the site confirms it (can_propose flips to false). A
+     "status 0" response alone is not trusted.
+
+Known site status codes: proposal POST returns 2700271 when the account is out
+of proposal points / has hit its proposal quota — no submission succeeds until
+points are topped up, regardless of this tool.
 
 `run_tasker_apply(...)` is the primary entry point (the flow calls it directly
 with an LLM-backed proposal_fn). `TaskerApplyTool` is a thin BaseTool wrapper
@@ -53,14 +66,19 @@ _CHECK_ERRORS = {
     "1230075": "not eligible to propose (您尚未具備提案資格)",
     "4030075": "case expired (此案件已失效)",
     "4030213": "your own case (您無法對自己的案件提案)",
+    "4700246": "cannot propose (案件不可提案：可能已關閉或不符資格)",
 }
 # postProposal error statuses → human reason
 _SUBMIT_ERRORS = {
     "2700071": "proposal text format error (提案說明格式錯誤)",
     "2700247": "min price missing/invalid (初次報價最小值未填或格式錯誤)",
-    "2700248": "max price missing/invalid (初次報價最大值未填或格式錯誤)",
+    "2700248": "max price missing/invalid (初次報價最大值/範圍錯誤，最大值須大於最小值)",
+    "2700271": "proposal points/quota exhausted (提案點數不足或已達提案上限，無法送出)",
     "1230075": "not eligible to propose (您尚未具備提案資格)",
 }
+# Submit statuses that mean *every* further submission will also fail (a global
+# account limit, not a per-case problem) — stop scanning when we hit one.
+_QUOTA_BLOCK_STATUSES = {"2700271", "1230075"}
 
 _DEFAULT_TEMPLATE = (
     "您好，我對這個案件很有興趣。我具備完成此需求的相關經驗，"
@@ -142,13 +160,19 @@ def _headers(bearer: str) -> dict:
     }
 
 
-# ── case discovery (DOM) ─────────────────────────────────────────────────────
+# ── case discovery (DOM, paginated) ──────────────────────────────────────────
 
-def _collect_case_ids(page, category_ids: str, max_cases: int, log: Callable) -> list[str]:
+def _collect_page_case_ids(page, category_ids: str, page_num: int,
+                           log: Callable) -> list[str]:
+    """Case ids on a single listing page (?page=N). The listing lazy-loads on
+    scroll, so we scroll until the count stops growing for that page."""
+    url = f"{_BASE}/cases?selected_categories={category_ids}&page={page_num}"
+    page.goto(url, wait_until="domcontentloaded", timeout=30000)
+    page.wait_for_timeout(1500)
     seen: list[str] = []
     seen_set: set[str] = set()
     prev = -1
-    for _ in range(12):
+    for _ in range(8):
         try:
             hrefs = page.evaluate(
                 "() => Array.from(document.querySelectorAll('a[href*=\"/cases/\"]'))"
@@ -164,10 +188,8 @@ def _collect_case_ids(page, category_ids: str, max_cases: int, log: Callable) ->
             if cid not in seen_set:
                 seen_set.add(cid)
                 seen.append(cid)
-        if len(seen) >= max_cases:
-            break
         if len(seen) == prev:
-            break
+            break  # this page fully loaded
         prev = len(seen)
         # window.scrollBy is more deterministic than mouse.wheel (no dependency
         # on cursor position over the scroll container) for triggering lazy load.
@@ -176,8 +198,8 @@ def _collect_case_ids(page, category_ids: str, max_cases: int, log: Callable) ->
         except Exception:  # noqa: BLE001
             page.mouse.wheel(0, 3000)
         page.wait_for_timeout(1000)
-    log(f"Found {len(seen)} case link(s) in category {category_ids}")
-    return seen[:max_cases]
+    log(f"Page {page_num}: found {len(seen)} case link(s)")
+    return seen
 
 
 # ── API calls ────────────────────────────────────────────────────────────────
@@ -188,6 +210,45 @@ def _get_json(ctx_request, bearer: str, path: str) -> dict | None:
         return resp.json()
     except Exception:  # noqa: BLE001
         return None
+
+
+def _my_proposed_ids(ctx_request, bearer: str, log: Callable,
+                     max_pages: int = 10) -> set[str]:
+    """The set of tk_no I have *actually* submitted a proposal to. This is the
+    authoritative 'already applied' signal — the per-case `proposal_content`
+    field is only a pre-fill template and must NOT be used for this."""
+    ids: set[str] = set()
+    for pg in range(1, max_pages + 1):
+        d = _get_json(ctx_request, bearer,
+                      f"/api/member/tasker/proposal?status=proposed&page={pg}")
+        if not isinstance(d, dict) or str(d.get("status")) != "0":
+            break
+        data = d.get("data") if isinstance(d.get("data"), dict) else {}
+        rows = data.get("list") or []
+        if not rows:
+            break
+        for row in rows:
+            tk = row.get("tk_no")
+            if tk:
+                ids.add(str(tk).upper())
+        if pg >= int(data.get("total_pages") or 1):
+            break
+    log(f"You have {len(ids)} existing proposal(s) on record.")
+    return ids
+
+
+def _confirm_recorded(ctx_request, bearer: str, cid: str) -> bool:
+    """Re-query the site after a submit to confirm it was truly recorded: an
+    applied case flips to can_propose=false (and its proposal endpoint returns
+    the 4700246 'already handled' status). Only trust success when the site
+    reflects it — a 'status 0' POST response alone is not enough."""
+    c = _get_json(ctx_request, bearer, f"/api/issue/{cid}/proposal/check")
+    if isinstance(c, dict) and str(c.get("status")) == "0":
+        data = c.get("data") if isinstance(c.get("data"), dict) else {}
+        if data.get("can_propose") is False:
+            return True
+    d = _get_json(ctx_request, bearer, f"/api/issue/{cid}/proposal")
+    return isinstance(d, dict) and str(d.get("status")) == "4700246"
 
 
 def _case_info(ctx_request, bearer: str, cid: str) -> dict:
@@ -221,8 +282,12 @@ def _check(ctx_request, bearer: str, cid: str) -> tuple[bool, str]:
 
 
 def _submit(ctx_request, bearer: str, cid: str, min_charge: int, max_charge: int,
-            content: str) -> tuple[bool, str]:
-    """POST the proposal as multipart form-data. Returns (ok, message)."""
+            content: str) -> tuple[bool, str, str | None]:
+    """POST the proposal as multipart form-data. Returns (ok, message, status).
+
+    STRICT success: only ``resp.status == 200`` AND site ``status == "0"``. A
+    non-JSON body or any other status is a failure — we never infer success from
+    the HTTP code alone (a plain 200 page is not a recorded proposal)."""
     try:
         resp = ctx_request.post(
             f"{_API}/api/issue/{cid}/proposal",
@@ -236,17 +301,19 @@ def _submit(ctx_request, bearer: str, cid: str, min_charge: int, max_charge: int
             timeout=30000,
         )
     except Exception as exc:  # noqa: BLE001
-        return False, f"{type(exc).__name__}: {exc}"
+        return False, f"{type(exc).__name__}: {exc}", None
+    status: str | None = None
     try:
         d = resp.json()
-        if not isinstance(d, dict):
-            d = {}
+        if isinstance(d, dict):
+            status = str(d.get("status"))
     except Exception:  # noqa: BLE001
-        return (resp.status == 200), f"HTTP {resp.status}"
-    status = str(d.get("status"))
+        d = None
     if resp.status == 200 and status == "0":
-        return True, "ok"
-    return False, _SUBMIT_ERRORS.get(status, f"submit failed (status {status})")
+        return True, "site accepted (status 0)", status
+    reason = _SUBMIT_ERRORS.get(
+        status, f"submit failed (HTTP {resp.status}, status {status})")
+    return False, reason, status
 
 
 # ── orchestration ────────────────────────────────────────────────────────────
@@ -261,8 +328,14 @@ def run_tasker_apply(
     proposal_fn: Callable[[str, str], str] | None = None,
     log: Callable[[str], None] | None = None,
     state_path: str | None = None,
+    max_pages: int = 20,
 ) -> dict:
-    """Log in and apply to open cases in the given category. See module docstring."""
+    """Log in and apply to open cases in the given category. See module docstring.
+
+    ``max_cases`` is the number of cases to actually apply to (prepare, in
+    dry-run); the scanner auto-advances through listing pages — skipping cases
+    already proposed / not eligible — until it reaches that target, runs out of
+    new cases (up to ``max_pages``), or hits an account-wide block."""
     from playwright.sync_api import sync_playwright
 
     log = log or _noop
@@ -270,6 +343,7 @@ def run_tasker_apply(
     state_path = state_path or os.getenv("TASKER_STORAGE_STATE", DEFAULT_STATE_PATH)
     username = os.getenv("TASKER_USERNAME", "")  # noqa: F841 (kept for parity/logs)
     max_cases = max(1, min(int(max_cases), 50))
+    max_pages = max(1, min(int(max_pages), 50))
 
     base = {"category_ids": category_ids, "dry_run": dry_run,
             "applied": [], "skipped": []}
@@ -302,79 +376,130 @@ def run_tasker_apply(
                 )}
             log("✓ Authenticated with tasker.com.tw API")
 
-            case_ids = _collect_case_ids(page, category_ids, max_cases, log)
-            if not case_ids:
-                return {**base, "cases_found": 0,
-                        "summary": f"No open cases found for category {category_ids}."}
-
             if min_charge < _MIN_CHARGE_FLOOR:
                 log(f"⚠ min_charge {min_charge} is below the site minimum "
                     f"{_MIN_CHARGE_FLOOR}; submissions may be rejected.")
 
+            # Authoritative 'already applied' set — never infer this from the
+            # per-case proposal_content field (that's just a pre-fill template).
+            my_proposed = _my_proposed_ids(ctx.request, bearer, log)
+
+            # `max_cases` is the number of cases to ACTUALLY apply to (prepare in
+            # dry-run). We page through the listing until we hit that target, run
+            # out of new cases, or hit an account-wide block.
             applied: list[dict] = []
             skipped: list[dict] = []
-            for i, cid in enumerate(case_ids, 1):
-                url = f"{_BASE}/cases/{cid}"
-                log(f"[{i}/{len(case_ids)}] {cid}")
-                entry = {"case_id": cid, "url": url}
-                try:
-                    info = _case_info(ctx.request, bearer, cid)
-                    entry["title"] = (info.get("title") or cid)[:200]
+            seen: set[str] = set()
+            scanned = 0
+            pages_scanned = 0
+            block_msg: str | None = None
+            page_num = 1
 
-                    if info.get("proposal_content"):
-                        entry.update(status="skipped", reason="already proposed")
-                        log(f"↷ {cid}: already proposed — skipping")
+            while len(applied) < max_cases and page_num <= max_pages:
+                page_ids = _collect_page_case_ids(page, category_ids, page_num, log)
+                new_ids = [c for c in page_ids if c not in seen]
+                if not new_ids:
+                    log(f"No new cases on page {page_num}; reached the end.")
+                    break
+                seen.update(new_ids)
+                pages_scanned += 1
+
+                for cid in new_ids:
+                    if len(applied) >= max_cases:
+                        break
+                    scanned += 1
+                    url = f"{_BASE}/cases/{cid}"
+                    log(f"[{len(applied)}/{max_cases} applied | scan #{scanned}] {cid}")
+                    entry = {"case_id": cid, "url": url}
+                    try:
+                        if cid in my_proposed:
+                            entry.update(status="skipped", reason="already proposed")
+                            log(f"↷ {cid}: already proposed — next")
+                            skipped.append(entry)
+                            continue
+
+                        ok, reason = _check(ctx.request, bearer, cid)
+                        if not ok:
+                            entry.update(status="skipped", reason=reason)
+                            log(f"↷ {cid}: {reason} — next")
+                            skipped.append(entry)
+                            continue
+
+                        info = _case_info(ctx.request, bearer, cid)
+                        entry["title"] = (info.get("title") or cid)[:200]
+
+                        proposal = (proposal_fn(info.get("title", ""),
+                                                info.get("content", "")) or "").strip() \
+                            or _DEFAULT_TEMPLATE
+                        entry.update(min_charge=min_charge, max_charge=max_charge,
+                                     proposal=proposal[:500])
+
+                        if dry_run:
+                            entry.update(status="prepared", submitted=False,
+                                         reason="dry_run")
+                            log(f"✓ {cid}: proposal prepared (dry-run, NOT submitted)")
+                            applied.append(entry)
+                            continue
+
+                        sok, smsg, sstatus = _submit(ctx.request, bearer, cid,
+                                                     min_charge, max_charge, proposal)
+                        if not sok:
+                            entry.update(status="failed", submitted=False, reason=smsg)
+                            log(f"✗ {cid}: submit failed — {smsg}")
+                            skipped.append(entry)
+                            if sstatus in _QUOTA_BLOCK_STATUSES:
+                                block_msg = smsg
+                                log("■ Account-wide block hit — every further "
+                                    "submission would also fail; stopping.")
+                                break
+                            continue
+
+                        # Site said 'accepted' — now CONFIRM it was truly recorded
+                        # before claiming success (per user's requirement).
+                        if _confirm_recorded(ctx.request, bearer, cid):
+                            entry.update(status="submitted", submitted=True,
+                                         confirmation=smsg)
+                            log(f"✓ {cid}: 提案 submitted AND confirmed by site")
+                            applied.append(entry)
+                        else:
+                            entry.update(
+                                status="unconfirmed", submitted=False,
+                                reason=("site returned success but the proposal was "
+                                        "NOT confirmed on re-check — treating as failed"))
+                            log(f"⚠ {cid}: submit unconfirmed — NOT counting as applied")
+                            skipped.append(entry)
+                    except Exception as exc:  # noqa: BLE001 — one bad case shouldn't stop the run
+                        entry.update(status="failed", reason=f"{type(exc).__name__}: {exc}")
+                        log(f"✗ {cid}: {type(exc).__name__}: {exc}")
                         skipped.append(entry)
-                        continue
 
-                    ok, reason = _check(ctx.request, bearer, cid)
-                    if not ok:
-                        entry.update(status="skipped", reason=reason)
-                        log(f"↷ {cid}: {reason} — skipping")
-                        skipped.append(entry)
-                        continue
+                if block_msg:
+                    break
+                page_num += 1
 
-                    proposal = (proposal_fn(info.get("title", ""),
-                                            info.get("content", "")) or "").strip() \
-                        or _DEFAULT_TEMPLATE
-                    entry.update(min_charge=min_charge, max_charge=max_charge,
-                                 proposal=proposal[:500])
-
-                    if dry_run:
-                        entry.update(status="prepared", submitted=False, reason="dry_run")
-                        log(f"✓ {cid}: proposal prepared (dry-run, NOT submitted)")
-                        applied.append(entry)
-                        continue
-
-                    sok, smsg = _submit(ctx.request, bearer, cid,
-                                        min_charge, max_charge, proposal)
-                    if sok:
-                        entry.update(status="submitted", submitted=True)
-                        log(f"✓ {cid}: 提案 submitted")
-                        applied.append(entry)
-                    else:
-                        entry.update(status="failed", submitted=False, reason=smsg)
-                        log(f"✗ {cid}: submit failed — {smsg}")
-                        skipped.append(entry)
-                except Exception as exc:  # noqa: BLE001 — one bad case shouldn't stop the run
-                    entry.update(status="failed", reason=f"{type(exc).__name__}: {exc}")
-                    log(f"✗ {cid}: {type(exc).__name__}: {exc}")
-                    skipped.append(entry)
+            if scanned == 0:
+                return {**base, "cases_found": 0,
+                        "summary": f"No open cases found for category {category_ids}."}
 
             submitted_n = sum(1 for e in applied if e.get("submitted"))
-            verb = "prepared (dry-run)" if dry_run else "submitted"
+            verb = "prepared (dry-run)" if dry_run else "submitted & confirmed"
             summary = (
-                f"Category {category_ids}: {len(case_ids)} case(s) scanned, "
-                f"{len(applied)} {verb}, {len(skipped)} skipped."
+                f"Category {category_ids}: {scanned} case(s) scanned across "
+                f"{pages_scanned} page(s), {len(applied)} {verb}, "
+                f"{len(skipped)} skipped."
             )
+            if block_msg:
+                summary += f" Stopped early: {block_msg}."
             return {
                 **base,
-                "cases_found": len(case_ids),
+                "cases_found": scanned,
+                "pages_scanned": pages_scanned,
                 "applied": applied,
                 "skipped": skipped,
                 "applied_count": len(applied),
                 "submitted_count": submitted_n,
                 "skipped_count": len(skipped),
+                "blocked": block_msg,
                 "summary": summary,
             }
         finally:

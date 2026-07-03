@@ -98,12 +98,12 @@ const AUTO_CATALOG = {
   },
   tasker_apply: {
     icon: '🧰', name: 'Tasker 自動提案',
-    desc: 'Log in to tasker.com.tw and auto-apply (提案) to open cases in a category: fill the 初次估價 min/max charge, write a tailored 提案說明 per case with AI, skip already-applied cases, and submit. Dry-run by default — prepares proposals without clicking 送出提案.',
+    desc: 'Log in to tasker.com.tw and auto-apply (提案) to open cases in a category: fill the 初次估價 min/max charge, write a tailored 提案說明 per case with AI, and submit. Auto-advances through listing pages, skipping cases you already proposed to or can\'t propose to, until it has applied to max_cases eligible ones. A submission is only counted as successful when the site confirms it. Dry-run by default — prepares proposals without clicking 送出提案. Note: submitting consumes tasker proposal points/quota.',
     inputs: [
       { name: 'category_ids', type: 'str',       desc: 'Category id(s) from selected_categories, e.g. 110 or 110,101001' },
       { name: 'min_charge',   type: 'int',       desc: '初次估價 lower bound (元)' },
-      { name: 'max_charge',   type: 'int',       desc: '初次估價 upper bound (元)' },
-      { name: 'max_cases',    type: 'int (1–50)', desc: 'Max cases to process' },
+      { name: 'max_charge',   type: 'int',       desc: '初次估價 upper bound (元, 須大於 min)' },
+      { name: 'max_cases',    type: 'int (1–50)', desc: 'Number of eligible cases to actually apply to (auto-advances pages)' },
       { name: 'dry_run',      type: 'bool',      desc: 'If checked, fill but do NOT click 送出提案' },
     ],
     crew: 'TaskerProposalCrew', flow: 'TaskerApplyFlow',
