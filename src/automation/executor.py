@@ -74,6 +74,7 @@ _FLOW_MAP = {
     "google_sheet_reader": ("src.automation.flows.google_sheet_flow",    "GoogleSheetFlow",   "Connecting to Google Sheets..."),
     "shopee_seller_scraper": ("src.automation.flows.shopee_seller_flow",  "ShopeeSellerFlow",  "Loading Shopee session..."),
     "profit_health_check":   ("src.automation.flows.profit_health_flow",   "ProfitHealthFlow",  "解析 CSV，計算利潤健檢..."),
+    "tasker_apply":          ("src.automation.flows.tasker_apply_flow",    "TaskerApplyFlow",   "Loading tasker.com.tw session..."),
 }
 
 
