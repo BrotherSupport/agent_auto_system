@@ -297,7 +297,7 @@ _CATALOG: dict = {
                 {"name": "min_charge",        "type": "int",  "description": "初次估價 lower bound"},
                 {"name": "max_charge",        "type": "int",  "description": "初次估價 upper bound"},
                 {"name": "proposal_template", "type": "str",  "description": "Base/fallback 提案說明 text"},
-                {"name": "max_cases",         "type": "int",  "description": "Max cases to process (default 5)"},
+                {"name": "max_cases",         "type": "int (1–500)",  "description": "Number of eligible cases to actually apply to; auto-advances pages (default 5)"},
                 {"name": "dry_run",           "type": "bool", "description": "If true (default), prepare but do NOT click 送出提案"},
             ],
             "used_by": ["TaskerApplyFlow"],

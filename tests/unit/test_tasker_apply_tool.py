@@ -77,45 +77,73 @@ def test_case_info_handles_non_dict_response(mocker):
 
 # ── _submit (multipart POST) ──────────────────────────────────────────────────
 
-def test_submit_success_sends_expected_multipart():
+def test_submit_success_sends_exactly_three_fields():
+    # The real 送出提案 form sends ONLY these 3 fields. An extra field (we used to
+    # send quota_amount) makes the API reject the request with 2700271.
     ctx = MagicMock()
     ctx.post.return_value = _resp(200, {"status": "0"})
-    ok, msg = T._submit(ctx, "bearer", "TK1", 1000, 2000, "my proposal")
-    assert ok is True and msg == "ok"
+    ok, msg, status = T._submit(ctx, "bearer", "TK1", 1000, 2000, "my proposal")
+    assert ok is True and status == "0"
     url = ctx.post.call_args.args[0]
     mp = ctx.post.call_args.kwargs["multipart"]
     assert url == f"{T._API}/api/issue/TK1/proposal"
     assert mp == {"initial_price_min": "1000", "initial_price_max": "2000",
-                  "content": "my proposal", "quota_amount": "0"}
+                  "content": "my proposal"}
+    assert "quota_amount" not in mp
 
 
 def test_submit_maps_known_error():
     ctx = MagicMock()
     ctx.post.return_value = _resp(400, {"status": "2700247"})
-    ok, msg = T._submit(ctx, "bearer", "TK1", 500, 2000, "c")
-    assert ok is False and "min price" in msg
+    ok, msg, status = T._submit(ctx, "bearer", "TK1", 500, 2000, "c")
+    assert ok is False and "min price" in msg and status == "2700247"
+
+
+def test_submit_maps_2700271_but_it_is_not_a_stop_status():
+    # 2700271 was caused by our own malformed request (extra field), NOT an
+    # account-wide block, so it must NOT be in _STOP_STATUSES.
+    ctx = MagicMock()
+    ctx.post.return_value = _resp(400, {"status": "2700271"})
+    ok, msg, status = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
+    assert ok is False and status == "2700271"
+    assert status not in T._STOP_STATUSES
+
+
+def test_ineligible_account_is_a_stop_status():
+    assert "1230075" in T._STOP_STATUSES
 
 
 def test_submit_unknown_status():
     ctx = MagicMock()
-    ctx.post.return_value = _resp(400, {"status": "2700271"})
-    ok, msg = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
-    assert ok is False and "2700271" in msg
+    ctx.post.return_value = _resp(400, {"status": "9999999"})
+    ok, msg, status = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
+    assert ok is False and "9999999" in msg
 
 
 def test_submit_network_exception():
     ctx = MagicMock()
     ctx.post.side_effect = RuntimeError("boom")
-    ok, msg = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
-    assert ok is False and "boom" in msg
+    ok, msg, status = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
+    assert ok is False and "boom" in msg and status is None
 
 
 def test_submit_non_dict_json_body():
     # resp.json() returning a list must not raise AttributeError.
     ctx = MagicMock()
     ctx.post.return_value = _resp(200, ["unexpected"])
-    ok, msg = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
+    ok, msg, status = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
     assert ok is False  # status missing -> not "0"
+
+
+def test_submit_never_infers_success_from_http_200_alone():
+    # A 200 with a non-JSON body (e.g. an HTML page) must NOT be counted as
+    # a recorded proposal — the strict path requires site status "0".
+    ctx = MagicMock()
+    resp = _resp(200, None)
+    resp.json.side_effect = ValueError("not json")
+    ctx.post.return_value = resp
+    ok, msg, status = T._submit(ctx, "bearer", "TK1", 1000, 2000, "c")
+    assert ok is False
 
 
 # ── _looks_logged_out ─────────────────────────────────────────────────────────
@@ -159,12 +187,16 @@ def test_logged_out_when_only_login_link_visible():
     assert T._looks_logged_out(page) is True
 
 
-# ── _collect_case_ids ─────────────────────────────────────────────────────────
+# ── _collect_page_case_ids (paginated) ────────────────────────────────────────
 
 class _FakeListPage:
     def __init__(self, hrefs):
         self._hrefs = hrefs
         self.mouse = MagicMock()
+        self.goto_calls = []
+
+    def goto(self, url, **_kw):
+        self.goto_calls.append(url)
 
     def evaluate(self, _js):
         return self._hrefs
@@ -173,13 +205,20 @@ class _FakeListPage:
         pass
 
 
-def test_collect_case_ids_dedupes_uppercases_and_caps():
+def test_collect_page_case_ids_dedupes_and_uppercases():
     page = _FakeListPage([
         "/cases/tk111aaa", "/cases/TK111AAA",   # dup (case-insensitive)
         "/cases/TK222BBB", "/other/link", "/cases/TK333CCC",
     ])
-    ids = T._collect_case_ids(page, "110", 2, lambda m: None)
-    assert ids == ["TK111AAA", "TK222BBB"]
+    ids = T._collect_page_case_ids(page, "110", 1, lambda m: None)
+    assert ids == ["TK111AAA", "TK222BBB", "TK333CCC"]
+
+
+def test_collect_page_case_ids_requests_the_given_page():
+    page = _FakeListPage(["/cases/TK1ABC"])
+    T._collect_page_case_ids(page, "110,101", 3, lambda m: None)
+    assert page.goto_calls and "page=3" in page.goto_calls[0]
+    assert "selected_categories=110,101" in page.goto_calls[0]
 
 
 # ── run_tasker_apply guard + TaskerApplyTool wrapper ──────────────────────────

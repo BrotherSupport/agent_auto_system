@@ -104,7 +104,7 @@ def test_proposal_fn_falls_back_to_template_without_llm(mocker):
 
 # ── tool orchestration (mocked API; no live calls) ───────────────────────────
 
-def _mock_playwright(mocker):
+def _mock_playwright(mocker, page_ids=None, proposed=("TK2",)):
     import src.automation.tools.tasker_apply_tool as T
     mocker.patch.object(T.os.path, "exists", return_value=True)
     fake_ctx = mocker.MagicMock()
@@ -115,19 +115,26 @@ def _mock_playwright(mocker):
     cm.__exit__ = lambda *a: False
     mocker.patch("playwright.sync_api.sync_playwright", return_value=cm)
     mocker.patch.object(T, "_capture_session", return_value="Bearer x")
-    mocker.patch.object(T, "_collect_case_ids", return_value=["TK1", "TK2"])
-    # TK1 is fresh & eligible; TK2 already proposed.
+    # Page 1 returns the given ids; later pages return nothing (end of listing).
+    ids = list(page_ids or ["TK1", "TK2"])
+    mocker.patch.object(T, "_collect_page_case_ids",
+                        side_effect=lambda page, cat, page_num, log:
+                        ids if page_num == 1 else [])
+    # Authoritative "already proposed" set (NOT proposal_content anymore).
+    mocker.patch.object(T, "_my_proposed_ids", return_value=set(proposed))
     mocker.patch.object(T, "_case_info", side_effect=lambda req, b, cid: {
         "title": f"case {cid}", "content": "desc", "budget_text": "$1",
-        "proposal_content": "prev proposal" if cid == "TK2" else "",
+        "proposal_content": "template",  # present for every proposable case
     })
     mocker.patch.object(T, "_check", return_value=(True, ""))
+    # Every accepted submit is confirmed recorded by the site, by default.
+    mocker.patch.object(T, "_confirm_recorded", return_value=True)
     return T
 
 
 def test_dry_run_prepares_without_submitting(mocker):
     T = _mock_playwright(mocker)
-    submit = mocker.patch.object(T, "_submit", return_value=(True, "ok"))
+    submit = mocker.patch.object(T, "_submit", return_value=(True, "ok", "0"))
 
     res = T.run_tasker_apply(
         category_ids="110", min_charge=5000, max_charge=9000, max_cases=5,
@@ -144,7 +151,7 @@ def test_dry_run_prepares_without_submitting(mocker):
 
 def test_submit_posts_expected_payload(mocker):
     T = _mock_playwright(mocker)
-    submit = mocker.patch.object(T, "_submit", return_value=(True, "ok"))
+    submit = mocker.patch.object(T, "_submit", return_value=(True, "ok", "0"))
 
     res = T.run_tasker_apply(
         category_ids="110", min_charge=5000, max_charge=9000, max_cases=5,
@@ -158,10 +165,41 @@ def test_submit_posts_expected_payload(mocker):
     assert res["applied"][0]["status"] == "submitted"
 
 
+def test_submit_success_only_when_site_confirms(mocker):
+    # The POST returns "accepted" but re-check does NOT confirm it → must NOT be
+    # counted as applied/submitted (the user's core requirement).
+    T = _mock_playwright(mocker, page_ids=["TK1"], proposed=())
+    mocker.patch.object(T, "_submit", return_value=(True, "ok", "0"))
+    mocker.patch.object(T, "_confirm_recorded", return_value=False)
+
+    res = T.run_tasker_apply(
+        category_ids="110", min_charge=5000, max_charge=9000, max_cases=5,
+        dry_run=False, proposal_fn=lambda t, d: "x", log=lambda m: None,
+    )
+    assert res["applied_count"] == 0 and res["submitted_count"] == 0
+    assert res["skipped"][0]["status"] == "unconfirmed"
+
+
+def test_account_block_stops_scanning(mocker):
+    # 1230075 (account not eligible to propose) on the first submit is
+    # account-wide → stop immediately, report it, and never claim success.
+    T = _mock_playwright(mocker, page_ids=["TK1", "TK2", "TK3"], proposed=())
+    submit = mocker.patch.object(
+        T, "_submit", return_value=(False, "not eligible to propose", "1230075"))
+
+    res = T.run_tasker_apply(
+        category_ids="110", min_charge=5000, max_charge=9000, max_cases=5,
+        dry_run=False, proposal_fn=lambda t, d: "x", log=lambda m: None,
+    )
+    assert submit.call_count == 1                      # stopped after the block
+    assert res["applied_count"] == 0
+    assert res["blocked"] and "eligible" in res["blocked"].lower()
+
+
 def test_ineligible_case_skipped(mocker):
-    T = _mock_playwright(mocker)
+    T = _mock_playwright(mocker, proposed=())
     mocker.patch.object(T, "_check", return_value=(False, "your own case (您無法對自己的案件提案)"))
-    submit = mocker.patch.object(T, "_submit", return_value=(True, "ok"))
+    submit = mocker.patch.object(T, "_submit", return_value=(True, "ok", "0"))
 
     res = T.run_tasker_apply(
         category_ids="110", min_charge=5000, max_charge=9000, max_cases=1,
