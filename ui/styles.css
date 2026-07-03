@@ -869,7 +869,7 @@ html.theme-dark .hl-yv { color: #98c379; }
 .allow-all { margin-top: 0.2rem; }
 .auser-error { color: var(--red); font-size: 0.82rem; background: var(--red-soft); border: 1px solid var(--red); border-radius: 6px; padding: 0.5rem 0.6rem; }
 
-/* ── Lead Collector result table ──────────────────────────────────────────── */
+/* ── Email Collector result table ─────────────────────────────────────────── */
 .leads-summary { font-size: 0.82rem; color: var(--text-muted); margin: 0.4rem 0 0.6rem; }
 .leads-table-wrap { overflow-x: auto; margin-bottom: 0.75rem; }
 .leads-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }

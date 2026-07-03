@@ -12,7 +12,7 @@ const TYPE_META = {
   shopee_seller_scraper: { chip: 'SHOPEE', cls: 'chip-shopee' },
   profit_health_check: { chip: '利潤健檢', cls: 'chip-profit' },
   tasker_apply:        { chip: 'TASKER', cls: 'chip-tasker' },
-  email_collect:        { chip: 'LEADS', cls: 'chip-leads' },
+  email_collect:        { chip: 'EMAILS', cls: 'chip-leads' },
   pipeline:            { chip: 'PIPE',  cls: 'chip-pipeline' },
 };
 
@@ -111,8 +111,8 @@ const AUTO_CATALOG = {
     agent: 'Proposal Writer', tools: ['Tasker Auto-Apply'],
   },
   email_collect: {
-    icon: '📇', name: 'Lead Collector',
-    desc: 'Auto-collect SMB / business contact emails via a Google Maps funnel: discover businesses for a query + region → scrape each website for emails → verify (MX + SMTP, no paid service) → dedupe → LLM qualifies ICP fit and writes a per-lead personalization hook for your outreach.',
+    icon: '📧', name: 'Email Collector',
+    desc: 'Find businesses on Google Maps and collect their contact emails — no paid database. For a search + region it discovers businesses, scrapes each website for emails, verifies them (MX + SMTP), removes duplicates, then uses AI to score fit and write a personalized opening line for each one, ready for your outreach.',
     inputs: [
       { name: 'query',    type: 'str', desc: 'What businesses to find (e.g. marketing agency, dental clinic)' },
       { name: 'region',   type: 'str', desc: 'Where (e.g. Taipei / Berlin / Austin, TX). Blank = anywhere' },
@@ -970,7 +970,7 @@ const PIPELINE_TYPE_OPTIONS = [
   { value: 'email_sender',       label: 'Email Sender' },
   { value: 'google_sheet_reader', label: 'Sheet Reader' },
   { value: 'shopee_seller_scraper', label: 'Shopee Sellers' },
-  { value: 'email_collect',        label: 'Lead Collector' },
+  { value: 'email_collect',        label: 'Email Collector' },
 ];
 
 function renderPipelineStepFields(stepIdx, jobType) {
@@ -1772,7 +1772,7 @@ function stopElapsedTimer(runId) {
   if (id !== undefined) { clearInterval(id); elapsedTimers.delete(runId); }
 }
 
-// ── Lead Collector result table ───────────────────────────────────────────────
+// ── Email Collector result table ──────────────────────────────────────────────
 
 function renderLeadsTable(rj) {
   const leads = Array.isArray(rj.leads) ? rj.leads : [];

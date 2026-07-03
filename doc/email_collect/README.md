@@ -126,7 +126,7 @@ confidence, mx_found, smtp_status, icp_fit, reason, hook), plus `businesses[]`
 ```bash
 uv run playwright install chromium          # one-time
 uv run pytest tests/unit/test_email_collect_tools.py tests/unit/test_email_collect_flow.py -v
-# then use the "Lead Collector" card in the UI, or POST /api/jobs with
+# then use the "Email Collector" card in the UI, or POST /api/jobs with
 # job_type="email_collect".
 ```
 
