@@ -46,6 +46,7 @@ using a static template, for catalog/agent parity.
 """
 import os
 import re
+import time
 from collections.abc import Callable
 
 from crewai.tools import BaseTool
@@ -91,7 +92,7 @@ _DEFAULT_TEMPLATE = (
     "- https://brothersupport.github.io/ai_consultant/index.html\n"
     "- https://yennj12.js.org/ai_builder.html\n"
     "- https://yennj12.js.org/yennj12_blog_V4/\n\n"
-    "前FANNG工程師, 9年開發經驗 精通backend, AI, full stack, cloud infra. "
+    "前FAANG工程師, 9年開發經驗 精通backend, AI, full stack, cloud infra. "
     "python/javascript/java/typescript\n\n"
     "上方為初步估價，實際費用可依細節討論調整。期待與您合作，謝謝！"
 )
@@ -177,8 +178,19 @@ def _collect_page_case_ids(page, category_ids: str, page_num: int,
     """Case ids on a single listing page (?page=N). The listing lazy-loads on
     scroll, so we scroll until the count stops growing for that page."""
     url = f"{_BASE}/cases?selected_categories={category_ids}&page={page_num}"
-    page.goto(url, wait_until="domcontentloaded", timeout=30000)
-    page.wait_for_timeout(1500)
+    # goto is the one unguarded external call here; a transient failure would
+    # otherwise crash the whole run. Retry a few times before giving up on the page.
+    for attempt in range(3):
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(1500)
+            break
+        except Exception as exc:  # noqa: BLE001
+            if attempt == 2:
+                log(f"⚠ Page {page_num}: failed to load after 3 attempts ({exc})")
+                return []
+            log(f"⚠ Page {page_num}: load attempt {attempt + 1} failed, retrying ({exc})")
+            page.wait_for_timeout(2000)
     seen: list[str] = []
     seen_set: set[str] = set()
     prev = -1
@@ -247,18 +259,27 @@ def _my_proposed_ids(ctx_request, bearer: str, log: Callable,
     return ids
 
 
-def _confirm_recorded(ctx_request, bearer: str, cid: str) -> bool:
+def _confirm_recorded(ctx_request, bearer: str, cid: str, retries: int = 3) -> bool:
     """Re-query the site after a submit to confirm it was truly recorded: an
     applied case flips to can_propose=false (and its proposal endpoint returns
     the 4700246 'already handled' status). Only trust success when the site
-    reflects it — a 'status 0' POST response alone is not enough."""
-    c = _get_json(ctx_request, bearer, f"/api/issue/{cid}/proposal/check")
-    if isinstance(c, dict) and str(c.get("status")) == "0":
-        data = c.get("data") if isinstance(c.get("data"), dict) else {}
-        if data.get("can_propose") is False:
+    reflects it — a 'status 0' POST response alone is not enough.
+
+    Retries a few times: the read-back can briefly lag the write (eventual
+    consistency) or hit a transient network blip, and a false negative here
+    would both mislabel a real success and trigger an extra submission."""
+    for attempt in range(retries):
+        c = _get_json(ctx_request, bearer, f"/api/issue/{cid}/proposal/check")
+        if isinstance(c, dict) and str(c.get("status")) == "0":
+            data = c.get("data") if isinstance(c.get("data"), dict) else {}
+            if data.get("can_propose") is False:
+                return True
+        d = _get_json(ctx_request, bearer, f"/api/issue/{cid}/proposal")
+        if isinstance(d, dict) and str(d.get("status")) == "4700246":
             return True
-    d = _get_json(ctx_request, bearer, f"/api/issue/{cid}/proposal")
-    return isinstance(d, dict) and str(d.get("status")) == "4700246"
+        if attempt < retries - 1:
+            time.sleep(1)
+    return False
 
 
 def _case_info(ctx_request, bearer: str, cid: str) -> dict:
