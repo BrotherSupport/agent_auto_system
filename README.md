@@ -4,11 +4,11 @@ A CrewAI-powered automation platform with **harness engineering** built in. Defi
 
 
 
-<p align="center"><img src ="./doc/pic/demo_1.png" ></p>
-<p align="center"><img src ="./doc/pic/demo_2.png" ></p>
-<p align="center"><img src ="./doc/pic/demo_3.png" ></p>
-<p align="center"><img src ="./doc/pic/demo_4.png" ></p>
-
+<p align="center"><img src ="./doc/pic/demo_2_1.png" ></p>
+<p align="center"><img src ="./doc/pic/demo_2_2.png" ></p>
+<p align="center"><img src ="./doc/pic/demo_2_3.png" ></p>
+<p align="center"><img src ="./doc/pic/demo_2_4.png" ></p>
+<p align="center"><img src ="./doc/pic/demo_2_5.png" ></p>
 ---
 
 ## What Changed (Recent Engineering Audit)
