@@ -98,6 +98,7 @@ async def _run_flow(run_id: int, job_type: str, payload: dict, effective_provide
     last_exc: Exception | None = None
 
     last_model: str | None = None
+    tried: list[str] = []
     for attempt in range(1, MAX_LLM_ATTEMPTS + 1):
         # Try the requested model twice (attempts 1-2) before advancing through
         # the fallback list, one model per subsequent attempt.
@@ -106,6 +107,8 @@ async def _run_flow(run_id: int, job_type: str, payload: dict, effective_provide
         if last_model is not None and model != last_model:
             append_log(run_id, f"Falling back to {effective_provider} / {model}...")
         last_model = model
+        if model not in tried:
+            tried.append(model)
 
         flow = flow_cls()
         inputs = {
@@ -131,7 +134,12 @@ async def _run_flow(run_id: int, job_type: str, payload: dict, effective_provide
         result_str = raw.raw if hasattr(raw, "raw") else str(raw)
         result = _parse_result(result_str)
         usage = getattr(flow.state, "usage", {})
-        return result, usage
+        serve = {
+            "served_model": model,
+            "models_attempted": len(tried),
+            "fallback_used": model != candidates[0],
+        }
+        return result, usage, serve
 
     raise last_exc  # exhausted retries + fallbacks (unreachable: loop raises first)
 
@@ -186,8 +194,9 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
             if job_type == "pipeline":
                 pipeline_steps = current_payload.get("steps", [])
                 result, usage = await execute_pipeline(run_id, pipeline_steps, effective_provider, effective_model)
+                serve = {"served_model": effective_model, "models_attempted": 1, "fallback_used": False}
             else:
-                result, usage = await _run_flow(run_id, job_type, current_payload, effective_provider, effective_model)
+                result, usage, serve = await _run_flow(run_id, job_type, current_payload, effective_provider, effective_model)
 
             tokens_in  += usage.get("prompt_tokens", 0)
             tokens_out += usage.get("completion_tokens", 0)
@@ -205,8 +214,13 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
 
             cost    = estimate_cost(effective_model, tokens_in, tokens_out)
             metrics = dict(llm_provider=effective_provider, llm_model=effective_model,
+                           served_model=serve["served_model"],
+                           fallback_used=serve["fallback_used"],
+                           models_attempted=serve["models_attempted"],
                            tokens_in=tokens_in, tokens_out=tokens_out,
                            cost_usd=cost, retry_count=attempt,
+                           duration_secs=round(time.monotonic() - _t0, 3),
+                           validation_passed=vr.valid, validation_reason=vr.reason,
                            eval_score=ev.score, eval_confidence=ev.confidence,
                            eval_notes=ev.notes, eval_method=ev.method)
 
@@ -236,6 +250,8 @@ async def execute_run(run_id: int, job_type: str, payload: dict):
             metrics = dict(llm_provider=effective_provider, llm_model=effective_model,
                            tokens_in=tokens_in, tokens_out=tokens_out,
                            cost_usd=cost, retry_count=attempt,
+                           duration_secs=round(time.monotonic() - _t0, 3),
+                           validation_passed=None, validation_reason=None,
                            eval_score=ev.score, eval_confidence=ev.confidence,
                            eval_notes=ev.notes, eval_method=ev.method)
             logger.error("run_id=%d failed after %d attempt(s): %s", run_id, attempt + 1, exc)
