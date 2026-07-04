@@ -379,19 +379,19 @@ def get_stats(days: int = 7):
         validation_fails = rel[2] or 0
 
         # Duration percentiles from the stored/backfilled column. SQLite has no
-        # PERCENTILE(); emulate with ORDER BY + OFFSET at the nth-of-count row.
-        n_dur = conn.execute(text(
-            "SELECT COUNT(*) FROM run WHERE duration_secs IS NOT NULL"
-        )).scalar() or 0
+        # PERCENTILE(); fetch the durations once and compute nth-of-count in
+        # Python — one roundtrip and one sort instead of a count + two sorts.
+        durations = sorted(
+            row[0] for row in conn.execute(text(
+                "SELECT duration_secs FROM run WHERE duration_secs IS NOT NULL"
+            ))
+        )
+        n_dur = len(durations)
 
         def _percentile(p: float):
             if not n_dur:
                 return None
-            offset = min(int(p * n_dur), n_dur - 1)
-            v = conn.execute(text(
-                "SELECT duration_secs FROM run WHERE duration_secs IS NOT NULL "
-                "ORDER BY duration_secs LIMIT 1 OFFSET :off"
-            ), {"off": offset}).scalar()
+            v = durations[min(int(p * n_dur), n_dur - 1)]
             return round(v, 1) if v is not None else None
 
         p50_dur = _percentile(0.50)
@@ -509,7 +509,12 @@ def get_stats(days: int = 7):
             })
 
         # N-day trend with cost / tokens / quality per day (only days with runs;
-        # gaps filled below). Window is the selectable `days` param.
+        # gaps filled below). Window is the selectable `days` param. Compare the
+        # raw (indexed) started_at against a Python-computed boundary so the
+        # ix_run_started_at index is usable — DATE(started_at) would not be.
+        # started_at is stored as an ISO string, so a date-string bound compares
+        # correctly (and dodges the Python 3.12 sqlite date-adapter deprecation).
+        since_date = (today - timedelta(days=days - 1)).isoformat()
         trend_rows = conn.execute(text("""
             SELECT
                 DATE(started_at) AS day,
@@ -520,9 +525,9 @@ def get_stats(days: int = 7):
                 SUM(COALESCE(tokens_in, 0) + COALESCE(tokens_out, 0)),
                 AVG(eval_score)
             FROM run
-            WHERE DATE(started_at) >= DATE('now', :since)
+            WHERE started_at >= :since
             GROUP BY DATE(started_at)
-        """), {"since": f"-{days - 1} days"}).fetchall()
+        """), {"since": since_date}).fetchall()
 
         trend_map = {
             row[0]: {
