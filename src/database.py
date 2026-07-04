@@ -29,6 +29,12 @@ def init_db():
             "ALTER TABLE run ADD COLUMN tokens_out INTEGER DEFAULT 0",
             "ALTER TABLE run ADD COLUMN cost_usd REAL DEFAULT 0.0",
             "ALTER TABLE run ADD COLUMN retry_count INTEGER DEFAULT 0",
+            "ALTER TABLE run ADD COLUMN served_model VARCHAR",
+            "ALTER TABLE run ADD COLUMN fallback_used INTEGER DEFAULT 0",
+            "ALTER TABLE run ADD COLUMN models_attempted INTEGER DEFAULT 1",
+            "ALTER TABLE run ADD COLUMN duration_secs REAL",
+            "ALTER TABLE run ADD COLUMN validation_passed INTEGER",
+            "ALTER TABLE run ADD COLUMN validation_reason VARCHAR",
             "ALTER TABLE run ADD COLUMN eval_score REAL",
             "ALTER TABLE run ADD COLUMN eval_confidence REAL",
             "ALTER TABLE run ADD COLUMN eval_notes VARCHAR",
@@ -46,6 +52,18 @@ def init_db():
                 conn.commit()
             except Exception:
                 pass  # column/index already exists
+
+        # Backfill duration_secs for pre-existing completed runs so percentile
+        # queries have a full population. Only fills NULLs → safe to re-run.
+        try:
+            conn.execute(text(
+                "UPDATE run SET duration_secs = (julianday(finished_at) - julianday(started_at)) * 86400 "
+                "WHERE duration_secs IS NULL AND finished_at IS NOT NULL "
+                "AND status IN ('success', 'failed')"
+            ))
+            conn.commit()
+        except Exception:
+            pass
 
 
 def reconcile_stale_runs() -> int:

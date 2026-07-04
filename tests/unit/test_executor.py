@@ -7,6 +7,9 @@ from sqlmodel import Session
 
 from src.models import Job, Run
 
+# _run_flow returns (result, usage, serve); serve carries fallback metadata.
+_SERVE = {"served_model": "test/model", "models_attempted": 1, "fallback_used": False}
+
 
 @pytest.fixture
 def seeded_run(test_engine):
@@ -35,6 +38,7 @@ async def test_execute_run_success(test_engine, seeded_run, mocker):
         new=AsyncMock(return_value=(
             {"digest": "Top HN stories today about AI and Rust", "stories": [1, 2, 3]},
             {"prompt_tokens": 100, "completion_tokens": 50},
+            _SERVE,
         )),
     )
 
@@ -46,6 +50,12 @@ async def test_execute_run_success(test_engine, seeded_run, mocker):
     assert run.tokens_in == 100
     assert run.tokens_out == 50
     assert run.retry_count == 0
+    # Tier 2 columns persisted from the serve dict + validation gate
+    assert run.served_model == "test/model"
+    assert run.fallback_used is False
+    assert run.models_attempted == 1
+    assert run.validation_passed is True
+    assert run.duration_secs is not None
 
 
 async def test_execute_run_validation_fail_then_retry_success(test_engine, seeded_run, mocker):
@@ -58,10 +68,11 @@ async def test_execute_run_validation_fail_then_retry_success(test_engine, seede
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            return ({"error": "first attempt failed"}, {})
+            return ({"error": "first attempt failed"}, {}, _SERVE)
         return (
             {"digest": "Stories on attempt two today!", "stories": [1]},
             {"prompt_tokens": 10, "completion_tokens": 5},
+            _SERVE,
         )
 
     mocker.patch("src.automation.executor._run_flow", side_effect=side_effect)
@@ -80,7 +91,7 @@ async def test_execute_run_all_retries_exhausted(test_engine, seeded_run, mocker
     mocker.patch("src.automation.progress.append_log")
     mocker.patch(
         "src.automation.executor._run_flow",
-        new=AsyncMock(return_value=({"error": "always fails"}, {})),
+        new=AsyncMock(return_value=({"error": "always fails"}, {}, _SERVE)),
     )
 
     from src.automation.executor import execute_run
@@ -130,10 +141,11 @@ async def test_previous_error_injected_on_retry(test_engine, seeded_run, mocker)
     async def capture(run_id, job_type, payload, provider, model):
         captured_payloads.append(dict(payload))
         if len(captured_payloads) == 1:
-            return ({"error": "first attempt"}, {})
+            return ({"error": "first attempt"}, {}, _SERVE)
         return (
             {"digest": "Fixed now, all stories included today!", "stories": [1]},
             {"prompt_tokens": 5, "completion_tokens": 5},
+            _SERVE,
         )
 
     mocker.patch("src.automation.executor._run_flow", side_effect=capture)
@@ -250,13 +262,17 @@ async def test_run_flow_retries_then_falls_back_on_unavailable(mocker):
     _register_fake_flow(mocker, kickoff)
 
     from src.automation.executor import _run_flow
-    result, usage = await _run_flow(0, "__test__", {}, "gemini", "gemini/gemini-2.5-flash")
+    result, usage, serve = await _run_flow(0, "__test__", {}, "gemini", "gemini/gemini-2.5-flash")
 
     assert result["sellers"]
     assert len(seen) == 3
     # primary tried twice, then a same-provider fallback
     assert seen[0] == seen[1] == "gemini/gemini-2.5-flash"
     assert seen[2] != "gemini/gemini-2.5-flash"
+    # serve metadata reflects the failover
+    assert serve["served_model"] == seen[2]
+    assert serve["fallback_used"] is True
+    assert serve["models_attempted"] == 2
 
 
 async def test_run_flow_non_retriable_error_raises_immediately(mocker):
@@ -322,6 +338,7 @@ async def test_execute_run_persists_eval_fields(test_engine, seeded_run, mocker)
         new=AsyncMock(return_value=(
             {"digest": "Top HN stories today", "stories": [1, 2]},
             {"prompt_tokens": 10, "completion_tokens": 5},
+            _SERVE,
         )),
     )
 

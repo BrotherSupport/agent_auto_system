@@ -40,11 +40,18 @@ class Run(SQLModel, table=True):
     finished_at: datetime | None = None
     # Harness fields
     llm_provider: str | None = None
-    llm_model: str | None = None
+    llm_model: str | None = None            # model requested (before fallback)
+    served_model: str | None = None         # model that actually produced the result
+    fallback_used: bool = False             # a cross-model fallback fired
+    models_attempted: int = 1               # distinct models tried before success
     tokens_in: int = 0
     tokens_out: int = 0
     cost_usd: float = 0.0
     retry_count: int = 0
+    duration_secs: float | None = None      # wall-clock; stored to enable p50/p95
+    # Quality gate (validator.py) outcome
+    validation_passed: bool | None = None   # None = validation never ran (hard error)
+    validation_reason: str | None = None    # why it failed the gate
     # Evaluation fields (LLM-as-judge quality score; informational only)
     eval_score: float | None = None        # 0-100 quality score
     eval_confidence: float | None = None    # 0-1 confidence in the score
