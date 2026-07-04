@@ -22,6 +22,22 @@ A CrewAI-powered automation platform with **harness engineering** built in. Defi
 
 ---
 
+## Blog Series
+
+A five-part deep dive (in Traditional Chinese) into how this system was designed and built, from architecture overview to frontend and pipeline orchestration:
+
+| # | Post | Focus |
+|---|---|---|
+| 1 | [系統總覽:一個 CrewAI 多代理自動化平台如何運作](https://yennj12.js.org/yennj12_blog_V4/posts/auto-agent-system-part1-overview-zh/) | Overall architecture, the 11 job types, and how the platform runs |
+| 2 | [Harness 引擎:多模型容錯、自我修正與 LLM 評審](https://yennj12.js.org/yennj12_blog_V4/posts/auto-agent-system-part2-harness-engine-zh/) | Cross-model fallback, self-correcting retries, and LLM-as-judge |
+| 3 | [自動化任務實戰:Shopee 爬蟲、Google Maps 名單、Tasker 自動提案](https://yennj12.js.org/yennj12_blog_V4/posts/auto-agent-system-part3-automations-zh/) | Four representative automations, walked through merged PRs |
+| 4 | [生產化之路:Langfuse 可觀測性、Docker 瘦身與 AWS 部署](https://yennj12.js.org/yennj12_blog_V4/posts/auto-agent-system-part4-production-zh/) | Langfuse observability, slim Docker image, and AWS deployment |
+| 5 | [前端體驗與 Pipeline 編排:SSE 即時串流與多步驟任務鏈](https://yennj12.js.org/yennj12_blog_V4/posts/auto-agent-system-part5-frontend-pipeline-zh/) | The 0.5 s SSE progress stream and multi-step pipeline chaining |
+
+_By the YennJ12 Engineering Team — see the [full posts list](https://yennj12.js.org/yennj12_blog_V4/posts-list/)._
+
+---
+
 ## Architecture
 
 ```
