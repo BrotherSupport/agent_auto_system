@@ -335,6 +335,28 @@ def get_stats():
         avg_eval_score   = round(row[7], 1) if row[7] is not None else None
         avg_eval_conf    = round(row[8], 2) if row[8] is not None else None
 
+        # Eval trust (how the scores were produced) + retry reliability.
+        # A trustworthy quality number is one graded by an independent LLM judge;
+        # heuristic fallbacks and self-graded runs (flagged in eval_notes) do not count.
+        trust = conn.execute(text("""
+            SELECT
+                SUM(CASE WHEN eval_score IS NOT NULL THEN 1 ELSE 0 END),
+                SUM(CASE WHEN eval_score IS NOT NULL AND eval_method='llm' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN eval_score IS NOT NULL AND COALESCE(eval_method,'heuristic')!='llm' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN eval_score IS NOT NULL AND eval_method='llm'
+                    AND (eval_notes IS NULL OR eval_notes NOT LIKE '%self-graded%') THEN 1 ELSE 0 END),
+                SUM(CASE WHEN COALESCE(retry_count, 0) > 0 THEN 1 ELSE 0 END),
+                AVG(COALESCE(retry_count, 0))
+            FROM run
+        """)).fetchone()
+
+        eval_scored      = trust[0] or 0
+        eval_llm         = trust[1] or 0
+        eval_heuristic   = trust[2] or 0
+        eval_independent = trust[3] or 0
+        retried_runs     = trust[4] or 0
+        avg_retries      = round(trust[5], 2) if trust[5] is not None else 0
+
         # By type: counts + weighted average duration per job_type
         type_rows = conn.execute(text("""
             SELECT
@@ -344,20 +366,22 @@ def get_stats():
                 SUM(CASE WHEN r.finished_at IS NOT NULL AND r.status IN ('success','failed')
                     THEN (julianday(r.finished_at) - julianday(r.started_at)) * 86400 ELSE 0 END) AS sum_dur,
                 SUM(CASE WHEN r.finished_at IS NOT NULL AND r.status IN ('success','failed')
-                    THEN 1 ELSE 0 END) AS cnt_dur
+                    THEN 1 ELSE 0 END) AS cnt_dur,
+                SUM(CASE WHEN COALESCE(r.retry_count, 0) > 0 THEN 1 ELSE 0 END) AS n_retried
             FROM run r
             LEFT JOIN job j ON r.job_id = j.id
             GROUP BY jtype, r.status
         """)).fetchall()
 
         by_type: dict = {}
-        for jtype, status, cnt, sum_dur, cnt_dur in type_rows:
+        for jtype, status, cnt, sum_dur, cnt_dur, n_retried in type_rows:
             bt = by_type.setdefault(jtype, {
                 "total": 0, "success": 0, "failed": 0, "pending": 0, "running": 0,
-                "_sum_dur": 0.0, "_cnt_dur": 0,
+                "retried": 0, "_sum_dur": 0.0, "_cnt_dur": 0,
             })
             bt["total"] += cnt
             bt[status] = bt.get(status, 0) + cnt
+            bt["retried"] += n_retried or 0
             bt["_sum_dur"] += sum_dur or 0.0
             bt["_cnt_dur"] += cnt_dur or 0
 
@@ -406,7 +430,11 @@ def get_stats():
                 SUM(COALESCE(cost_usd, 0.0)) AS cost,
                 AVG(CASE WHEN finished_at IS NOT NULL AND status IN ('success','failed')
                     THEN (julianday(finished_at) - julianday(started_at)) * 86400 END) AS avg_dur,
-                AVG(eval_score) AS avg_score
+                AVG(eval_score) AS avg_score,
+                AVG(eval_confidence) AS avg_conf,
+                SUM(CASE WHEN eval_score IS NOT NULL THEN 1 ELSE 0 END) AS n_scored,
+                SUM(CASE WHEN eval_score IS NOT NULL AND eval_method='llm' THEN 1 ELSE 0 END) AS n_llm,
+                SUM(CASE WHEN COALESCE(retry_count, 0) > 0 THEN 1 ELSE 0 END) AS n_retried
             FROM run
             WHERE llm_model IS NOT NULL
             GROUP BY provider, model
@@ -414,7 +442,8 @@ def get_stats():
         """)).fetchall()
 
         by_model: dict = {}
-        for prov, model, runs, n_success, ti, tot, cost, avg_dur, avg_score in model_detail_rows:
+        for (prov, model, runs, n_success, ti, tot, cost, avg_dur, avg_score,
+             avg_conf, n_scored, n_llm, n_retried) in model_detail_rows:
             by_model.setdefault(prov, []).append({
                 "model": model,
                 "runs": runs,
@@ -424,6 +453,10 @@ def get_stats():
                 "cost_usd": round(cost or 0.0, 6),
                 "avg_duration": round(avg_dur, 1) if avg_dur else 0,
                 "avg_eval_score": round(avg_score, 1) if avg_score is not None else None,
+                "avg_eval_confidence": round(avg_conf, 2) if avg_conf is not None else None,
+                "scored": n_scored or 0,
+                "llm_judged": n_llm or 0,
+                "retried": n_retried or 0,
             })
 
         # 7-day trend (only days with runs; fill gaps below)
@@ -460,6 +493,15 @@ def get_stats():
         "avg_duration_secs": avg_dur,
         "avg_eval_score": avg_eval_score,
         "avg_eval_confidence": avg_eval_conf,
+        "eval_scored": eval_scored,
+        "eval_llm": eval_llm,
+        "eval_heuristic": eval_heuristic,
+        "eval_independent": eval_independent,
+        "eval_independent_rate": round(eval_independent / eval_scored * 100, 1) if eval_scored else None,
+        "eval_llm_rate": round(eval_llm / eval_scored * 100, 1) if eval_scored else None,
+        "retried_runs": retried_runs,
+        "retry_rate": round(retried_runs / total_runs * 100, 1) if total_runs else 0,
+        "avg_retries": avg_retries,
         "by_type": by_type,
         "trend": trend,
         "total_tokens_in": total_tokens_in,
@@ -482,6 +524,9 @@ def _empty_stats():
         "total_runs": 0, "success": 0, "failed": 0, "active": 0,
         "success_rate": 0, "avg_duration_secs": 0,
         "avg_eval_score": None, "avg_eval_confidence": None,
+        "eval_scored": 0, "eval_llm": 0, "eval_heuristic": 0, "eval_independent": 0,
+        "eval_independent_rate": None, "eval_llm_rate": None,
+        "retried_runs": 0, "retry_rate": 0, "avg_retries": 0,
         "by_type": {}, "trend": trend,
         "total_tokens_in": 0, "total_tokens_out": 0, "total_tokens": 0,
         "total_cost_usd": 0.0, "by_provider": {}, "by_model": {},

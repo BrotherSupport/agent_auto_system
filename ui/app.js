@@ -2122,11 +2122,45 @@ function renderPerformancePage(s) {
             <div class="mini-bar-f" style="width:${fw}%"></div>
           </div>
         </td>
+        <td style="text-align:right;color:${data.retried > 0 ? 'var(--red)' : 'var(--text-muted)'}">${data.retried > 0 ? data.retried : '—'}</td>
         <td style="color:var(--text-muted)">${data.avg_duration > 0 ? data.avg_duration + 's' : '—'}</td>
       </tr>`;
   }).join('');
 
   const successRateColor = s.success_rate >= 80 ? 'green' : s.success_rate >= 50 ? '' : 'red';
+
+  // Eval trust & reliability — is the headline quality number actually trustworthy?
+  const indepRate = s.eval_independent_rate;   // % of scored runs graded by an independent LLM judge
+  const indepColor = indepRate == null ? '' : indepRate >= 80 ? 'green' : indepRate >= 50 ? '' : 'red';
+  const indepStr = indepRate == null ? '—' : indepRate + '%';
+  const heurCount = s.eval_heuristic || 0;
+  const retryColor = s.retry_rate === 0 ? 'green' : s.retry_rate <= 20 ? '' : 'red';
+  const trustSection = `
+    <div class="perf-section">
+      <div class="perf-section-title">Eval Trust &amp; Reliability</div>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-label" title="Share of scored runs graded by an independent LLM judge, excluding self-graded and heuristic fallbacks. Low = the quality score is not trustworthy.">Independent Judge</div>
+          <div class="stat-value ${indepColor}">${indepStr}</div>
+          <div class="stat-sub">${s.eval_independent || 0} of ${s.eval_scored || 0} scored</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label" title="Runs whose quality score is a heuristic fallback (no LLM judge available). These inflate/deflate Avg Quality without a real judgment.">Heuristic Scores</div>
+          <div class="stat-value ${heurCount > 0 ? 'orange' : 'green'}" style="font-size:1.4rem">${heurCount}</div>
+          <div class="stat-sub">${s.eval_llm || 0} LLM-judged</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label" title="Percentage of all runs that needed at least one retry (validation failure or transient LLM error). High = flaky provider or weak prompts.">Retry Rate</div>
+          <div class="stat-value ${retryColor}">${s.retry_rate || 0}%</div>
+          <div class="stat-sub">${s.retried_runs || 0} runs retried</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label" title="Average retry attempts per run across all runs.">Avg Retries</div>
+          <div class="stat-value" style="font-size:1.4rem">${s.avg_retries || 0}</div>
+          <div class="stat-sub">per run</div>
+        </div>
+      </div>
+    </div>`;
 
   const totalCostStr = s.total_cost_usd > 0
     ? (s.total_cost_usd < 0.01 ? s.total_cost_usd.toFixed(5) : s.total_cost_usd.toFixed(3))
@@ -2159,11 +2193,22 @@ function renderPerformancePage(s) {
       const score = m.avg_eval_score;
       const scoreCls = score == null ? 'srate-mid' : score >= 80 ? 'srate-high' : score >= 50 ? 'srate-mid' : 'srate-low';
       const scoreStr = score == null ? '—' : Math.round(score);
+      const conf = m.avg_eval_confidence;
+      const confStr = conf == null ? '—' : conf.toFixed(2);
+      // Share of scored runs judged by an independent LLM (vs heuristic fallback)
+      const scored = m.scored || 0;
+      const llmPct = scored > 0 ? Math.round((m.llm_judged / scored) * 100) : 0;
+      const judgeCls = scored === 0 ? 'srate-mid' : llmPct >= 80 ? 'srate-high' : llmPct >= 50 ? 'srate-mid' : 'srate-low';
+      const judgeStr = scored === 0 ? '—' : llmPct + '%';
+      const judgeTitle = scored === 0 ? 'no scored runs' : `${m.llm_judged}/${scored} scored by LLM judge, rest heuristic`;
+      const retStr = m.retried > 0 ? m.retried : '—';
       return `<tr>
         <td><span class="model-name-mono">${escHtml(modelShort)}</span></td>
         <td style="text-align:right">${m.runs}</td>
         <td><span class="srate-pill ${srCls}">${sr}%</span></td>
-        <td><span class="srate-pill ${scoreCls}">${scoreStr}</span></td>
+        <td><span class="srate-pill ${scoreCls}" title="confidence ${confStr}">${scoreStr}</span></td>
+        <td><span class="srate-pill ${judgeCls}" title="${judgeTitle}">${judgeStr}</span></td>
+        <td style="text-align:right;color:${m.retried > 0 ? 'var(--red)' : 'var(--text-muted)'}" title="runs that needed a retry">${retStr}</td>
         <td>
           <div class="tok-bar-wrap" style="width:${barW}px" title="${m.tokens_in.toLocaleString()} in · ${m.tokens_out.toLocaleString()} out">
             <div class="tok-bar-in"  style="width:${inW}%"></div>
@@ -2199,6 +2244,8 @@ function renderPerformancePage(s) {
       ${modelRows ? `<table class="llm-model-table">
         <thead><tr>
           <th>Model</th><th style="text-align:right">Runs</th><th>Success</th><th>Score</th>
+          <th title="% of scored runs graded by an independent LLM judge (vs heuristic fallback)">LLM&nbsp;Judged</th>
+          <th style="text-align:right" title="runs that needed at least one retry">Retries</th>
           <th>Tokens <span style="opacity:0.5;font-weight:400">■ in ■ out</span></th>
           <th>Cost</th><th>Avg Dur</th>
         </tr></thead>
@@ -2246,6 +2293,8 @@ function renderPerformancePage(s) {
       </div>
     </div>
 
+    ${trustSection}
+
     <div class="perf-section">
       <div class="perf-section-title">Last 7 Days</div>
       <div class="trend-chart">${trendRows}</div>
@@ -2263,6 +2312,7 @@ function renderPerformancePage(s) {
               <th style="text-align:right">Success</th>
               <th style="text-align:right">Failed</th>
               <th>Rate</th>
+              <th style="text-align:right" title="runs that needed at least one retry">Retries</th>
               <th>Avg Duration</th>
             </tr>
           </thead>

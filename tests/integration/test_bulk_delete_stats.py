@@ -20,7 +20,9 @@ def _make_job(session, job_type: str = "web_scraper") -> Job:
 
 
 def _make_run(session, job_id: int, status: str = "success",
-              duration_secs: int = 10) -> Run:
+              duration_secs: int = 10, *, eval_score=None, eval_confidence=None,
+              eval_method=None, eval_notes=None, retry_count=0,
+              llm_provider=None, llm_model=None) -> Run:
     started = datetime.now(UTC)
     finished = started + timedelta(seconds=duration_secs) if status in ("success", "failed") else None
     run = Run(
@@ -29,6 +31,13 @@ def _make_run(session, job_id: int, status: str = "success",
         result=json.dumps({"ok": True}) if status == "success" else None,
         started_at=started,
         finished_at=finished,
+        eval_score=eval_score,
+        eval_confidence=eval_confidence,
+        eval_method=eval_method,
+        eval_notes=eval_notes,
+        retry_count=retry_count,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
     )
     session.add(run)
     session.commit()
@@ -191,6 +200,84 @@ async def test_stats_avg_duration_computed(client, db_session):
 
     data = (await client.get("/api/stats")).json()
     assert data["avg_duration_secs"] == 15.0
+
+
+# ── GET /api/stats — eval trust & reliability (Tier 1) ───────────────────────
+
+async def test_stats_empty_db_has_trust_fields(client):
+    data = (await client.get("/api/stats")).json()
+    assert data["eval_scored"] == 0
+    assert data["eval_llm"] == 0
+    assert data["eval_heuristic"] == 0
+    assert data["eval_independent_rate"] is None
+    assert data["retry_rate"] == 0
+    assert data["avg_retries"] == 0
+
+
+async def test_stats_eval_method_breakdown(client, db_session):
+    job = _make_job(db_session)
+    _make_run(db_session, job.id, "success", eval_score=90, eval_method="llm")
+    _make_run(db_session, job.id, "success", eval_score=80, eval_method="llm")
+    _make_run(db_session, job.id, "success", eval_score=50, eval_method="heuristic")
+    _make_run(db_session, job.id, "success")  # unscored → excluded from breakdown
+
+    data = (await client.get("/api/stats")).json()
+    assert data["eval_scored"] == 3
+    assert data["eval_llm"] == 2
+    assert data["eval_heuristic"] == 1
+    assert data["eval_llm_rate"] == round(2 / 3 * 100, 1)
+
+
+async def test_stats_self_graded_excluded_from_independent(client, db_session):
+    job = _make_job(db_session)
+    _make_run(db_session, job.id, "success", eval_score=90, eval_method="llm",
+              eval_notes="great output")
+    _make_run(db_session, job.id, "success", eval_score=88, eval_method="llm",
+              eval_notes="ok [self-graded: no independent judge available]")
+
+    data = (await client.get("/api/stats")).json()
+    assert data["eval_llm"] == 2
+    assert data["eval_independent"] == 1
+    assert data["eval_independent_rate"] == 50.0
+
+
+async def test_stats_retry_metrics(client, db_session):
+    job = _make_job(db_session)
+    _make_run(db_session, job.id, "success", retry_count=0)
+    _make_run(db_session, job.id, "success", retry_count=2)
+    _make_run(db_session, job.id, "failed", retry_count=1)
+    _make_run(db_session, job.id, "success", retry_count=0)
+
+    data = (await client.get("/api/stats")).json()
+    assert data["retried_runs"] == 2
+    assert data["retry_rate"] == 50.0
+    assert data["avg_retries"] == round((0 + 2 + 1 + 0) / 4, 2)
+
+
+async def test_stats_by_type_includes_retried(client, db_session):
+    job = _make_job(db_session, "web_scraper")
+    _make_run(db_session, job.id, "success", retry_count=1)
+    _make_run(db_session, job.id, "success", retry_count=0)
+
+    data = (await client.get("/api/stats")).json()
+    assert data["by_type"]["web_scraper"]["retried"] == 1
+
+
+async def test_stats_by_model_enriched(client, db_session):
+    job = _make_job(db_session)
+    _make_run(db_session, job.id, "success", eval_score=90, eval_confidence=0.8,
+              eval_method="llm", retry_count=1,
+              llm_provider="anthropic", llm_model="claude-opus-4-8")
+    _make_run(db_session, job.id, "success", eval_score=70, eval_confidence=0.6,
+              eval_method="heuristic", retry_count=0,
+              llm_provider="anthropic", llm_model="claude-opus-4-8")
+
+    data = (await client.get("/api/stats")).json()
+    m = data["by_model"]["anthropic"][0]
+    assert m["scored"] == 2
+    assert m["llm_judged"] == 1
+    assert m["retried"] == 1
+    assert m["avg_eval_confidence"] == 0.7
 
 
 async def test_stats_active_count(client, db_session, mocker):
