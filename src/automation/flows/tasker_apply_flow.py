@@ -4,6 +4,7 @@ from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel
 
 from src.automation.crews.tasker_apply_crew.crew import TaskerProposalCrew
+from src.automation.crews.tasker_relevance_crew.crew import TaskerRelevanceCrew
 from src.automation.flows.base import FlowMixin
 from src.automation.flows.utils import extract_usage
 from src.automation.progress import append_log
@@ -14,11 +15,37 @@ from src.automation.tools.tasker_apply_tool import (
 )
 
 
+def _parse_verdict(text: str) -> dict | None:
+    """Best-effort extract a {"relevant": bool, "reason": str} object from LLM text.
+
+    Tolerates ```json fences and surrounding prose; returns None if no usable
+    object with a boolean-ish ``relevant`` can be found (caller fails open)."""
+    if not text:
+        return None
+    candidates = [text]
+    start, end = text.find("{"), text.rfind("}")
+    if 0 <= start < end:
+        candidates.append(text[start:end + 1])
+    for cand in candidates:
+        try:
+            obj = json.loads(cand)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(obj, dict) and "relevant" in obj:
+            val = obj["relevant"]
+            if isinstance(val, str):
+                obj["relevant"] = val.strip().lower() in (
+                    "true", "yes", "y", "1", "相關", "符合", "是", "對")
+            return obj
+    return None
+
+
 class TaskerApplyState(BaseModel):
     category_ids: str = ""          # e.g. "110" or "110,101001"
     min_charge: int = 0
     max_charge: int = 0
     proposal_template: str = ""     # optional base/fallback for the LLM writer
+    task_filter: str = ""           # optional 2nd gate: LLM relevance filter (nat-lang)
     max_cases: int = 5
     dry_run: bool = True            # safety: don't click 送出提案 unless explicitly false
     run_id: int = 0
@@ -94,6 +121,44 @@ class TaskerApplyFlow(FlowMixin, Flow[TaskerApplyState]):
                 except Exception:  # noqa: BLE001
                     return template
 
+        # Second gate: an optional natural-language task_filter. When set (and an
+        # LLM is available) each scanned case is judged for relevance BEFORE we
+        # spend a proposal-writing call; irrelevant cases are skipped. Fails open
+        # (keeps the case) on any judge/parse error so a flaky LLM never silently
+        # drops good cases — mirrors proposal_fn's degrade-gracefully policy.
+        task_filter = (self.state.task_filter or "").strip()
+        relevance_fn = None
+        if task_filter and llm is None:
+            append_log(self.state.run_id,
+                       "task_filter is set but no LLM is available; skipping the "
+                       "relevance gate (applying to all eligible cases).")
+        elif task_filter:
+            append_log(self.state.run_id,
+                       "Second gate active: filtering cases by task_filter before proposing.")
+
+            def relevance_fn(title: str, description: str) -> tuple[bool, str]:  # noqa: F811
+                try:
+                    result = TaskerRelevanceCrew(llm=llm).crew().kickoff(inputs={
+                        "task_filter": task_filter,
+                        "case_title": title,
+                        "case_description": description,
+                    })
+                    u = extract_usage(result)
+                    usage_acc["prompt_tokens"] += u.get("prompt_tokens", 0)
+                    usage_acc["completion_tokens"] += u.get("completion_tokens", 0)
+                    text = (result.raw if hasattr(result, "raw") else str(result)) or ""
+                    verdict = _parse_verdict(text)
+                    if verdict is None:
+                        append_log(self.state.run_id,
+                                   f"Relevance verdict unparseable ({text[:80]!r}); "
+                                   "keeping case (fail-open).")
+                        return True, ""
+                    return bool(verdict.get("relevant")), str(verdict.get("reason") or "")
+                except Exception as exc:  # noqa: BLE001 — never fail a case on the gate
+                    append_log(self.state.run_id,
+                               f"Relevance judge failed ({exc}); keeping case (fail-open).")
+                    return True, ""
+
         append_log(self.state.run_id, "Loading tasker.com.tw session and scanning cases...")
         result = run_tasker_apply(
             category_ids=self.state.category_ids,
@@ -102,6 +167,7 @@ class TaskerApplyFlow(FlowMixin, Flow[TaskerApplyState]):
             max_cases=self.state.max_cases,
             dry_run=self.state.dry_run,
             proposal_fn=proposal_fn,
+            relevance_fn=relevance_fn,
             log=lambda m: append_log(self.state.run_id, m),
         )
 

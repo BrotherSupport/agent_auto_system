@@ -105,9 +105,10 @@ const AUTO_CATALOG = {
       { name: 'min_charge',   type: 'int',       desc: '初次估價 lower bound (元)' },
       { name: 'max_charge',   type: 'int',       desc: '初次估價 upper bound (元, 須大於 min)' },
       { name: 'max_cases',    type: 'int (1–500)', desc: 'Number of eligible cases to actually apply to (auto-advances pages)' },
+      { name: 'task_filter',  type: 'str',       desc: '2nd gate (optional): natural-language filter; AI skips cases that don\'t match before proposing' },
       { name: 'dry_run',      type: 'bool',      desc: 'If checked, fill but do NOT click 送出提案' },
     ],
-    crew: 'TaskerProposalCrew', flow: 'TaskerApplyFlow',
+    crew: 'TaskerProposalCrew + TaskerRelevanceCrew', flow: 'TaskerApplyFlow',
     agent: 'Proposal Writer', tools: ['Tasker Auto-Apply'],
   },
   email_collect: {
@@ -1203,6 +1204,7 @@ runForm.addEventListener('submit', async (e) => {
     if (minCharge < 1000) { showToast('最低金額不可小於 1000 元', 'error'); return; }
     if (minCharge > maxCharge) { showToast('最低金額不可大於最高金額', 'error'); return; }
     const template = document.getElementById('tasker-template').value.trim();
+    const taskFilter = document.getElementById('tasker-filter').value.trim();
     payload = {
       category_ids: categories,
       min_charge: minCharge,
@@ -1210,6 +1212,7 @@ runForm.addEventListener('submit', async (e) => {
       max_cases: parseInt(document.getElementById('tasker-max-cases').value, 10) || 5,
       dry_run: document.getElementById('tasker-dry-run').checked,
       ...(template ? { proposal_template: template } : {}),
+      ...(taskFilter ? { task_filter: taskFilter } : {}),
     };
     jobName = `Tasker 提案: ${categories}${payload.dry_run ? ' (dry-run)' : ''}`;
 

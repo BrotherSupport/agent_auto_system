@@ -161,6 +161,18 @@ _CATALOG: dict = {
             "source_file": "src/automation/crews/tasker_apply_crew/config/agents.yaml",
         },
         {
+            "id": "relevance_judge",
+            "name": "Relevance Judge",
+            "role": "外包接案案件相關性判斷專家",
+            "goal": "依接案者自訂的 task_filter 篩選條件，判斷單一案件是否為值得投遞的相關案件，只回傳 JSON 判斷。",
+            "backstory": "資深接案顧問，熟悉各類外包案件領域。第二道關卡：只看案件標題與內容對照篩選條件，快速客觀判斷相關與否，只輸出 {\"relevant\": bool, \"reason\": str}。",
+            "tools": [],
+            "crew": "TaskerRelevanceCrew",
+            "task": "judge_relevance_task",
+            "job_type": "tasker_apply",
+            "source_file": "src/automation/crews/tasker_relevance_crew/config/agents.yaml",
+        },
+        {
             "id": "lead_qualifier_agent",
             "name": "Lead Qualifier",
             "role": "B2B Lead Qualifier & Outreach Strategist",
@@ -525,6 +537,23 @@ _CATALOG: dict = {
             "source_file": "src/automation/crews/tasker_apply_crew/crew.py",
         },
         {
+            "id": "tasker_relevance_crew",
+            "name": "TaskerRelevanceCrew",
+            "process": "sequential",
+            "agents": ["relevance_judge"],
+            "job_type": "tasker_apply",
+            "flow": "TaskerApplyFlow",
+            "tasks": [
+                {
+                    "name": "judge_relevance_task",
+                    "description": "Second gate: judge whether a single case matches the user's natural-language task_filter (one kickoff per scanned case), skipping irrelevant cases before a proposal is written. Only runs when task_filter is set.",
+                    "expected_output": "A strict JSON verdict {\"relevant\": bool, \"reason\": str}.",
+                    "config_file": "src/automation/crews/tasker_relevance_crew/config/tasks.yaml",
+                }
+            ],
+            "source_file": "src/automation/crews/tasker_relevance_crew/crew.py",
+        },
+        {
             "id": "email_collect_crew",
             "name": "EmailCollectCrew",
             "process": "sequential",
@@ -770,12 +799,13 @@ _CATALOG: dict = {
             "id": "tasker_apply_flow",
             "name": "TaskerApplyFlow",
             "job_type": "tasker_apply",
-            "crew": "TaskerProposalCrew (per-case 提案說明) + tasker_apply tool (browser)",
+            "crew": "TaskerProposalCrew (per-case 提案說明) + TaskerRelevanceCrew (2nd-gate filter) + tasker_apply tool (browser)",
             "state_fields": [
                 {"name": "category_ids",      "type": "str",  "default": ""},
                 {"name": "min_charge",        "type": "int",  "default": 0},
                 {"name": "max_charge",        "type": "int",  "default": 0},
                 {"name": "proposal_template", "type": "str",  "default": ""},
+                {"name": "task_filter",       "type": "str",  "default": ""},
                 {"name": "max_cases",         "type": "int",  "default": 5},
                 {"name": "dry_run",           "type": "bool", "default": True},
                 {"name": "run_id",            "type": "int",  "default": 0},
@@ -791,10 +821,12 @@ _CATALOG: dict = {
                     "decorator": "@listen(validate_payload)",
                     "description": (
                         "Resolves the LLM, logs in to tasker.com.tw, scans open cases in "
-                        "the category, and for each: writes a tailored 提案說明 via "
+                        "the category, and for each: (optional 2nd gate) if task_filter is "
+                        "set, TaskerRelevanceCrew judges relevance and skips non-matching "
+                        "cases before proposing; then writes a tailored 提案說明 via "
                         "TaskerProposalCrew, fills 初次估價 min/max + 提案說明, skips "
                         "already-applied cases, and clicks 送出提案 unless dry_run. "
-                        "Returns an applied/skipped summary JSON."
+                        "Returns an applied/skipped summary JSON (incl. filtered_count)."
                     ),
                 },
             ],

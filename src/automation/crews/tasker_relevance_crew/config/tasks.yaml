@@ -1,0 +1,24 @@
+judge_relevance_task:
+  description: >
+    接案者只想投遞符合以下「篩選條件」的案件（這是類別之外的第二道關卡）：
+    ---
+    {task_filter}
+    ---
+
+    請判斷下面這個 tasker.com.tw 案件是否符合上述篩選條件。
+
+    案件標題：{case_title}
+
+    案件內容（節錄）：
+    {case_description}
+
+    判斷要求：
+    - 只依據篩選條件判斷；條件明確符合才算相關 (relevant=true)。
+    - 若案件明確落在被排除的類型，或明顯屬於篩選條件之外的領域，則算不相關 (relevant=false)。
+    - reason 用一句簡短繁體中文說明判斷依據（例如「屬於 Python 後端開發，符合條件」或
+      「屬於美編設計，已被排除」）。
+    - 只輸出一個 JSON 物件，格式為 {{"relevant": true 或 false, "reason": "<一句話>"}}。
+      不要輸出任何其他文字、標題、引號外的說明或 Markdown。
+  expected_output: >
+    一個嚴格的 JSON 物件，例如 {{"relevant": true, "reason": "屬於後端開發，符合條件"}}。
+  agent: relevance_judge
