@@ -467,9 +467,16 @@ def run_tasker_apply(
                         info = _case_info(ctx.request, bearer, cid)
                         entry["title"] = (info.get("title") or cid)[:200]
 
-                        # Second gate: relevance filter on the case content.
-                        keep, why = relevance_fn(info.get("title", ""),
-                                                 info.get("content", ""))
+                        # Second gate: relevance filter on the case content. Fail
+                        # open — a raising relevance_fn must never drop a good case
+                        # (the surrounding except would otherwise mark it failed).
+                        try:
+                            keep, why = relevance_fn(info.get("title", ""),
+                                                     info.get("content", ""))
+                        except Exception as exc:  # noqa: BLE001
+                            keep, why = True, ""
+                            log(f"⚠ {cid}: relevance filter errored ({exc}); "
+                                "keeping case (fail-open)")
                         if not keep:
                             reason = f"filtered out: {why}" if why else "filtered out by task_filter"
                             entry.update(status="skipped", reason=reason, filtered=True)

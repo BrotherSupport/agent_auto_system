@@ -235,6 +235,24 @@ def test_relevance_gate_filters_out_case(mocker):
     assert "1 filtered by task_filter" in res["summary"]
 
 
+def test_relevance_gate_fails_open_when_relevance_fn_raises(mocker):
+    # A raising relevance_fn must NOT drop the case (fail-open) — it should be
+    # kept and applied, not marked failed by the surrounding except.
+    T = _mock_playwright(mocker, page_ids=["TK1"], proposed=())
+
+    def boom(_t, _d):
+        raise RuntimeError("judge exploded")
+
+    res = T.run_tasker_apply(
+        category_ids="110", min_charge=5000, max_charge=9000, max_cases=5,
+        dry_run=True, proposal_fn=lambda t, d: "P", relevance_fn=boom,
+        log=lambda m: None,
+    )
+    assert res["filtered_count"] == 0
+    assert res["applied_count"] == 1
+    assert res["applied"][0]["case_id"] == "TK1"
+
+
 def test_no_relevance_fn_filters_nothing(mocker):
     T = _mock_playwright(mocker, page_ids=["TK1"], proposed=())
     res = T.run_tasker_apply(
@@ -265,7 +283,29 @@ def test_parse_verdict_coerces_string_boolean():
     from src.automation.flows.tasker_apply_flow import _parse_verdict
 
     assert _parse_verdict('{"relevant": "yes", "reason": "x"}')["relevant"] is True
+    assert _parse_verdict('{"relevant": "是", "reason": "x"}')["relevant"] is True
     assert _parse_verdict('{"relevant": "false", "reason": "x"}')["relevant"] is False
+
+
+def test_parse_verdict_null_reason_is_empty_not_none_string(mocker):
+    # {"reason": null} must not surface the literal string "None" downstream.
+    captured = {}
+    _patch_run(mocker, captured)
+    mocker.patch("src.automation.harness.provider.resolve",
+                 return_value=(mocker.MagicMock(), "openai", "gpt-4o-mini"))
+    mocker.patch("src.automation.flows.tasker_apply_flow.extract_usage", return_value={})
+    fake_crew = mocker.patch("src.automation.flows.tasker_apply_flow.TaskerRelevanceCrew")
+    verdict = mocker.MagicMock()
+    verdict.raw = '{"relevant": false, "reason": null}'
+    fake_crew.return_value.crew.return_value.kickoff.return_value = verdict
+
+    from src.automation.flows.tasker_apply_flow import TaskerApplyFlow
+
+    TaskerApplyFlow().kickoff(inputs={
+        "category_ids": "110", "min_charge": 1000, "max_charge": 2000,
+        "task_filter": "只接後端"})
+    keep, reason = captured["relevance_fn"]("t", "d")
+    assert keep is False and reason == ""
 
 
 def test_parse_verdict_returns_none_on_garbage():

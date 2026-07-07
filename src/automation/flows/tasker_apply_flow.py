@@ -34,7 +34,8 @@ def _parse_verdict(text: str) -> dict | None:
         if isinstance(obj, dict) and "relevant" in obj:
             val = obj["relevant"]
             if isinstance(val, str):
-                obj["relevant"] = val.strip().lower() in ("true", "yes", "1", "相關", "符合")
+                obj["relevant"] = val.strip().lower() in (
+                    "true", "yes", "y", "1", "相關", "符合", "是", "對")
             return obj
     return None
 
@@ -152,7 +153,7 @@ class TaskerApplyFlow(FlowMixin, Flow[TaskerApplyState]):
                                    f"Relevance verdict unparseable ({text[:80]!r}); "
                                    "keeping case (fail-open).")
                         return True, ""
-                    return bool(verdict.get("relevant")), str(verdict.get("reason", ""))
+                    return bool(verdict.get("relevant")), str(verdict.get("reason") or "")
                 except Exception as exc:  # noqa: BLE001 — never fail a case on the gate
                     append_log(self.state.run_id,
                                f"Relevance judge failed ({exc}); keeping case (fail-open).")
