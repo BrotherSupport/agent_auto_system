@@ -359,6 +359,7 @@ def run_tasker_apply(
     max_cases: int = 5,
     dry_run: bool = True,
     proposal_fn: Callable[[str, str], str] | None = None,
+    relevance_fn: Callable[[str, str], tuple[bool, str]] | None = None,
     log: Callable[[str], None] | None = None,
     state_path: str | None = None,
     max_pages: int = 60,
@@ -373,6 +374,10 @@ def run_tasker_apply(
 
     log = log or _noop
     proposal_fn = proposal_fn or (lambda _t, _d: _DEFAULT_TEMPLATE)
+    # Optional "second gate": a case that survives the category URL filter and the
+    # eligibility check still must match relevance_fn (title, content) -> (keep, reason)
+    # before we spend a proposal-writing call. Default keeps every case.
+    relevance_fn = relevance_fn or (lambda _t, _d: (True, ""))
     state_path = state_path or os.getenv("TASKER_STORAGE_STATE", DEFAULT_STATE_PATH)
     username = os.getenv("TASKER_USERNAME", "")  # noqa: F841 (kept for parity/logs)
     max_cases = max(1, min(int(max_cases), 500))
@@ -424,6 +429,7 @@ def run_tasker_apply(
             skipped: list[dict] = []
             seen: set[str] = set()
             scanned = 0
+            filtered = 0
             pages_scanned = 0
             block_msg: str | None = None
             page_num = 1
@@ -460,6 +466,17 @@ def run_tasker_apply(
 
                         info = _case_info(ctx.request, bearer, cid)
                         entry["title"] = (info.get("title") or cid)[:200]
+
+                        # Second gate: relevance filter on the case content.
+                        keep, why = relevance_fn(info.get("title", ""),
+                                                 info.get("content", ""))
+                        if not keep:
+                            reason = f"filtered out: {why}" if why else "filtered out by task_filter"
+                            entry.update(status="skipped", reason=reason, filtered=True)
+                            log(f"↷ {cid}: {reason} — next")
+                            skipped.append(entry)
+                            filtered += 1
+                            continue
 
                         proposal = (proposal_fn(info.get("title", ""),
                                                 info.get("content", "")) or "").strip() \
@@ -519,8 +536,9 @@ def run_tasker_apply(
             summary = (
                 f"Category {category_ids}: {scanned} case(s) scanned across "
                 f"{pages_scanned} page(s), {len(applied)} {verb}, "
-                f"{len(skipped)} skipped."
+                f"{len(skipped)} skipped"
             )
+            summary += f" ({filtered} filtered by task_filter)." if filtered else "."
             if block_msg:
                 summary += f" Stopped early: {block_msg}."
             return {
@@ -532,6 +550,7 @@ def run_tasker_apply(
                 "applied_count": len(applied),
                 "submitted_count": submitted_n,
                 "skipped_count": len(skipped),
+                "filtered_count": filtered,
                 "blocked": block_msg,
                 "summary": summary,
             }

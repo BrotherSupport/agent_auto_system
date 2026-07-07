@@ -210,6 +210,144 @@ def test_ineligible_case_skipped(mocker):
     assert "own case" in res["skipped"][0]["reason"]
 
 
+# ── second gate: task_filter relevance ───────────────────────────────────────
+
+def test_relevance_gate_filters_out_case(mocker):
+    # TK1 is judged irrelevant → skipped as 'filtered out' (not applied); TK3 kept.
+    T = _mock_playwright(mocker, page_ids=["TK1", "TK3"], proposed=())
+    submit = mocker.patch.object(T, "_submit", return_value=(True, "ok", "0"))
+
+    def rel(title, _desc):
+        return ("TK1" not in title, "美編類，不符合條件")
+
+    res = T.run_tasker_apply(
+        category_ids="110", min_charge=5000, max_charge=9000, max_cases=5,
+        dry_run=True, proposal_fn=lambda t, d: "P", relevance_fn=rel,
+        log=lambda m: None,
+    )
+    assert submit.call_count == 0
+    assert res["filtered_count"] == 1
+    assert res["applied_count"] == 1
+    assert res["applied"][0]["case_id"] == "TK3"
+    filtered = [s for s in res["skipped"] if s.get("filtered")]
+    assert filtered and "filtered out" in filtered[0]["reason"]
+    assert "美編" in filtered[0]["reason"]
+    assert "1 filtered by task_filter" in res["summary"]
+
+
+def test_no_relevance_fn_filters_nothing(mocker):
+    T = _mock_playwright(mocker, page_ids=["TK1"], proposed=())
+    res = T.run_tasker_apply(
+        category_ids="110", min_charge=5000, max_charge=9000, max_cases=5,
+        dry_run=True, proposal_fn=lambda t, d: "P", log=lambda m: None,
+    )
+    assert res["filtered_count"] == 0 and res["applied_count"] == 1
+    assert "filtered by task_filter" not in res["summary"]
+
+
+# ── _parse_verdict ────────────────────────────────────────────────────────────
+
+def test_parse_verdict_plain_json():
+    from src.automation.flows.tasker_apply_flow import _parse_verdict
+
+    v = _parse_verdict('{"relevant": true, "reason": "屬於後端開發"}')
+    assert v["relevant"] is True and "後端" in v["reason"]
+
+
+def test_parse_verdict_fenced_and_prose_wrapped():
+    from src.automation.flows.tasker_apply_flow import _parse_verdict
+
+    v = _parse_verdict('判斷結果：\n```json\n{"relevant": false, "reason": "美編"}\n```')
+    assert v["relevant"] is False
+
+
+def test_parse_verdict_coerces_string_boolean():
+    from src.automation.flows.tasker_apply_flow import _parse_verdict
+
+    assert _parse_verdict('{"relevant": "yes", "reason": "x"}')["relevant"] is True
+    assert _parse_verdict('{"relevant": "false", "reason": "x"}')["relevant"] is False
+
+
+def test_parse_verdict_returns_none_on_garbage():
+    from src.automation.flows.tasker_apply_flow import _parse_verdict
+
+    assert _parse_verdict("not json at all") is None
+    assert _parse_verdict('{"foo": 1}') is None          # no 'relevant' key
+    assert _parse_verdict("") is None
+
+
+# ── flow wiring of the relevance gate ─────────────────────────────────────────
+
+def _patch_run(mocker, captured):
+    mocker.patch("src.automation.flows.tasker_apply_flow.run_tasker_apply",
+                 side_effect=lambda **kw: captured.update(kw) or {
+                     "applied": [], "skipped": [], "cases_found": 0, "summary": "x"})
+
+
+def test_flow_no_relevance_fn_without_task_filter(mocker):
+    captured = {}
+    _patch_run(mocker, captured)
+    mocker.patch("src.automation.harness.provider.resolve",
+                 return_value=(mocker.MagicMock(), "openai", "gpt-4o-mini"))
+
+    from src.automation.flows.tasker_apply_flow import TaskerApplyFlow
+
+    TaskerApplyFlow().kickoff(inputs={
+        "category_ids": "110", "min_charge": 1000, "max_charge": 2000})
+    assert captured["relevance_fn"] is None
+
+
+def test_flow_skips_gate_when_task_filter_set_but_no_llm(mocker):
+    captured = {}
+    _patch_run(mocker, captured)
+    mocker.patch("src.automation.harness.provider.resolve", side_effect=OSError("no key"))
+
+    from src.automation.flows.tasker_apply_flow import TaskerApplyFlow
+
+    TaskerApplyFlow().kickoff(inputs={
+        "category_ids": "110", "min_charge": 1000, "max_charge": 2000,
+        "task_filter": "只接後端"})
+    assert captured["relevance_fn"] is None
+
+
+def test_flow_builds_relevance_fn_and_judges(mocker):
+    captured = {}
+    _patch_run(mocker, captured)
+    mocker.patch("src.automation.harness.provider.resolve",
+                 return_value=(mocker.MagicMock(), "openai", "gpt-4o-mini"))
+    mocker.patch("src.automation.flows.tasker_apply_flow.extract_usage", return_value={})
+    fake_crew = mocker.patch("src.automation.flows.tasker_apply_flow.TaskerRelevanceCrew")
+    verdict = mocker.MagicMock()
+    verdict.raw = '{"relevant": false, "reason": "屬於美編，已排除"}'
+    fake_crew.return_value.crew.return_value.kickoff.return_value = verdict
+
+    from src.automation.flows.tasker_apply_flow import TaskerApplyFlow
+
+    TaskerApplyFlow().kickoff(inputs={
+        "category_ids": "110", "min_charge": 1000, "max_charge": 2000,
+        "task_filter": "只接 Python 後端"})
+    assert callable(captured["relevance_fn"])
+    keep, reason = captured["relevance_fn"]("設計 banner", "美編需求")
+    assert keep is False and "美編" in reason
+
+
+def test_flow_relevance_fn_fails_open_on_error(mocker):
+    captured = {}
+    _patch_run(mocker, captured)
+    mocker.patch("src.automation.harness.provider.resolve",
+                 return_value=(mocker.MagicMock(), "openai", "gpt-4o-mini"))
+    fake_crew = mocker.patch("src.automation.flows.tasker_apply_flow.TaskerRelevanceCrew")
+    fake_crew.return_value.crew.return_value.kickoff.side_effect = RuntimeError("boom")
+
+    from src.automation.flows.tasker_apply_flow import TaskerApplyFlow
+
+    TaskerApplyFlow().kickoff(inputs={
+        "category_ids": "110", "min_charge": 1000, "max_charge": 2000,
+        "task_filter": "只接後端"})
+    keep, reason = captured["relevance_fn"]("t", "d")
+    assert keep is True and reason == ""      # fail-open: never drop a case on error
+
+
 # ── wiring consistency ───────────────────────────────────────────────────────
 
 def test_job_type_wired_everywhere():
