@@ -172,6 +172,15 @@ async def test_list_runs_bad_date_ignored(client, db_session):
     assert len(resp.json()) == 3  # unparseable filter is silently dropped
 
 
+async def test_list_runs_filter_accepts_full_datetime(client, db_session):
+    _seed_runs_for_filtering(db_session)
+    # An explicit timestamp (with time component) narrows within a single day.
+    resp = await client.get("/api/runs?started_after=2026-07-05T11:00:00")
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["status"] == "success"  # only the 2026-07-09 run is after this
+
+
 async def test_leads_csv_export(client, db_session):
     run = _seed_lead_run(db_session, {
         "discovered_count": 2, "with_website": 1, "lead_count": 1,

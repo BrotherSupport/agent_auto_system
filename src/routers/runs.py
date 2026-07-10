@@ -76,12 +76,19 @@ async def cancel_run(
     return {"cancelled": was_cancelled, "run_id": run_id}
 
 
-def _parse_day(value: str) -> datetime | None:
-    """Parse an ISO date/datetime filter value; return None if unparseable."""
+def _parse_day(value: str | None) -> datetime | None:
+    """Parse an ISO date/datetime filter value; return None if empty/unparseable.
+
+    A bare date ("2026-07-05") parses timezone-naive; we pin it to UTC so it
+    compares cleanly against the tz-aware Run.started_at column (Postgres rejects
+    naive-vs-aware comparisons)."""
+    if not value:
+        return None
     try:
-        return datetime.fromisoformat(value)
+        dt = datetime.fromisoformat(value)
     except (ValueError, TypeError):
         return None
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 @router.get("/runs")
@@ -107,7 +114,7 @@ def list_runs(
         stmt = stmt.where(Run.started_at >= after)
     if (before := _parse_day(started_before)) is not None:
         # A bare "YYYY-MM-DD" means "up to and including that day".
-        if len(started_before) <= 10:
+        if started_before and len(started_before) <= 10:
             before += timedelta(days=1)
         stmt = stmt.where(Run.started_at < before)
     runs = session.exec(stmt.offset(offset).limit(limit)).all()
