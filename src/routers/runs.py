@@ -119,7 +119,7 @@ def list_runs(
             before += timedelta(days=1)
         stmt = stmt.where(Run.started_at < before)
     # Total matching rows (before offset/limit) drives client-side page numbering.
-    total = session.scalar(select(func.count()).select_from(stmt.order_by(None).subquery())) or 0
+    total = session.scalar(stmt.order_by(None).with_only_columns(func.count(Run.id))) or 0
     response.headers["X-Total-Count"] = str(total)
     runs = session.exec(stmt.offset(offset).limit(limit)).all()
     if not runs:

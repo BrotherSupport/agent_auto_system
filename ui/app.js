@@ -1779,7 +1779,12 @@ function renderPagination() {
 
   let html = '', prev = -1;
   for (const p of shown) {
-    if (p - prev > 1) html += `<span class="page-num ellipsis">…</span>`;
+    // A gap of exactly one page: show that page's button instead of a same-width "…".
+    if (p - prev === 2) {
+      html += `<button class="page-num" data-page-num="${p - 1}">${p}</button>`;
+    } else if (p - prev > 2) {
+      html += `<span class="page-num ellipsis">…</span>`;
+    }
     html += `<button class="page-num ${p === cur ? 'active' : ''}" data-page-num="${p}">${p + 1}</button>`;
     prev = p;
   }
