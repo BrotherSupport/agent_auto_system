@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlmodel import Session, select
 
 from src.auth import assert_can_run, require_user
@@ -93,6 +93,7 @@ def _parse_day(value: str | None) -> datetime | None:
 
 @router.get("/runs")
 def list_runs(
+    response: Response,
     offset: int = 0,
     limit: int = 50,
     job_type: str | None = None,
@@ -117,6 +118,9 @@ def list_runs(
         if started_before and len(started_before) <= 10:
             before += timedelta(days=1)
         stmt = stmt.where(Run.started_at < before)
+    # Total matching rows (before offset/limit) drives client-side page numbering.
+    total = session.scalar(select(func.count()).select_from(stmt.order_by(None).subquery())) or 0
+    response.headers["X-Total-Count"] = str(total)
     runs = session.exec(stmt.offset(offset).limit(limit)).all()
     if not runs:
         return []
