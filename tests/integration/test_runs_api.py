@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 from src.models import Job, Run
@@ -106,6 +107,78 @@ def _seed_lead_run(db_session, result: dict):
     db_session.commit()
     db_session.refresh(run)
     return run
+
+
+def _seed_runs_for_filtering(db_session):
+    """Two job types, mixed statuses, and spread-out start dates."""
+    form_job = Job(name="Form", job_type="google_form_fill", payload="{}")
+    web_job = Job(name="Web", job_type="web_scraper", payload="{}")
+    db_session.add_all([form_job, web_job])
+    db_session.commit()
+    db_session.refresh(form_job)
+    db_session.refresh(web_job)
+
+    runs = [
+        Run(job_id=form_job.id, status="success",
+            started_at=datetime(2026, 7, 1, 10, 0, tzinfo=UTC)),
+        Run(job_id=form_job.id, status="failed",
+            started_at=datetime(2026, 7, 5, 10, 0, tzinfo=UTC)),
+        Run(job_id=web_job.id, status="success",
+            started_at=datetime(2026, 7, 9, 10, 0, tzinfo=UTC)),
+    ]
+    db_session.add_all(runs)
+    db_session.commit()
+    return form_job, web_job
+
+
+async def test_list_runs_filter_by_job_type(client, db_session):
+    form_job, _ = _seed_runs_for_filtering(db_session)
+    resp = await client.get("/api/runs?job_type=google_form_fill")
+    data = resp.json()
+    assert len(data) == 2
+    assert all(r["job_type"] == "google_form_fill" for r in data)
+
+
+async def test_list_runs_filter_by_status(client, db_session):
+    _seed_runs_for_filtering(db_session)
+    resp = await client.get("/api/runs?status=failed")
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["status"] == "failed"
+
+
+async def test_list_runs_filter_by_date_range(client, db_session):
+    _seed_runs_for_filtering(db_session)
+    # started_after is inclusive; started_before includes the whole named day.
+    resp = await client.get("/api/runs?started_after=2026-07-05&started_before=2026-07-09")
+    data = resp.json()
+    assert len(data) == 2
+    assert {r["status"] for r in data} == {"failed", "success"}
+
+
+async def test_list_runs_filters_combine(client, db_session):
+    _seed_runs_for_filtering(db_session)
+    resp = await client.get("/api/runs?job_type=google_form_fill&status=success")
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["job_type"] == "google_form_fill"
+    assert data[0]["status"] == "success"
+
+
+async def test_list_runs_bad_date_ignored(client, db_session):
+    _seed_runs_for_filtering(db_session)
+    resp = await client.get("/api/runs?started_after=not-a-date")
+    assert resp.status_code == 200
+    assert len(resp.json()) == 3  # unparseable filter is silently dropped
+
+
+async def test_list_runs_filter_accepts_full_datetime(client, db_session):
+    _seed_runs_for_filtering(db_session)
+    # An explicit timestamp (with time component) narrows within a single day.
+    resp = await client.get("/api/runs?started_after=2026-07-05T11:00:00")
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["status"] == "success"  # only the 2026-07-09 run is after this
 
 
 async def test_leads_csv_export(client, db_session):
