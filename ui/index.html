@@ -213,6 +213,33 @@
       <ul id="progress-log"></ul>
     </div>
 
+    <div class="filter-bar" id="history-filters">
+      <div class="filter-field">
+        <label for="filter-automation">Automation</label>
+        <select id="filter-automation"><option value="">All</option></select>
+      </div>
+      <div class="filter-field">
+        <label for="filter-status">Status</label>
+        <select id="filter-status">
+          <option value="">All</option>
+          <option value="success">Success</option>
+          <option value="failed">Failed</option>
+          <option value="running">Running</option>
+          <option value="pending">Pending</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="filter-after">Started after</label>
+        <input type="date" id="filter-after" />
+      </div>
+      <div class="filter-field">
+        <label for="filter-before">Started before</label>
+        <input type="date" id="filter-before" />
+      </div>
+      <button class="btn btn-ghost btn-sm" id="filter-clear-btn">Clear</button>
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead>

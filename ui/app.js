@@ -379,6 +379,7 @@ let systemCategory     = 'agents';
 let confirmResolve     = null;
 let runsOffset         = 0;
 const RUNS_PAGE_SIZE   = 50;
+const historyFilters   = { job_type: '', status: '', started_after: '', started_before: '' };
 let activeJobType      = null;
 let activeLogs         = [];
 
@@ -1556,7 +1557,12 @@ function updateRow(runId, data) {
 async function loadHistory(reset = true) {
   try {
     if (reset) runsOffset = 0;
-    const resp = await fetch(`/api/runs?limit=${RUNS_PAGE_SIZE}&offset=${runsOffset}`);
+    const params = new URLSearchParams({ limit: RUNS_PAGE_SIZE, offset: runsOffset });
+    if (historyFilters.job_type)       params.set('job_type', historyFilters.job_type);
+    if (historyFilters.status)         params.set('status', historyFilters.status);
+    if (historyFilters.started_after)  params.set('started_after', historyFilters.started_after);
+    if (historyFilters.started_before) params.set('started_before', historyFilters.started_before);
+    const resp = await fetch(`/api/runs?${params.toString()}`);
     if (!resp.ok) return;
     const newRuns = await resp.json();
     const allRuns = reset ? newRuns : [...cachedRuns, ...newRuns];
@@ -1577,7 +1583,11 @@ function renderHistory(runs, hasMore = false) {
   });
 
   if (!runs.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No runs yet. Click "New Run" to get started.</td></tr>';
+    const filtered = Object.values(historyFilters).some(Boolean);
+    const msg = filtered
+      ? 'No runs match the current filters.'
+      : 'No runs yet. Click "New Run" to get started.';
+    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${msg}</td></tr>`;
     document.getElementById('select-all-cb').checked = false;
     return;
   }
@@ -2582,6 +2592,34 @@ document.getElementById('load-more-btn').addEventListener('click', async () => {
   runsOffset += RUNS_PAGE_SIZE;
   await loadHistory(false);
 });
+
+// ── History filters ─────────────────────────────────────────────────────────
+(function initHistoryFilters() {
+  const autoSel = document.getElementById('filter-automation');
+  // Populate the automation dropdown from the known job types.
+  autoSel.insertAdjacentHTML('beforeend', ALL_TYPES.map(t =>
+    `<option value="${t}">${escHtml(AUTO_CATALOG[t]?.name || TYPE_META[t]?.chip || t)}</option>`
+  ).join(''));
+
+  const statusSel = document.getElementById('filter-status');
+  const afterInp  = document.getElementById('filter-after');
+  const beforeInp = document.getElementById('filter-before');
+
+  const apply = () => {
+    historyFilters.job_type       = autoSel.value;
+    historyFilters.status         = statusSel.value;
+    historyFilters.started_after  = afterInp.value;
+    historyFilters.started_before = beforeInp.value;
+    loadHistory();  // reset=true → offset back to 0
+  };
+
+  [autoSel, statusSel, afterInp, beforeInp].forEach(el => el.addEventListener('change', apply));
+
+  document.getElementById('filter-clear-btn').addEventListener('click', () => {
+    autoSel.value = statusSel.value = afterInp.value = beforeInp.value = '';
+    apply();
+  });
+})();
 
 // History loads once authenticated (see onAuthenticated); poll only while logged in.
 setInterval(() => { if (CURRENT_USER && !activeEventSource) loadHistory(); }, 5000);
