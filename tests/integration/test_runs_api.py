@@ -181,6 +181,31 @@ async def test_list_runs_filter_accepts_full_datetime(client, db_session):
     assert data[0]["status"] == "success"  # only the 2026-07-09 run is after this
 
 
+async def test_list_runs_total_count_header(client, db_session):
+    _seed_runs_for_filtering(db_session)
+    resp = await client.get("/api/runs")
+    assert resp.status_code == 200
+    assert resp.headers["X-Total-Count"] == "3"  # total ignores the page window
+
+
+async def test_list_runs_total_count_reflects_filters(client, db_session):
+    _seed_runs_for_filtering(db_session)
+    resp = await client.get("/api/runs?job_type=google_form_fill")
+    assert resp.headers["X-Total-Count"] == "2"  # count is filter-aware
+
+
+async def test_list_runs_pagination_window(client, db_session):
+    _seed_runs_for_filtering(db_session)
+    # A page smaller than the total returns just the window but the full count.
+    resp = await client.get("/api/runs?limit=2&offset=0")
+    assert len(resp.json()) == 2
+    assert resp.headers["X-Total-Count"] == "3"
+    # The last page returns the remainder.
+    resp2 = await client.get("/api/runs?limit=2&offset=2")
+    assert len(resp2.json()) == 1
+    assert resp2.headers["X-Total-Count"] == "3"
+
+
 async def test_leads_csv_export(client, db_session):
     run = _seed_lead_run(db_session, {
         "discovered_count": 2, "with_website": 1, "lead_count": 1,

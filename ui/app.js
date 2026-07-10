@@ -377,7 +377,8 @@ let selectedRunIds     = new Set();
 let systemData         = null;
 let systemCategory     = 'agents';
 let confirmResolve     = null;
-let runsOffset         = 0;
+let runsPage           = 0;    // 0-indexed current page
+let runsTotal          = 0;    // total rows matching current filters
 const RUNS_PAGE_SIZE   = 50;
 const historyFilters   = { job_type: '', status: '', started_after: '', started_before: '' };
 let activeJobType      = null;
@@ -1554,23 +1555,28 @@ function updateRow(runId, data) {
 
 // ── History table ─────────────────────────────────────────────────────────────
 
+// `reset` sends the view back to page 1 (used by filters / after a run finishes).
 async function loadHistory(reset = true) {
   try {
-    if (reset) runsOffset = 0;
-    const params = new URLSearchParams({ limit: RUNS_PAGE_SIZE, offset: runsOffset });
+    if (reset) runsPage = 0;
+    const params = new URLSearchParams({ limit: RUNS_PAGE_SIZE, offset: runsPage * RUNS_PAGE_SIZE });
     if (historyFilters.job_type)       params.set('job_type', historyFilters.job_type);
     if (historyFilters.status)         params.set('status', historyFilters.status);
     if (historyFilters.started_after)  params.set('started_after', historyFilters.started_after);
     if (historyFilters.started_before) params.set('started_before', historyFilters.started_before);
     const resp = await fetch(`/api/runs?${params.toString()}`);
     if (!resp.ok) return;
-    const newRuns = await resp.json();
-    const allRuns = reset ? newRuns : [...cachedRuns, ...newRuns];
-    renderHistory(allRuns, newRuns.length === RUNS_PAGE_SIZE);
+    runsTotal = parseInt(resp.headers.get('X-Total-Count'), 10) || 0;
+    const pageCount = Math.max(1, Math.ceil(runsTotal / RUNS_PAGE_SIZE));
+    // A page can go stale (e.g. rows deleted); clamp and refetch if we overshot.
+    if (runsPage > 0 && runsPage >= pageCount) { runsPage = pageCount - 1; return loadHistory(false); }
+    const runs = await resp.json();
+    renderHistory(runs);
+    renderPagination();
   } catch (_) {}
 }
 
-function renderHistory(runs, hasMore = false) {
+function renderHistory(runs) {
   cachedRuns = runs;
   const tbody = document.getElementById('history-tbody');
 
@@ -1746,9 +1752,52 @@ function renderHistory(runs, hasMore = false) {
     }
   });
 
-  document.getElementById('load-more-btn')?.classList.toggle('hidden', !hasMore);
   initElapsedTimers();
   updateBulkActionButtons();
+}
+
+// Windowed numbered pagination: « ‹ 1 … 4 5 [6] 7 8 … 20 › »
+function renderPagination() {
+  const bar = document.getElementById('history-pagination');
+  const pageCount = Math.max(1, Math.ceil(runsTotal / RUNS_PAGE_SIZE));
+
+  // Nothing to page through — hide the bar entirely.
+  if (runsTotal <= RUNS_PAGE_SIZE) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+
+  const cur = runsPage; // 0-indexed
+  document.getElementById('page-prev-btn').disabled = cur <= 0;
+  document.getElementById('page-next-btn').disabled = cur >= pageCount - 1;
+
+  const from = runsTotal ? cur * RUNS_PAGE_SIZE + 1 : 0;
+  const to   = Math.min(runsTotal, (cur + 1) * RUNS_PAGE_SIZE);
+  document.getElementById('page-info').textContent = `${from}–${to} of ${runsTotal}`;
+
+  // Build the page-number window: always show first & last, plus ±1 around current.
+  const pages = new Set([0, pageCount - 1, cur, cur - 1, cur + 1]);
+  const shown = [...pages].filter(p => p >= 0 && p < pageCount).sort((a, b) => a - b);
+
+  let html = '', prev = -1;
+  for (const p of shown) {
+    // A gap of exactly one page: show that page's button instead of a same-width "…".
+    if (p - prev === 2) {
+      html += `<button class="page-num" data-page-num="${p - 1}">${p}</button>`;
+    } else if (p - prev > 2) {
+      html += `<span class="page-num ellipsis">…</span>`;
+    }
+    html += `<button class="page-num ${p === cur ? 'active' : ''}" data-page-num="${p}">${p + 1}</button>`;
+    prev = p;
+  }
+  document.getElementById('page-numbers').innerHTML = html;
+}
+
+function goToPage(page) {
+  const pageCount = Math.max(1, Math.ceil(runsTotal / RUNS_PAGE_SIZE));
+  const clamped = Math.max(0, Math.min(page, pageCount - 1));
+  if (clamped === runsPage) return;
+  runsPage = clamped;
+  loadHistory(false);
+  document.getElementById('history-filters')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function toggleDetail(runId) {
@@ -2588,9 +2637,11 @@ function showToast(msg, type = 'error') {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-document.getElementById('load-more-btn').addEventListener('click', async () => {
-  runsOffset += RUNS_PAGE_SIZE;
-  await loadHistory(false);
+document.getElementById('page-prev-btn').addEventListener('click', () => goToPage(runsPage - 1));
+document.getElementById('page-next-btn').addEventListener('click', () => goToPage(runsPage + 1));
+document.getElementById('page-numbers').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-page-num]');
+  if (btn) goToPage(parseInt(btn.dataset.pageNum, 10));
 });
 
 // ── History filters ─────────────────────────────────────────────────────────
@@ -2622,4 +2673,5 @@ document.getElementById('load-more-btn').addEventListener('click', async () => {
 })();
 
 // History loads once authenticated (see onAuthenticated); poll only while logged in.
-setInterval(() => { if (CURRENT_USER && !activeEventSource) loadHistory(); }, 5000);
+// reset=false → the poll refreshes in place instead of snapping back to page 1.
+setInterval(() => { if (CURRENT_USER && !activeEventSource) loadHistory(false); }, 5000);
