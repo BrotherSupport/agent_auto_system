@@ -57,7 +57,7 @@ def search_maps(query: str, region: str = "", limit: int = 15, log=None) -> dict
     Returns {"query", "region", "businesses": [...], "warnings": [...]}.
     Each business: {name, website, phone, address, category, maps_url}.
     """
-    limit = max(1, min(int(limit), 40))
+    limit = max(1, min(int(limit), 500))
     _log = log or (lambda _m: None)
     term = f"{query} {region}".strip()
     warnings: list[str] = []

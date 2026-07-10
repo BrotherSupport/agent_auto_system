@@ -335,7 +335,7 @@ _CATALOG: dict = {
             "inputs": [
                 {"name": "query",  "type": "str", "description": "What to search, e.g. 'marketing agency'"},
                 {"name": "region", "type": "str", "description": "Where, e.g. 'Taipei' / 'Berlin' / 'Austin, TX'"},
-                {"name": "limit",  "type": "int (1–40)", "description": "Number of listings to collect"},
+                {"name": "limit",  "type": "int (1–500)", "description": "Number of listings to collect"},
             ],
             "used_by": ["EmailCollectFlow"],
             "source_file": "src/automation/tools/maps_search_tool.py",
